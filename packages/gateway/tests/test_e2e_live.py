@@ -1,7 +1,7 @@
 """Live end-to-end tests over a real HTTP server.
 
-Proves the full path the SDK actually uses: SDK buffer → HTTPTransport → real
-uvicorn server → gateway → writer. The last test carries it all the way into
+Proves the full path the SDK actually uses: SDK buffer -> HTTPTransport -> real
+uvicorn server -> gateway -> writer. The last test carries it all the way into
 ClickHouse and is skipped when the trace store is not reachable.
 """
 

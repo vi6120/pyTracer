@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "navik-registry"
 version = "0.0.1"
-description = "Navik collaboration registry — versioned, forkable, access-controlled test collections."
+description = "Navik collaboration registry - versioned, forkable, access-controlled test collections."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

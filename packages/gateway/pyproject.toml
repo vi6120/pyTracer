@@ -10,8 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Navik" }]
-# navik-sdk (Span schema) and navik-stores (TraceStore) are sibling packages in the same venv.
 dependencies = [
+    "navik-sdk==0.0.1",
+    "navik-stores==0.0.1",
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "pydantic>=2.6",

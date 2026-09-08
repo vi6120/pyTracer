@@ -13,6 +13,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class GatewayConfig:
+    """Tunables for the gateway's ingest queue, batching, and write retries."""
+
     queue_maxsize: int = int(os.getenv("NAVIK_GATEWAY_QUEUE_MAXSIZE", "10000"))
     batch_size: int = int(os.getenv("NAVIK_GATEWAY_BATCH_SIZE", "256"))
     flush_interval: float = float(os.getenv("NAVIK_GATEWAY_FLUSH_INTERVAL", "0.5"))

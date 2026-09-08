@@ -1,4 +1,4 @@
-# Navik agent-tests GitLab CI template — a thin wrapper around `navik run`.
+# Navik agent-tests GitLab CI template - a thin wrapper around `navik run`.
 # Include this job in your .gitlab-ci.yml. JUnit output is surfaced in the
 # merge-request test report.
 navik-agent-tests:

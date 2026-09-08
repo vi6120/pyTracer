@@ -1,4 +1,4 @@
-"""Mock store integration tests (guide §4): versioning, keyed lookup,
+"""Mock store integration tests (guide section 4): versioning, keyed lookup,
 success/failure flag, hash determinism, and concurrent version assignment.
 """
 

@@ -1,4 +1,4 @@
-"""Navik replay & test engine — deterministic replay, assertions, diffing, and
+"""Navik replay & test engine - deterministic replay, assertions, diffing, and
 cross-branch outcome classification.
 """
 
@@ -23,15 +23,18 @@ from .engine import MissingMockError, ReplayEngine, ReplayMode, ReplayResult
 from .fingerprint import failure_fingerprint, fingerprint
 from .hashing import canonical_json, input_hash
 from .mocks import MockSet
+from .sandbox import BlockedNetworkError, NetworkSandbox
 
 __all__ = [
     "Assertion",
     "AssertionResult",
+    "BlockedNetworkError",
     "Contains",
     "ExactMatch",
     "LLMJudge",
     "MissingMockError",
     "MockSet",
+    "NetworkSandbox",
     "NoErrors",
     "Outcome",
     "Predicate",

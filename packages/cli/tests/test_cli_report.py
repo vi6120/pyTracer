@@ -27,7 +27,7 @@ def test_markdown_summary() -> None:
     md = to_markdown(result)
     assert "1/2 scenarios passed" in md
     assert "`happy`" in md and "`broken`" in md
-    assert "❌" in md and "✅" in md
+    assert "FAIL" in md and "PASS" in md
 
 
 def test_json_shape() -> None:

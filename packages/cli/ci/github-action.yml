@@ -1,4 +1,4 @@
-# Navik agent-tests GitHub Action (composite) — a thin wrapper around `navik run`.
+# Navik agent-tests GitHub Action (composite) - a thin wrapper around `navik run`.
 # Drop this in as `.github/actions/navik/action.yml` and reference it from a
 # workflow, or adapt the steps directly into a workflow job.
 name: "Navik Agent Tests"

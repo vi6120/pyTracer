@@ -1,7 +1,7 @@
 """Tracer, active-span handle, and the ``@op`` decorator.
 
 Trace/span context propagates through :mod:`contextvars`, so a span opened
-inside another span automatically becomes its child — across sync calls and
+inside another span automatically becomes its child - across sync calls and
 within a single async task. Capture is fire-and-forget: closing a span redacts
 its payload and hands it to the buffer without blocking.
 """

@@ -48,6 +48,7 @@ class SpanBuffer:
         self._flush_interval = flush_interval
         self._queue: queue.Queue[object] = queue.Queue(maxsize=max_queue_size)
         self._dropped = 0
+        self._send_errors = 0
         self._dropped_lock = threading.Lock()
         self._stopping = threading.Event()
         self._worker = threading.Thread(
@@ -60,6 +61,12 @@ class SpanBuffer:
         """Number of spans dropped because the queue was full."""
         with self._dropped_lock:
             return self._dropped
+
+    @property
+    def send_errors(self) -> int:
+        """Number of spans whose delivery raised (e.g. gateway unreachable)."""
+        with self._dropped_lock:
+            return self._send_errors
 
     def record(self, span: Span) -> None:
         """Enqueue a span without blocking the caller."""
@@ -86,6 +93,9 @@ class SpanBuffer:
             if batch:
                 try:
                     self._transport.send(batch)
+                except Exception:  # noqa: BLE001 — fire-and-forget: never kill the flush worker
+                    with self._dropped_lock:
+                        self._send_errors += len(batch)
                 finally:
                     for _ in batch:
                         self._queue.task_done()

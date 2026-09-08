@@ -1,4 +1,4 @@
-"""Trace store integration tests (guide §4): write throughput, query
+"""Trace store integration tests (guide section 4): write throughput, query
 correctness, concurrency integrity, retention purge, and required git context.
 """
 

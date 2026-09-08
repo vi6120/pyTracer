@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "navik-sdk"
 version = "0.0.1"
-description = "Navik instrumentation SDK — capture agent runs as OpenTelemetry-compliant spans."
+description = "Navik instrumentation SDK - capture agent runs as OpenTelemetry-compliant spans."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

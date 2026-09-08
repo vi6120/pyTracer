@@ -28,7 +28,7 @@ def test_diff_added_removed_changed() -> None:
 def test_clean_merge_of_nonoverlapping_changes() -> None:
     reg = Registry()
     origin_id, fork_id = _origin_and_fork(reg)
-    # Fork adds b; origin adds c. No overlap → clean merge.
+    # Fork adds b; origin adds c. No overlap -> clean merge.
     reg.commit("bob", fork_id, artifact("m", scenarios={"a": scenario("base"), "b": scenario("b")}), "add b")
     reg.commit("alice", origin_id, artifact("m", scenarios={"a": scenario("base"), "c": scenario("c")}), "add c")
     pr = reg.open_pull_request("bob", fork_id, origin_id, "add b")
@@ -40,7 +40,7 @@ def test_clean_merge_of_nonoverlapping_changes() -> None:
 def test_merge_conflict_on_competing_edits() -> None:
     reg = Registry()
     origin_id, fork_id = _origin_and_fork(reg)
-    # Both edit scenario "a" differently → conflict.
+    # Both edit scenario "a" differently -> conflict.
     reg.commit("bob", fork_id, artifact("m", scenarios={"a": scenario("bob")}), "bob edits a")
     reg.commit("alice", origin_id, artifact("m", scenarios={"a": scenario("alice")}), "alice edits a")
     pr = reg.open_pull_request("bob", fork_id, origin_id, "conflict")

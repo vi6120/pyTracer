@@ -1,9 +1,9 @@
-"""Mock store — PostgreSQL.
+"""Mock store - PostgreSQL.
 
 Holds recorded tool responses used to reconstruct deterministic replays. Each
 mock is keyed by ``(project, tool_name, input_hash)`` and *versioned*, so the
 same tool call can carry multiple recorded outcomes for different scenarios,
-each flagged as a success or a failure case (guide §4). Mock volume is far
+each flagged as a success or a failure case (guide section 4). Mock volume is far
 lower than trace volume, so a row store is the right fit here.
 """
 
@@ -103,7 +103,7 @@ class MockStore:
 
         A transaction-scoped advisory lock keyed by ``(project, tool_name,
         input_hash)`` serializes concurrent writers on the *same* key, so the
-        ``MAX(version) + 1`` read-then-insert cannot race — versions stay
+        ``MAX(version) + 1`` read-then-insert cannot race - versions stay
         contiguous with no unique-constraint collisions. Writers on different
         keys never contend.
 
@@ -111,7 +111,7 @@ class MockStore:
         explicit transaction: under READ COMMITTED each statement takes a fresh
         snapshot at its start, so once a waiter acquires the lock its INSERT
         sees the previous writer's committed row. (Acquiring the lock inside
-        the same statement as the ``MAX`` read would not — that snapshot is
+        the same statement as the ``MAX`` read would not - that snapshot is
         frozen before the wait.) The lock releases at commit.
         """
         key_hash = input_hash(input)

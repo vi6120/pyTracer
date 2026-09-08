@@ -13,6 +13,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ClickHouseConfig:
+    """ClickHouse connection settings for the trace store (env-overridable)."""
+
     host: str = os.getenv("NAVIK_CLICKHOUSE_HOST", "localhost")
     port: int = int(os.getenv("NAVIK_CLICKHOUSE_PORT", "8123"))
     username: str = os.getenv("NAVIK_CLICKHOUSE_USER", "navik")
@@ -22,6 +24,8 @@ class ClickHouseConfig:
 
 @dataclass(frozen=True)
 class PostgresConfig:
+    """PostgreSQL connection settings for the mock store (env-overridable)."""
+
     host: str = os.getenv("NAVIK_POSTGRES_HOST", "localhost")
     port: int = int(os.getenv("NAVIK_POSTGRES_PORT", "5432"))
     dbname: str = os.getenv("NAVIK_POSTGRES_DB", "navik")
@@ -29,6 +33,7 @@ class PostgresConfig:
     password: str = os.getenv("NAVIK_POSTGRES_PASSWORD", "navik")
 
     def conninfo(self) -> str:
+        """Return a libpq connection string for psycopg."""
         return (
             f"host={self.host} port={self.port} dbname={self.dbname} "
             f"user={self.user} password={self.password}"

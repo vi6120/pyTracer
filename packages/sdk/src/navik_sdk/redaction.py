@@ -1,8 +1,8 @@
 """Local secret / PII redaction, applied at capture time.
 
 Runs on span input/output *before* serialization, so nothing sensitive ever
-reaches the network layer. The ruleset is intentionally conservative regex —
-API keys, emails, and card numbers — and is applied recursively to nested
+reaches the network layer. The ruleset is intentionally conservative regex -
+API keys, emails, and card numbers - and is applied recursively to nested
 structures. Redacted values are replaced with a stable placeholder so the
 shape of the data is preserved for debugging.
 """
@@ -13,7 +13,7 @@ import re
 from re import Pattern
 from typing import Any
 
-PLACEHOLDER = "«redacted:{label}»"
+PLACEHOLDER = "[redacted:{label}]"
 MAX_DEPTH = 20  # guard against pathological / cyclic structures
 
 

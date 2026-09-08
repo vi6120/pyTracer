@@ -1,11 +1,11 @@
 """Render collection results for humans, machines, and CI.
 
-- ``to_markdown``  → a PR-comment summary (pass/fail counts + per-scenario table)
-- ``to_json``      → a machine-readable dict
-- ``to_junit``     → JUnit XML for CI test reporters
-- ``issue_body``   → an auto-documentation issue for a failure, carrying a
+- ``to_markdown``  -> a PR-comment summary (pass/fail counts + per-scenario table)
+- ``to_json``      -> a machine-readable dict
+- ``to_junit``     -> JUnit XML for CI test reporters
+- ``issue_body``   -> an auto-documentation issue for a failure, carrying a
                      fingerprint marker so a repeat failure updates one issue
-                     instead of opening duplicates (guide §7).
+                     instead of opening duplicates (guide section 7).
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ from xml.sax.saxutils import escape
 
 from .runner import CollectionResult, ScenarioResult
 
-_PASS = "✅"
-_FAIL = "❌"
+_PASS = "PASS"
+_FAIL = "FAIL"
 
 # Hidden marker embedded in an auto-doc issue body; the fingerprint is the
 # dedup key CI matches on to decide "update existing" vs "open new".
@@ -25,6 +25,7 @@ FINGERPRINT_MARKER = "<!-- navik-fingerprint: {fp} -->"
 
 
 def to_json(result: CollectionResult) -> dict[str, Any]:
+    """Machine-readable result: counts, pass flag, and per-scenario detail."""
     return {
         "collection": result.name,
         "counts": result.counts,
@@ -58,10 +59,11 @@ def _scenario_reason(s: ScenarioResult) -> str:
 
 
 def to_markdown(result: CollectionResult) -> str:
+    """Render a PR-comment summary: header, counts, and a per-scenario table."""
     c = result.counts
-    header = _PASS if result.passed else _FAIL
+    status = _PASS if result.passed else _FAIL
     lines = [
-        f"## {header} Navik agent tests — `{result.name}`",
+        f"## Navik agent tests: `{result.name}` ({status})",
         "",
         f"**{c['passed']}/{c['total']} scenarios passed**"
         + (f", {c['failed']} failed" if c["failed"] else ""),
@@ -71,12 +73,13 @@ def to_markdown(result: CollectionResult) -> str:
     ]
     for s in result.scenarios:
         mark = _PASS if s.passed else _FAIL
-        detail = _scenario_reason(s).replace("|", "\\|") or "—"
+        detail = _scenario_reason(s).replace("|", "\\|") or "-"
         lines.append(f"| `{s.name}` | {mark} | {detail} |")
     return "\n".join(lines) + "\n"
 
 
 def to_junit(result: CollectionResult) -> str:
+    """Render JUnit XML so CI test reporters can surface scenario results."""
     c = result.counts
     cases: list[str] = []
     for s in result.scenarios:
@@ -131,4 +134,5 @@ def issue_body(
 
 
 def dumps_json(result: CollectionResult) -> str:
+    """Serialize :func:`to_json` output as an indented JSON string."""
     return json.dumps(to_json(result), indent=2, default=str)

@@ -1,6 +1,6 @@
 """Non-blocking span buffer with a background flush worker.
 
-Design goal (guide §10): instrumentation is fire-and-forget. Recording a span
+Design goal (guide section 10): instrumentation is fire-and-forget. Recording a span
 does a single ``queue.put_nowait`` on the calling (agent) thread and returns
 immediately; a daemon worker thread batches spans and hands them to the
 transport. The agent is never blocked waiting on the observability layer.
@@ -28,7 +28,7 @@ class SpanBuffer:
     max_queue_size:
         Bound on in-flight spans. ``0`` means unbounded. When bounded and full,
         new spans are dropped (and counted in :attr:`dropped`) rather than
-        blocking the agent — backpressure without stalling execution.
+        blocking the agent - backpressure without stalling execution.
     batch_size:
         Maximum spans handed to the transport in one ``send`` call.
     flush_interval:
@@ -93,7 +93,7 @@ class SpanBuffer:
             if batch:
                 try:
                     self._transport.send(batch)
-                except Exception:  # noqa: BLE001 — fire-and-forget: never kill the flush worker
+                except Exception:  # noqa: BLE001 - fire-and-forget: never kill the flush worker
                     with self._dropped_lock:
                         self._send_errors += len(batch)
                 finally:

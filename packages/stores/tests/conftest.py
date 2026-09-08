@@ -25,7 +25,7 @@ def _clickhouse_up() -> bool:
         client.command("SELECT 1")
         client.close()
         return True
-    except Exception:  # noqa: BLE001 — any failure means "not reachable, skip"
+    except Exception:  # noqa: BLE001 - any failure means "not reachable, skip"
         return False
 
 
@@ -36,7 +36,7 @@ def _postgres_up() -> bool:
         conn = psycopg.connect(PostgresConfig().conninfo(), connect_timeout=3)
         conn.close()
         return True
-    except Exception:  # noqa: BLE001 — any failure means "not reachable, skip"
+    except Exception:  # noqa: BLE001 - any failure means "not reachable, skip"
         return False
 
 

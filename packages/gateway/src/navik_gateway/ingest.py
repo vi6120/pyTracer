@@ -1,7 +1,7 @@
-"""Ingest pipeline: validate → enqueue → async write-through to storage.
+"""Ingest pipeline: validate -> enqueue -> async write-through to storage.
 
 The request path only validates and enqueues, then returns immediately, so a
-write spike to storage never blocks incoming requests (guide §3). A background
+write spike to storage never blocks incoming requests (guide section 3). A background
 worker drains the queue in batches and writes through to the trace store,
 retrying on failure so a transient storage outage does not lose spans. Spans
 that still fail after the retry budget, or that fail schema validation, go to a
@@ -35,6 +35,8 @@ class _Queued:
 
 @dataclass
 class DeadLetter:
+    """A span that could not be persisted, kept so nothing disappears silently."""
+
     reason: str  # "validation" | "storage"
     project: str | None
     detail: str
@@ -43,6 +45,8 @@ class DeadLetter:
 
 @dataclass
 class Stats:
+    """Running counters for one gateway process, exposed at ``/v1/stats``."""
+
     accepted: int = 0  # enqueued for writing
     written: int = 0  # persisted to storage
     validation_failed: int = 0
@@ -161,7 +165,7 @@ class IngestPipeline:
                 await asyncio.to_thread(self._writer.write, project, spans)
                 self.stats.written += len(spans)
                 return
-            except Exception as exc:  # noqa: BLE001 — retry any storage error, then DLQ
+            except Exception as exc:  # noqa: BLE001 - retry any storage error, then DLQ
                 attempt += 1
                 if attempt > self._config.max_write_retries:
                     self.stats.storage_dlq += len(spans)

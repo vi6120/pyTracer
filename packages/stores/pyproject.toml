@@ -10,8 +10,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Navik" }]
-# navik-sdk is a sibling package installed editable in the same venv (provides the Span schema).
 dependencies = [
+    "navik-sdk==0.0.1",
     "clickhouse-connect>=0.7",
     "psycopg[binary]>=3.1",
     "pydantic>=2.6",

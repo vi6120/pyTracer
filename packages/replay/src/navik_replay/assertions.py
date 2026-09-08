@@ -1,8 +1,8 @@
 """Assertion framework for replay results.
 
 Pluggable scorers judge a :class:`ReplayResult`. The built-ins cover the four
-kinds the guide calls for — exact match, semantic similarity, LLM-as-judge, and
-custom Python — plus a couple of conveniences. Semantic similarity and the LLM
+kinds the guide calls for - exact match, semantic similarity, LLM-as-judge, and
+custom Python - plus a couple of conveniences. Semantic similarity and the LLM
 judge take injectable backends so the core stays dependency-free; the semantic
 default is a no-dependency token-overlap score.
 """
@@ -19,12 +19,16 @@ from .engine import ReplayResult
 
 @dataclass
 class AssertionResult:
+    """One assertion's verdict: its name, whether it passed, and why not."""
+
     name: str
     passed: bool
     detail: str = ""
 
 
 class Assertion(Protocol):
+    """A named scorer that judges a replay result via ``check``."""
+
     name: str
 
     def check(self, result: ReplayResult) -> AssertionResult: ...
@@ -36,6 +40,7 @@ def run_assertions(result: ReplayResult, assertions: list[Assertion]) -> list[As
 
 
 def all_passed(results: list[AssertionResult]) -> bool:
+    """True if every assertion result passed."""
     return all(r.passed for r in results)
 
 
@@ -84,7 +89,7 @@ class Predicate:
         try:
             ok = bool(self.fn(result))
             return AssertionResult(self.name, ok, "" if ok else "predicate returned false")
-        except Exception as exc:  # noqa: BLE001 — a raising predicate is a failed assertion
+        except Exception as exc:  # noqa: BLE001 - a raising predicate is a failed assertion
             return AssertionResult(self.name, False, f"predicate raised {type(exc).__name__}: {exc}")
 
 
@@ -104,7 +109,7 @@ def token_jaccard(a: str, b: str) -> float:
 
 @dataclass
 class SemanticSimilarity:
-    """Passes when similarity(return_value, expected) ≥ threshold.
+    """Passes when similarity(return_value, expected) >= threshold.
 
     ``similarity`` is injectable (e.g. an embedding cosine); the default is a
     no-dependency token-overlap score.

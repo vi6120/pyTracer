@@ -31,7 +31,7 @@ def test_transient_storage_outage_recovers_without_loss(wait_until: Callable[...
 
 
 def test_permanent_failure_goes_to_dead_letter(wait_until: Callable[..., bool]) -> None:
-    # Never recovers within the retry budget → spans land in the DLQ, not lost silently.
+    # Never recovers within the retry budget -> spans land in the DLQ, not lost silently.
     writer = FailingWriter(fail_times=10_000)
     cfg = GatewayConfig(max_write_retries=2, retry_backoff=0.01, batch_size=8)
     spans = [make_span().model_dump(mode="json") for _ in range(8)]

@@ -1,4 +1,4 @@
-"""Buffer load & non-blocking behavior (guide §2 / §10).
+"""Buffer load & non-blocking behavior (guide section 2 / section 10).
 
 Confirms: no span dropped under high volume with an adequate queue, recording
 does not block the calling thread, and a bounded queue applies backpressure by

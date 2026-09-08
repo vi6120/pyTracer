@@ -15,13 +15,15 @@ stamp every span with the current service name, branch, and commit.
 
 from __future__ import annotations
 
+import functools
+import inspect
 from typing import Any
 
 from .buffer import SpanBuffer
 from .ids import new_span_id, new_trace_id
 from .redaction import DEFAULT_RULES, RedactionRule, Redactor
 from .schema import Resource, Span, SpanKind, SpanStatus
-from .tracer import ActiveSpan, SpanContext, Tracer
+from .tracer import ActiveSpan, Intercept, Interceptor, SpanContext, Tracer, _OpMeta
 from .transport import HTTPTransport, InMemoryTransport, Transport, TransportError
 
 __all__ = [
@@ -29,6 +31,8 @@ __all__ = [
     "ActiveSpan",
     "HTTPTransport",
     "InMemoryTransport",
+    "Intercept",
+    "Interceptor",
     "RedactionRule",
     "Redactor",
     "Resource",
@@ -46,6 +50,7 @@ __all__ = [
     "new_span_id",
     "new_trace_id",
     "op",
+    "set_tracer",
     "shutdown",
     "start_span",
 ]
@@ -88,9 +93,43 @@ def get_tracer() -> Tracer:
     return _default_tracer
 
 
+def set_tracer(tracer: Tracer | None) -> None:
+    """Replace the module-level default tracer (pass ``None`` to reset)."""
+    global _default_tracer
+    _default_tracer = tracer
+
+
 def op(func: Any = None, **kwargs: Any) -> Any:
-    """Module-level ``@op`` delegating to the default tracer."""
-    return get_tracer().op(func, **kwargs)
+    """Module-level ``@op`` decorator.
+
+    Late-bound: the wrapper resolves the *current* default tracer at call time,
+    so :func:`configure` (and the replay engine, which swaps the default tracer)
+    take effect even for functions decorated earlier at import time.
+    """
+
+    def decorator(fn: Any) -> Any:
+        meta = _OpMeta(
+            kwargs.get("name") or fn.__name__,
+            kwargs.get("kind", SpanKind.UNKNOWN),
+            kwargs.get("agent_name"),
+            kwargs.get("tool_name"),
+            kwargs.get("capture_io", True),
+        )
+        if inspect.iscoroutinefunction(fn):
+
+            @functools.wraps(fn)
+            async def async_wrapper(*args: Any, **kw: Any) -> Any:
+                return await get_tracer().acall_op(fn, args, kw, meta)
+
+            return async_wrapper
+
+        @functools.wraps(fn)
+        def sync_wrapper(*args: Any, **kw: Any) -> Any:
+            return get_tracer().call_op(fn, args, kw, meta)
+
+        return sync_wrapper
+
+    return decorator(func) if func is not None else decorator
 
 
 def start_span(name: str, **kwargs: Any) -> ActiveSpan:

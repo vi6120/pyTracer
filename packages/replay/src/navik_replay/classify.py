@@ -4,7 +4,7 @@ Given a known-failing baseline run and a replay of the same scenario on a
 candidate branch (model version and recorded tools held frozen, only the agent
 code varying), classify the candidate as fixed, still failing, or diverged.
 A plain pass/fail flag cannot tell a team whether their branch introduced a new
-problem — this can.
+problem - this can.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ from .fingerprint import fingerprint
 
 
 class Outcome(str, Enum):
+    """Result of comparing a candidate branch's replay to a failing baseline."""
+
     FIXED = "fixed"  # candidate no longer fails
     STILL_FAILING = "still_failing"  # candidate fails the same way (same fingerprint)
     DIVERGED = "diverged"  # candidate fails, but differently than the baseline

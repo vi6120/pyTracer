@@ -23,6 +23,8 @@ DECLARATIVE_ASSERTIONS = frozenset(
 
 
 class AssertionSpec(BaseModel):
+    """A declarative assertion (type plus the fields that type needs)."""
+
     model_config = ConfigDict(extra="forbid")
 
     type: str
@@ -33,6 +35,8 @@ class AssertionSpec(BaseModel):
 
 
 class ScenarioSpec(BaseModel):
+    """One test scenario: which agent to run, against which trace, and how to judge it."""
+
     model_config = ConfigDict(extra="forbid")
 
     name: str
@@ -44,6 +48,8 @@ class ScenarioSpec(BaseModel):
 
 
 class Collection(BaseModel):
+    """A named bundle of scenarios, the unit the CLI runs and the registry versions."""
+
     model_config = ConfigDict(extra="forbid")
 
     name: str

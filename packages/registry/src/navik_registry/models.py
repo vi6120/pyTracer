@@ -16,6 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class Visibility(str, Enum):
+    """Who may see and interact with a collection."""
+
     PRIVATE = "private"  # owner only
     TEAM = "team"  # owner + named team members
     PUBLIC = "public"  # anyone
@@ -28,8 +30,8 @@ class CollectionArtifact(BaseModel):
 
     name: str
     description: str = ""
-    framework: str | None = None  # e.g. "langgraph", "crewai" — for discovery
-    use_case: str | None = None  # e.g. "rag", "tool-use" — for discovery
+    framework: str | None = None  # e.g. "langgraph", "crewai" - for discovery
+    use_case: str | None = None  # e.g. "rag", "tool-use" - for discovery
     scenarios: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
@@ -46,6 +48,8 @@ class Version(BaseModel):
 
 
 class ForkRef(BaseModel):
+    """Points at the origin collection and version a fork was created from."""
+
     collection_id: str
     version_id: str
 
@@ -65,9 +69,11 @@ class Collection(BaseModel):
 
     @property
     def head(self) -> Version:
+        """The most recent version (the tip of history)."""
         return self.versions[-1]
 
     def version(self, version_id: str) -> Version | None:
+        """Look up a version by id, or None if it is not in this collection."""
         return next((v for v in self.versions if v.id == version_id), None)
 
 
@@ -76,7 +82,7 @@ class PullRequest(BaseModel):
 
     The proposed content is *snapshotted* at open time (the author can see their
     own fork), so merging never needs the target maintainer to read the source
-    collection directly — mirroring how a git PR is against a fixed commit.
+    collection directly - mirroring how a git PR is against a fixed commit.
     """
 
     id: str

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "navik-replay"
 version = "0.0.1"
-description = "Navik replay & test engine — deterministic replay, assertions, diffing, and cross-branch classification."
+description = "Navik replay & test engine - deterministic replay, assertions, diffing, and cross-branch classification."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

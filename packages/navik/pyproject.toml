@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "navik"
+version = "0.0.1"
+description = "Navik - install the full agent test and replay platform."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Navik" }]
+# Installing `navik` pulls in every component of the platform.
+dependencies = [
+    "navik-sdk==0.0.1",
+    "navik-stores==0.0.1",
+    "navik-gateway==0.0.1",
+    "navik-replay==0.0.1",
+    "navik-runner==0.0.1",
+    "navik-registry==0.0.1",
+    "navik-cli==0.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/navik"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true

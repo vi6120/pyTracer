@@ -36,6 +36,10 @@ Seven packages, each an installable Python package under `packages/`:
 | `navik-registry` | 5. Collaboration | Versioned, forkable, access-controlled test collections with pull requests and discovery |
 | `navik-cli` | 6. CI/CD | `navik run` executes test collections locally and in CI; ships a GitHub Action and a GitLab template |
 
+A `navik` meta-package ties them together: installing it pulls in all seven, so
+`pip install navik` gives you the whole platform in one command (and `import
+navik` re-exports the SDK's core entrypoints for convenience).
+
 Backing services (ClickHouse, PostgreSQL) run via [docker-compose.yml](docker-compose.yml).
 
 ## How a development team uses Navik
@@ -149,6 +153,19 @@ history, pull requests, three-way merge, access control (private / team /
 public), and discovery by framework and use case, the way Postman collections
 worked for API testing.
 
+## Installing
+
+Once the packages are published, the whole platform installs with one command:
+
+```bash
+pip install navik            # installs all seven components
+# or install just what you need, e.g. the SDK in your agent:
+pip install navik-sdk
+```
+
+Nothing is published to a package index yet, so for now install from this repo
+(see below).
+
 ## Quick start (local development)
 
 ```bash
@@ -157,7 +174,8 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # 2. Install every package in editable mode with dev tooling
-for p in sdk stores gateway replay runner registry cli; do
+#    (order matters: the navik meta-package resolves against the others)
+for p in sdk stores gateway replay runner registry cli navik; do
   pip install -e "packages/$p[dev]"
 done
 
@@ -188,7 +206,7 @@ Connection defaults for both stores match [docker-compose.yml](docker-compose.ym
 Every package is covered by tests and checked with `ruff` and `mypy --strict`:
 
 ```bash
-pytest packages            # 133 tests
+pytest packages            # 136 tests
 ruff check packages
 mypy packages/*/src
 ```

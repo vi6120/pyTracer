@@ -34,6 +34,40 @@ class SpanContext:
     span_id: str
 
 
+@dataclass(frozen=True)
+class Intercept:
+    """An interceptor's decision to short-circuit an op with a recorded output.
+
+    Returning this from a :data:`Interceptor` makes the ``@op`` skip the real
+    function body and use ``output`` instead. This is how the replay engine
+    injects recorded tool/model responses without the agent code knowing.
+    """
+
+    output: Any
+
+
+# Called with (kind, name, tool_name, redacted_input); returns Intercept to
+# inject a recorded output, or None to run the op live.
+Interceptor = Callable[["SpanKind", str, "str | None", Any], "Intercept | None"]
+
+
+@dataclass(frozen=True)
+class _OpMeta:
+    """Static metadata for a decorated op, computed once at decoration time."""
+
+    name: str
+    kind: SpanKind
+    agent_name: str | None
+    tool_name: str | None
+    capture_io: bool
+
+
+def _make_op_input(meta: _OpMeta, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any | None:
+    if not meta.capture_io:
+        return None
+    return {"args": list(args), "kwargs": dict(kwargs)}
+
+
 _current: contextvars.ContextVar[SpanContext | None] = contextvars.ContextVar(
     "navik_current_span", default=None
 )
@@ -112,10 +146,14 @@ class Tracer:
         resource: Resource | None = None,
         redactor: Redactor | None = None,
         buffer: SpanBuffer | None = None,
+        interceptor: Interceptor | None = None,
     ) -> None:
         self.resource = resource or Resource()
         self.redactor = redactor or Redactor()
         self.buffer = buffer or SpanBuffer(transport)
+        # When set, consulted before every op to optionally inject a recorded
+        # output (used by the replay engine). Settable at runtime.
+        self.interceptor = interceptor
 
     def start_span(
         self,
@@ -153,51 +191,25 @@ class Tracer:
         tool_name: str | None = None,
         capture_io: bool = True,
     ) -> Any:
-        """Decorator that captures a function call as a span.
+        """Decorator that captures a function call as a span, bound to this tracer.
 
         Works on both sync and async functions. Input is the call's args/kwargs
         and output is the return value, each redacted before storage.
         """
 
         def decorator(fn: F) -> F:
-            span_name = name or fn.__name__
-
-            def _make_input(args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any | None:
-                if not capture_io:
-                    return None
-                return {"args": list(args), "kwargs": dict(kwargs)}
-
+            meta = _OpMeta(name or fn.__name__, kind, agent_name, tool_name, capture_io)
             if inspect.iscoroutinefunction(fn):
 
                 @functools.wraps(fn)
                 async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-                    with self.start_span(
-                        span_name,
-                        kind=kind,
-                        agent_name=agent_name,
-                        tool_name=tool_name,
-                        input=_make_input(args, kwargs),
-                    ) as active:
-                        result = await fn(*args, **kwargs)
-                        if capture_io:
-                            active.set_output(result)
-                        return result
+                    return await self.acall_op(fn, args, kwargs, meta)
 
                 return async_wrapper  # type: ignore[return-value]
 
             @functools.wraps(fn)
             def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-                with self.start_span(
-                    span_name,
-                    kind=kind,
-                    agent_name=agent_name,
-                    tool_name=tool_name,
-                    input=_make_input(args, kwargs),
-                ) as active:
-                    result = fn(*args, **kwargs)
-                    if capture_io:
-                        active.set_output(result)
-                    return result
+                return self.call_op(fn, args, kwargs, meta)
 
             return sync_wrapper  # type: ignore[return-value]
 
@@ -205,6 +217,60 @@ class Tracer:
         if func is not None:
             return decorator(func)
         return decorator
+
+    def call_op(
+        self, fn: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any], meta: _OpMeta
+    ) -> Any:
+        """Execute one sync op call through this tracer (used by decorators)."""
+        with self.start_span(
+            meta.name,
+            kind=meta.kind,
+            agent_name=meta.agent_name,
+            tool_name=meta.tool_name,
+            input=_make_op_input(meta, args, kwargs),
+        ) as active:
+            injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
+            if injected is not None:
+                return injected.output
+            result = fn(*args, **kwargs)
+            if meta.capture_io:
+                active.set_output(result)
+            return result
+
+    async def acall_op(
+        self, fn: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any], meta: _OpMeta
+    ) -> Any:
+        """Execute one async op call through this tracer (used by decorators)."""
+        with self.start_span(
+            meta.name,
+            kind=meta.kind,
+            agent_name=meta.agent_name,
+            tool_name=meta.tool_name,
+            input=_make_op_input(meta, args, kwargs),
+        ) as active:
+            injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
+            if injected is not None:
+                return injected.output
+            result = await fn(*args, **kwargs)
+            if meta.capture_io:
+                active.set_output(result)
+            return result
+
+    def _maybe_intercept(
+        self,
+        active: ActiveSpan,
+        kind: SpanKind,
+        name: str,
+        tool_name: str | None,
+    ) -> Intercept | None:
+        """Consult the interceptor; on a hit, record the injected output on the span."""
+        if self.interceptor is None:
+            return None
+        decision = self.interceptor(kind, name, tool_name, active.span.input)
+        if decision is not None:
+            active.set_output(decision.output)
+            active.set_attribute("navik.replayed", True)
+        return decision
 
     def flush(self, timeout: float | None = None) -> None:
         self.buffer.flush(timeout)

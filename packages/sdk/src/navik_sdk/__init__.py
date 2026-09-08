@@ -22,11 +22,12 @@ from .ids import new_span_id, new_trace_id
 from .redaction import DEFAULT_RULES, RedactionRule, Redactor
 from .schema import Resource, Span, SpanKind, SpanStatus
 from .tracer import ActiveSpan, SpanContext, Tracer
-from .transport import InMemoryTransport, Transport
+from .transport import HTTPTransport, InMemoryTransport, Transport, TransportError
 
 __all__ = [
     "DEFAULT_RULES",
     "ActiveSpan",
+    "HTTPTransport",
     "InMemoryTransport",
     "RedactionRule",
     "Redactor",
@@ -38,6 +39,7 @@ __all__ = [
     "SpanStatus",
     "Tracer",
     "Transport",
+    "TransportError",
     "configure",
     "flush",
     "get_tracer",

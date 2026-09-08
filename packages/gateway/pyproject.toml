@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "navik-gateway"
 version = "0.0.1"
-description = "Navik ingestion gateway — receives spans and writes them through to the trace store."
+description = "Navik ingestion gateway - receives spans and writes them through to the trace store."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

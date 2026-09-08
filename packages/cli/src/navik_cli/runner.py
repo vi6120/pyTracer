@@ -36,6 +36,12 @@ class ScenarioError(RuntimeError):
 
 @dataclass
 class ScenarioResult:
+    """Outcome of one scenario: pass flag, replay result, and assertion results.
+
+    ``config_error`` is set (and ``passed`` is False) when the scenario itself
+    was misconfigured, e.g. a bad agent path or a missing trace file.
+    """
+
     name: str
     passed: bool
     replay: ReplayResult
@@ -46,6 +52,8 @@ class ScenarioResult:
 
 @dataclass
 class CollectionResult:
+    """Aggregate outcome of running every scenario in a collection."""
+
     name: str
     scenarios: list[ScenarioResult] = field(default_factory=list)
 
@@ -135,6 +143,7 @@ def run_scenario(scenario: ScenarioSpec, base_dir: Path) -> ScenarioResult:
 
 
 def run_collection(collection: Collection, base_dir: Path) -> CollectionResult:
+    """Run every scenario in a collection and aggregate the results."""
     results = [run_scenario(s, base_dir) for s in collection.scenarios]
     return CollectionResult(collection.name, results)
 

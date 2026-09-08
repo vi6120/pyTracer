@@ -1,0 +1,50 @@
+# Navik agent-tests GitHub Action (composite) — a thin wrapper around `navik run`.
+# Drop this in as `.github/actions/navik/action.yml` and reference it from a
+# workflow, or adapt the steps directly into a workflow job.
+name: "Navik Agent Tests"
+description: "Run a Navik agent test collection and comment the results on the PR."
+inputs:
+  collection:
+    description: "Path to the collection YAML/JSON file"
+    required: true
+  python-version:
+    description: "Python version to run under"
+    required: false
+    default: "3.12"
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install navik-cli
+      shell: bash
+      run: pip install navik-cli
+
+    - name: Run agent test collection
+      id: navik
+      shell: bash
+      run: |
+        set +e
+        navik run "${{ inputs.collection }}" --comment navik-comment.md --junit navik-results.xml
+        echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+    - name: Comment results on the PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const body = fs.readFileSync('navik-comment.md', 'utf8');
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body,
+          });
+
+    - name: Fail the job if any scenario failed
+      if: steps.navik.outputs.exit_code != '0'
+      shell: bash
+      run: exit 1

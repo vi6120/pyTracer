@@ -49,16 +49,16 @@ def _merge_map(
         if o == t:
             if o is not None:  # both sides agree (both changed alike, or unchanged)
                 merged[key] = o
-            continue  # both deleted, or identical → nothing/agree
+            continue  # both deleted, or identical -> nothing/agree
         ours_changed = o != b
         theirs_changed = t != b
         if ours_changed and not theirs_changed:
             if o is not None:
-                merged[key] = o  # take ours (theirs untouched); o is None → our delete wins
+                merged[key] = o  # take ours (theirs untouched); o is None -> our delete wins
         elif theirs_changed and not ours_changed:
             if t is not None:
                 merged[key] = t  # take theirs
-        else:  # both changed, and differently → conflict
+        else:  # both changed, and differently -> conflict
             conflicts.append(key)
     return merged, conflicts
 

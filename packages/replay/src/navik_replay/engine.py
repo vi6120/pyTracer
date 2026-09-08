@@ -1,4 +1,4 @@
-"""Replay engine — re-run an agent with recorded responses injected.
+"""Replay engine - re-run an agent with recorded responses injected.
 
 Reconstructs a run by swapping the SDK's default tracer for one carrying a
 replay interceptor. The agent's ``@op``-decorated tools and model calls consult
@@ -8,7 +8,7 @@ run is deterministic. Three modes control what is mocked.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -16,14 +16,15 @@ import navik_sdk as navik
 from navik_sdk import InMemoryTransport, Intercept, Resource, Span, SpanKind, SpanStatus, Tracer
 
 from .mocks import MockSet, _identifier
+from .sandbox import NetworkSandbox
 
 
 class ReplayMode(str, Enum):
     """What gets replaced with recorded responses during a replay."""
 
-    FULL = "full"  # recorded model output AND recorded tools — fully deterministic
+    FULL = "full"  # recorded model output AND recorded tools - fully deterministic
     PARTIAL = "partial"  # recorded tools, live model
-    LIVE = "live"  # nothing mocked — re-run everything (drift detection)
+    LIVE = "live"  # nothing mocked - re-run everything (drift detection)
 
 
 _MOCKED_KINDS: dict[ReplayMode, frozenset[SpanKind]] = {
@@ -56,9 +57,20 @@ class ReplayResult:
 class ReplayEngine:
     """Runs agents under a chosen replay mode against a mock set."""
 
-    def __init__(self, mode: ReplayMode = ReplayMode.FULL, *, strict: bool = False) -> None:
+    def __init__(
+        self,
+        mode: ReplayMode = ReplayMode.FULL,
+        *,
+        strict: bool = False,
+        sandbox: bool = False,
+        network_allow: Iterable[str] = (),
+    ) -> None:
         self.mode = mode
         self.strict = strict
+        # When sandbox is on, agent execution runs with outbound network blocked
+        # (except network_allow), so a replay cannot fire a real side effect.
+        self.sandbox = sandbox
+        self.network_allow = tuple(network_allow)
 
     def replay(
         self,
@@ -95,8 +107,12 @@ class ReplayEngine:
         error_message: str | None = None
         return_value: object = None
         try:
-            return_value = agent()
-        except Exception as exc:  # noqa: BLE001 — capture agent failure as a result, not a raise
+            if self.sandbox:
+                with NetworkSandbox(self.network_allow):
+                    return_value = agent()
+            else:
+                return_value = agent()
+        except Exception as exc:  # noqa: BLE001 - capture agent failure as a result, not a raise
             status = SpanStatus.ERROR
             error_type = type(exc).__name__
             error_message = str(exc)

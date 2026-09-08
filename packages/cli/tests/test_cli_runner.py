@@ -1,4 +1,4 @@
-"""Runner: recorded trace → replay → assertions → scenario pass/fail."""
+"""Runner: recorded trace -> replay -> assertions -> scenario pass/fail."""
 
 from __future__ import annotations
 

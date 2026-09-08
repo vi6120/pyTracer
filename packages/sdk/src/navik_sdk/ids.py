@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import os
 
-TRACE_ID_BYTES = 16  # 128-bit → 32 hex chars
-SPAN_ID_BYTES = 8  # 64-bit → 16 hex chars
+TRACE_ID_BYTES = 16  # 128-bit -> 32 hex chars
+SPAN_ID_BYTES = 8  # 64-bit -> 16 hex chars
 
 
 def new_trace_id() -> str:

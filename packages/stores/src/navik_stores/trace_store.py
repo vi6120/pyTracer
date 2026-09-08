@@ -1,10 +1,10 @@
-"""Trace store — ClickHouse.
+"""Trace store - ClickHouse.
 
 Holds every captured span for querying, analysis, and replay. ClickHouse is a
 columnar engine tuned for the append-heavy, high-cardinality write pattern that
-traces produce (guide §4, §10). ``branch`` and ``commit`` are enforced as
+traces produce (guide section 4, section 10). ``branch`` and ``commit`` are enforced as
 required on every span so a captured failure is always tied to the exact code
-state that produced it — the foundation cross-branch replay is built on.
+state that produced it - the foundation cross-branch replay is built on.
 """
 
 from __future__ import annotations
@@ -130,7 +130,7 @@ class TraceStore:
         """Insert one span or a batch. Returns the number of rows written.
 
         Raises ``ValueError`` if any span is missing branch/commit, since the
-        trace store treats those as required (guide §4).
+        trace store treats those as required (guide section 4).
         """
         batch = [spans] if isinstance(spans, Span) else list(spans)
         if not batch:
@@ -284,7 +284,7 @@ class TraceStore:
         )
 
     def export_jsonl(self, spans: Sequence[Span] | None = None, **filters: Any) -> str:
-        """Export spans as newline-delimited JSON (no lock-in, guide §4).
+        """Export spans as newline-delimited JSON (no lock-in, guide section 4).
 
         Pass an explicit ``spans`` sequence, or filter keywords forwarded to
         :meth:`query`. Returns the JSONL text.

@@ -1,4 +1,4 @@
-"""Registry facade — create, version, fork, propose, merge, and discover
+"""Registry facade - create, version, fork, propose, merge, and discover
 collections, enforcing access control on every operation.
 """
 
@@ -33,6 +33,12 @@ def _new_id(prefix: str) -> str:
 
 
 class Registry:
+    """Public entrypoint for the collaboration registry.
+
+    Wraps a :class:`Store` and enforces access control on every operation.
+    Pull requests are held in memory keyed by id; collections live in the store.
+    """
+
     def __init__(self, store: Store | None = None) -> None:
         self._store = store or InMemoryStore()
         self._prs: dict[str, PullRequest] = {}
@@ -65,6 +71,7 @@ class Registry:
         visibility: Visibility = Visibility.PRIVATE,
         team: list[str] | None = None,
     ) -> Collection:
+        """Create a new collection owned by ``owner`` with an initial version."""
         version = self._new_version(artifact, None, "initial", owner)
         collection = Collection(
             id=_new_id("col"),
@@ -86,6 +93,7 @@ class Registry:
     def commit(
         self, user: str | None, collection_id: str, artifact: CollectionArtifact, message: str
     ) -> Version:
+        """Append a new version to a collection. Requires edit rights."""
         collection = self._require_visible(user, collection_id)
         if not can_edit(user, collection):
             raise AccessDenied(f"{user!r} cannot edit {collection_id}")
@@ -101,6 +109,7 @@ class Registry:
     def fork(
         self, user: str, collection_id: str, *, name: str | None = None
     ) -> Collection:
+        """Create an independent private copy owned by ``user``, recording lineage."""
         source = self._require_visible(user, collection_id)
         if not can_fork(user, source):
             raise AccessDenied(f"{user!r} cannot fork {collection_id}")
@@ -125,6 +134,7 @@ class Registry:
     def open_pull_request(
         self, user: str, source_id: str, target_id: str, title: str
     ) -> PullRequest:
+        """Open a PR proposing the source's changes to the target, snapshotting content."""
         source = self._require_visible(user, source_id)
         target = self._require_visible(user, target_id)
         diff = diff_artifacts(target.head.artifact, source.head.artifact)
@@ -143,6 +153,7 @@ class Registry:
         return pr
 
     def get_pull_request(self, pr_id: str) -> PullRequest:
+        """Return a pull request by id, or raise NotFoundError."""
         pr = self._prs.get(pr_id)
         if pr is None:
             raise NotFoundError(pr_id)

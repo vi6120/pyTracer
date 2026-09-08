@@ -10,8 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Navik" }]
-# navik-replay (Outcome/classify) is a sibling package in the same venv.
-dependencies = []
+dependencies = [
+    "navik-replay==0.0.1",
+]
 
 [project.optional-dependencies]
 dev = [

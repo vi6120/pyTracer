@@ -1,4 +1,4 @@
-"""Navik ingestion gateway — receive spans and write them through to storage."""
+"""Navik ingestion gateway - receive spans and write them through to storage."""
 
 from __future__ import annotations
 

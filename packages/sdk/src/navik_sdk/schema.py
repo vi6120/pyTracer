@@ -1,4 +1,4 @@
-"""Span schema — the core data contract for the whole platform.
+"""Span schema - the core data contract for the whole platform.
 
 Every layer (ingestion, trace store, replay engine, CLI) speaks this schema,
 so it is defined once here and reused everywhere. Fields follow the guide's

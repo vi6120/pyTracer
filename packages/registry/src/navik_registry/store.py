@@ -1,7 +1,7 @@
 """Storage backends for collections.
 
 Each backend returns an independent copy of a collection on every read, so a
-caller mutating what it reads can never corrupt another caller's view — the
+caller mutating what it reads can never corrupt another caller's view - the
 same isolation a real database or a git repo per collection would give. The
 filesystem backend writes one JSON file per collection, diffable in git.
 """
@@ -15,6 +15,12 @@ from .models import Collection
 
 
 class Store(Protocol):
+    """Persistence for collections. ``get``/``all`` return independent copies.
+
+    ``put`` upserts by collection id; ``get`` returns None when absent; ``all``
+    returns every stored collection.
+    """
+
     def put(self, collection: Collection) -> None: ...
     def get(self, collection_id: str) -> Collection | None: ...
     def all(self) -> list[Collection]: ...

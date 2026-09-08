@@ -1,4 +1,4 @@
-"""Navik collaboration registry — versioned, forkable, access-controlled
+"""Navik collaboration registry - versioned, forkable, access-controlled
 test collections.
 """
 

@@ -1,4 +1,4 @@
-"""Navik SDK — capture agent runs as OpenTelemetry-compliant spans.
+"""Navik SDK - capture agent runs as OpenTelemetry-compliant spans.
 
 Quick start::
 

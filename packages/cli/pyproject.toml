@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "navik-cli"
 version = "0.0.1"
-description = "Navik CLI — run agent test collections locally and in CI."
+description = "Navik CLI - run agent test collections locally and in CI."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

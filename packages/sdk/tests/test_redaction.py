@@ -20,7 +20,7 @@ def test_secret_is_removed_from_text(label: str, secret: str, fragment: str) -> 
     out = Redactor().redact_text(f"here is the value: {secret} done")
     assert secret not in out
     assert fragment not in out
-    assert "«redacted:" in out
+    assert "[redacted:" in out
 
 
 def test_redaction_recurses_into_nested_structures() -> None:

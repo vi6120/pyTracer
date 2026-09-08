@@ -1,4 +1,4 @@
-"""MockSet — recorded op outputs keyed by (identifier, input hash).
+"""MockSet - recorded op outputs keyed by (identifier, input hash).
 
 A mock set is the deterministic substitute for live tool/model calls during
 replay. It is built from a captured trace's recorded spans, or assembled by
@@ -26,7 +26,7 @@ def _identifier(kind: SpanKind, name: str, tool_name: str | None) -> str:
 
 @dataclass
 class MockSet:
-    """Maps (identifier, input_hash) → recorded output."""
+    """Maps (identifier, input_hash) -> recorded output."""
 
     _outputs: dict[tuple[str, str], Any] = field(default_factory=dict)
 

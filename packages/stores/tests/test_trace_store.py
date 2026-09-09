@@ -26,12 +26,13 @@ def _span(
     start_time_ns: int = NOW_NS,
     resource: Resource = RES,
     name: str = "op",
+    kind: SpanKind = SpanKind.TOOL,
 ) -> Span:
     return Span(
         trace_id=trace_id or new_trace_id(),
         span_id=new_span_id(),
         name=name,
-        kind=SpanKind.TOOL,
+        kind=kind,
         agent_name=agent_name,
         status=status,
         start_time_ns=start_time_ns,
@@ -132,6 +133,28 @@ def test_retention_purge(trace_store: TraceStore) -> None:
     remaining = trace_store.query(project="ret", limit=10)
     assert len(remaining) == 1
     assert remaining[0].span_id == recent.span_id
+
+
+def test_list_traces_summarizes_and_filters(trace_store: TraceStore) -> None:
+    ok_trace, bad_trace = new_trace_id(), new_trace_id()
+    trace_store.insert(
+        [
+            _span(trace_id=ok_trace, agent_name="writer", name="run", kind=SpanKind.AGENT),
+            _span(trace_id=ok_trace, name="chat"),
+            _span(trace_id=bad_trace, agent_name="planner", name="run", kind=SpanKind.AGENT),
+            _span(trace_id=bad_trace, name="search", status=SpanStatus.ERROR),
+        ],
+        project="ls",
+    )
+    all_rows = {r.trace_id: r for r in trace_store.list_traces(project="ls")}
+    assert set(all_rows) == {ok_trace, bad_trace}
+    assert all_rows[ok_trace].span_count == 2
+    assert all_rows[ok_trace].failed is False
+    assert all_rows[bad_trace].failed is True
+    assert all_rows[bad_trace].root_agent == "planner"
+
+    failed = trace_store.list_traces(project="ls", failed_only=True)
+    assert [r.trace_id for r in failed] == [bad_trace]
 
 
 def test_export_jsonl_roundtrips(trace_store: TraceStore) -> None:

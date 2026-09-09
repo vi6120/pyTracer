@@ -9,7 +9,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from navik_stores import MockStore, TraceStore
+from navik_stores import ApiKeyStore, MockStore, TraceStore
 from navik_stores.config import ClickHouseConfig, PostgresConfig
 
 
@@ -64,6 +64,20 @@ def mock_store() -> Iterator[MockStore]:
         pytest.skip("PostgreSQL not reachable (run `docker compose up -d`)")
     table = f"mocks_test_{uuid.uuid4().hex[:8]}"
     store = MockStore(table=table)
+    store.migrate()
+    try:
+        yield store
+    finally:
+        store.drop()
+        store.close()
+
+
+@pytest.fixture()
+def api_key_store() -> Iterator[ApiKeyStore]:
+    if not POSTGRES_UP:
+        pytest.skip("PostgreSQL not reachable (run `docker compose up -d`)")
+    table = f"api_keys_test_{uuid.uuid4().hex[:8]}"
+    store = ApiKeyStore(table=table)
     store.migrate()
     try:
         yield store

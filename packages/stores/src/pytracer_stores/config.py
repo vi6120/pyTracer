@@ -1,7 +1,7 @@
 """Connection settings for the trace and mock stores.
 
 Defaults match the local ``docker-compose.yml`` (ClickHouse + PostgreSQL, both
-``navik``/``navik``). Every value can be overridden by an environment variable
+``pytracer``/``pytracer``). Every value can be overridden by an environment variable
 so the same code runs against local containers, CI services, or managed tiers.
 """
 
@@ -15,22 +15,22 @@ from dataclasses import dataclass
 class ClickHouseConfig:
     """ClickHouse connection settings for the trace store (env-overridable)."""
 
-    host: str = os.getenv("NAVIK_CLICKHOUSE_HOST", "localhost")
-    port: int = int(os.getenv("NAVIK_CLICKHOUSE_PORT", "8123"))
-    username: str = os.getenv("NAVIK_CLICKHOUSE_USER", "navik")
-    password: str = os.getenv("NAVIK_CLICKHOUSE_PASSWORD", "navik")
-    database: str = os.getenv("NAVIK_CLICKHOUSE_DB", "navik")
+    host: str = os.getenv("PYTRACER_CLICKHOUSE_HOST", "localhost")
+    port: int = int(os.getenv("PYTRACER_CLICKHOUSE_PORT", "8123"))
+    username: str = os.getenv("PYTRACER_CLICKHOUSE_USER", "pytracer")
+    password: str = os.getenv("PYTRACER_CLICKHOUSE_PASSWORD", "pytracer")
+    database: str = os.getenv("PYTRACER_CLICKHOUSE_DB", "pytracer")
 
 
 @dataclass(frozen=True)
 class PostgresConfig:
     """PostgreSQL connection settings for the mock store (env-overridable)."""
 
-    host: str = os.getenv("NAVIK_POSTGRES_HOST", "localhost")
-    port: int = int(os.getenv("NAVIK_POSTGRES_PORT", "5432"))
-    dbname: str = os.getenv("NAVIK_POSTGRES_DB", "navik")
-    user: str = os.getenv("NAVIK_POSTGRES_USER", "navik")
-    password: str = os.getenv("NAVIK_POSTGRES_PASSWORD", "navik")
+    host: str = os.getenv("PYTRACER_POSTGRES_HOST", "localhost")
+    port: int = int(os.getenv("PYTRACER_POSTGRES_PORT", "5432"))
+    dbname: str = os.getenv("PYTRACER_POSTGRES_DB", "pytracer")
+    user: str = os.getenv("PYTRACER_POSTGRES_USER", "pytracer")
+    password: str = os.getenv("PYTRACER_POSTGRES_PASSWORD", "pytracer")
 
     def conninfo(self) -> str:
         """Return a libpq connection string for psycopg."""

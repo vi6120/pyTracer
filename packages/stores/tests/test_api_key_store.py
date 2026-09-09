@@ -6,8 +6,8 @@ reachable (see conftest.py).
 
 from __future__ import annotations
 
-from navik_stores import ApiKeyStore
-from navik_stores.api_key_store import KEY_PREFIX, generate_key, hash_key
+from pytracer_stores import ApiKeyStore
+from pytracer_stores.api_key_store import KEY_PREFIX, generate_key, hash_key
 
 
 def test_create_returns_full_key_once_and_resolves(api_key_store: ApiKeyStore) -> None:

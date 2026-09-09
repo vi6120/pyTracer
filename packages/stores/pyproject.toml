@@ -3,15 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "navik-stores"
+name = "pytracer-stores"
 version = "0.0.1"
-description = "Navik trace store (ClickHouse) and mock store (PostgreSQL)."
+description = "pyTracer trace store (ClickHouse) and mock store (PostgreSQL)."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-authors = [{ name = "Navik" }]
+authors = [{ name = "pyTracer" }]
 dependencies = [
-    "navik-sdk==0.0.1",
+    "pytracer-sdk==0.0.1",
     "clickhouse-connect>=0.7",
     "psycopg[binary]>=3.1",
     "pydantic>=2.6",
@@ -25,7 +25,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/navik_stores"]
+packages = ["src/pytracer_stores"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,4 +1,4 @@
-"""Navik stores - trace store (ClickHouse) and mock store (PostgreSQL)."""
+"""pyTracer stores - trace store (ClickHouse) and mock store (PostgreSQL)."""
 
 from __future__ import annotations
 

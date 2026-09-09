@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import threading
 
-from navik_stores import MockStore, input_hash
-from navik_stores.config import PostgresConfig
+from pytracer_stores import MockStore, input_hash
+from pytracer_stores.config import PostgresConfig
 
 
 def test_hash_is_order_independent() -> None:

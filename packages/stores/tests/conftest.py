@@ -9,8 +9,8 @@ from collections.abc import Iterator
 
 import pytest
 
-from navik_stores import ApiKeyStore, MockStore, TraceStore
-from navik_stores.config import ClickHouseConfig, PostgresConfig
+from pytracer_stores import ApiKeyStore, MockStore, TraceStore
+from pytracer_stores.config import ClickHouseConfig, PostgresConfig
 
 
 def _clickhouse_up() -> bool:

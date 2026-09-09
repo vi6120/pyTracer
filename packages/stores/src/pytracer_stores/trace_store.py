@@ -18,7 +18,7 @@ from typing import Any
 
 import clickhouse_connect
 from clickhouse_connect.driver.client import Client
-from navik_sdk.schema import Resource, Span, SpanKind, SpanStatus
+from pytracer_sdk.schema import Resource, Span, SpanKind, SpanStatus
 
 from .config import ClickHouseConfig
 from .hashing import canonical_json

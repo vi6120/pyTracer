@@ -7,11 +7,11 @@ from __future__ import annotations
 import threading
 import time
 
-from navik_sdk import new_span_id, new_trace_id
-from navik_sdk.schema import Resource, Span, SpanKind, SpanStatus
+from pytracer_sdk import new_span_id, new_trace_id
+from pytracer_sdk.schema import Resource, Span, SpanKind, SpanStatus
 
-from navik_stores import TraceStore
-from navik_stores.config import ClickHouseConfig
+from pytracer_stores import TraceStore
+from pytracer_stores.config import ClickHouseConfig
 
 NOW_NS = time.time_ns()
 DAY_NS = 86_400 * 1_000_000_000

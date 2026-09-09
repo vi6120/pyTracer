@@ -6,7 +6,7 @@ cannot be recovered afterwards, the same way a password would be handled. A key
 carries a short public identifier (``key_id``) used to list and revoke it without
 knowing the secret.
 
-This replaces the static ``NAVIK_GATEWAY_API_KEYS`` environment map for real
+This replaces the static ``PYTRACER_GATEWAY_API_KEYS`` environment map for real
 deployments, which cannot rotate or revoke a key without a redeploy.
 """
 

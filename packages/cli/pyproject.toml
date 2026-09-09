@@ -21,9 +21,12 @@ dependencies = [
 [project.optional-dependencies]
 # Trace browsing / recording commands need the store client.
 stores = ["navik-stores==0.0.1"]
+# The reproduce command needs the cross-branch runner.
+runner = ["navik-runner==0.0.1"]
 dev = [
     "pytest>=8.0",
     "navik-stores==0.0.1",
+    "navik-runner==0.0.1",
     "ruff>=0.5",
     "mypy>=1.10",
     "types-PyYAML>=6.0",

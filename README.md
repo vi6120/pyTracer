@@ -12,7 +12,9 @@ It works with agents built on LangGraph, CrewAI, AutoGen, and the OpenAI Agents
 SDK, or any Python agent you instrument by hand.
 
 Built from [agent-test-platform-guide.md](agent-test-platform-guide.md). See
-[PLAN.md](PLAN.md) for the build tracker.
+[PLAN.md](PLAN.md) for the build tracker. New here? Run the
+[quickstart](examples/quickstart) to try the whole loop in a couple of minutes,
+with no services.
 
 ## Why
 

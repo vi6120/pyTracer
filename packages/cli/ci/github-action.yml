@@ -27,7 +27,10 @@ runs:
       shell: bash
       run: |
         set +e
-        pytracer run "${{ inputs.collection }}" --comment pytracer-comment.md --junit pytracer-results.xml
+        pytracer run "${{ inputs.collection }}" \
+          --comment pytracer-comment.md \
+          --junit pytracer-results.xml \
+          --json pytracer-results.json
         echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
     - name: Comment results on the PR
@@ -43,6 +46,16 @@ runs:
             issue_number: context.issue.number,
             body,
           });
+
+    # Open or update a deduplicated issue per failure on a push to a branch
+    # (not on PRs, which get the comment above). The calling workflow must grant
+    # `permissions: issues: write` for GITHUB_TOKEN to create issues.
+    - name: Document failures as issues
+      if: steps.pytracer.outputs.exit_code != '0' && github.event_name != 'pull_request'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: pytracer issues sync pytracer-results.json
 
     - name: Fail the job if any scenario failed
       if: steps.pytracer.outputs.exit_code != '0'

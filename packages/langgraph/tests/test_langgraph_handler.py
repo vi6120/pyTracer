@@ -11,17 +11,17 @@ import uuid
 
 from langchain_core.messages import HumanMessage
 from langchain_core.outputs import Generation, LLMResult
-from navik_sdk import Resource, SpanStatus, Tracer
-from navik_sdk import SpanKind as K
-from navik_sdk.transport import InMemoryTransport
+from pytracer_sdk import Resource, SpanStatus, Tracer
+from pytracer_sdk import SpanKind as K
+from pytracer_sdk.transport import InMemoryTransport
 
-from navik_langgraph import NavikCallbackHandler
+from pytracer_langgraph import PyTracerCallbackHandler
 
 
-def _setup() -> tuple[NavikCallbackHandler, InMemoryTransport, Tracer]:
+def _setup() -> tuple[PyTracerCallbackHandler, InMemoryTransport, Tracer]:
     sink = InMemoryTransport()
     tracer = Tracer(sink, resource=Resource(service_name="t", branch="main", commit="c0"))
-    return NavikCallbackHandler(tracer), sink, tracer
+    return PyTracerCallbackHandler(tracer), sink, tracer
 
 
 def test_llm_span_mapping_with_tokens() -> None:

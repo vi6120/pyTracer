@@ -1,8 +1,8 @@
-"""LangChain / LangGraph callback handler that records Navik spans.
+"""LangChain / LangGraph callback handler that records pyTracer spans.
 
 LangChain reports work through callbacks that carry a ``run_id`` and
 ``parent_run_id`` (UUIDs) for every LLM call, tool call, and chain/graph node.
-This handler translates those callbacks into :class:`~navik_sdk.SpanRecorder`
+This handler translates those callbacks into :class:`~pytracer_sdk.SpanRecorder`
 start/end calls, so an agent is instrumented just by passing the handler in the
 run config, with no ``@op`` decorators in the agent code.
 
@@ -20,7 +20,7 @@ from uuid import UUID
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
-from navik_sdk import SpanKind, SpanRecorder, Tracer, get_tracer
+from pytracer_sdk import SpanKind, SpanRecorder, Tracer, get_tracer
 
 _MAX_DEPTH = 6
 
@@ -80,8 +80,8 @@ def _extract_llm_output(response: LLMResult) -> tuple[Any, int | None]:
     return output, tokens
 
 
-class NavikCallbackHandler(BaseCallbackHandler):
-    """LangChain callback handler that records spans into Navik."""
+class PyTracerCallbackHandler(BaseCallbackHandler):
+    """LangChain callback handler that records spans into pyTracer."""
 
     def __init__(self, tracer: Tracer | None = None) -> None:
         self._recorder = SpanRecorder(tracer or get_tracer())

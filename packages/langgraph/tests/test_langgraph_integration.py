@@ -11,12 +11,12 @@ from __future__ import annotations
 import importlib.util
 from typing import TypedDict
 
-import navik_sdk as navik
 import pytest
-from navik_sdk import SpanKind
-from navik_sdk.transport import InMemoryTransport
+import pytracer_sdk as pytracer
+from pytracer_sdk import SpanKind
+from pytracer_sdk.transport import InMemoryTransport
 
-from navik_langgraph import NavikCallbackHandler
+from pytracer_langgraph import PyTracerCallbackHandler
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("langgraph") is None, reason="langgraph not installed"
@@ -34,7 +34,7 @@ def test_real_graph_run_is_captured_as_one_trace() -> None:
     from langgraph.graph import END, START, StateGraph
 
     sink = InMemoryTransport()
-    tracer = navik.Tracer(sink, resource=navik.Resource(service_name="lg", branch="main", commit="c0"))
+    tracer = pytracer.Tracer(sink, resource=pytracer.Resource(service_name="lg", branch="main", commit="c0"))
 
     @tool
     def search(query: str) -> str:
@@ -59,7 +59,7 @@ def test_real_graph_run_is_captured_as_one_trace() -> None:
 
     app.invoke(
         {"messages": [HumanMessage(content="hi")]},
-        config={"callbacks": [NavikCallbackHandler(tracer)]},
+        config={"callbacks": [PyTracerCallbackHandler(tracer)]},
     )
     tracer.flush()
 

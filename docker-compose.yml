@@ -1,18 +1,18 @@
-# Navik backing services for local development.
+# pyTracer backing services for local development.
 # Trace store (ClickHouse) + mock store (PostgreSQL) + durable ingest queue (Redis).
 # Start with: docker compose up -d   (requires Docker Desktop running)
 
 services:
   clickhouse:
     image: clickhouse/clickhouse-server:24.8-alpine
-    container_name: navik-clickhouse
+    container_name: pytracer-clickhouse
     ports:
       - "8123:8123"   # HTTP interface
       - "9000:9000"   # native protocol
     environment:
-      CLICKHOUSE_DB: navik
-      CLICKHOUSE_USER: navik
-      CLICKHOUSE_PASSWORD: navik
+      CLICKHOUSE_DB: pytracer
+      CLICKHOUSE_USER: pytracer
+      CLICKHOUSE_PASSWORD: pytracer
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     ulimits:
       nofile:
@@ -28,24 +28,24 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: navik-postgres
+    container_name: pytracer-postgres
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: navik
-      POSTGRES_USER: navik
-      POSTGRES_PASSWORD: navik
+      POSTGRES_DB: pytracer
+      POSTGRES_USER: pytracer
+      POSTGRES_PASSWORD: pytracer
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U navik -d navik"]
+      test: ["CMD-SHELL", "pg_isready -U pytracer -d pytracer"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   redis:
     image: redis:7-alpine
-    container_name: navik-redis
+    container_name: pytracer-redis
     # Append-only persistence so the ingest backlog survives a Redis restart.
     command: ["redis-server", "--appendonly", "yes"]
     ports:

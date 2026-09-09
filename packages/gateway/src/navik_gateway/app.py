@@ -67,20 +67,27 @@ def create_app(
 
     @app.get("/v1/stats")
     async def stats() -> dict[str, Any]:
-        return {"stats": pipeline.stats.snapshot(), "dead_letters": len(pipeline.dead_letters)}
+        return {"stats": pipeline.stats.snapshot(), "dead_letters": await pipeline.dead_letter_count()}
+
+    @app.get("/v1/dead-letters")
+    async def dead_letters(limit: int = 20) -> dict[str, Any]:
+        # Inspect the dead-letter store (durable when the Redis backend is used).
+        capped = min(max(limit, 1), 200)
+        sample = await pipeline.dead_letters(capped)
+        return {
+            "count": await pipeline.dead_letter_count(),
+            "sample": [
+                {"reason": d.reason, "project": d.project, "detail": d.detail} for d in sample
+            ],
+        }
 
     @app.post("/v1/spans")
     async def ingest_spans(request: Request, project: str = Depends(require_project)) -> JSONResponse:
         body = await _parse_body(request)
         spans, errors = validate_spans(body)
-        pipeline.stats.validation_failed += len(errors)
-        for err in errors:
-            pipeline.dead_letters.append(
-                # No project trust from an unvalidated span; record the auth'd project.
-                _validation_dead_letter(project, err)
-            )
+        await pipeline.record_validation_failures(project, errors)
 
-        accepted, backpressured = pipeline.enqueue(project, spans)
+        accepted, backpressured = await pipeline.enqueue(project, spans)
 
         payload: dict[str, Any] = {
             "accepted": accepted,
@@ -111,12 +118,6 @@ async def _parse_body(request: Request) -> list[Any]:
         status.HTTP_400_BAD_REQUEST,
         "body must be a list of spans or an object with a 'spans' list",
     )
-
-
-def _validation_dead_letter(project: str, err: dict[str, Any]) -> Any:
-    from .ingest import DeadLetter
-
-    return DeadLetter("validation", project, str(err.get("error")), None)
 
 
 def build_default_app() -> FastAPI:

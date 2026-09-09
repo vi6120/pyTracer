@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pyTracer - test and replay your AI agents</title>
+<meta name="description" content="pyTracer captures what your AI agent does, replays a past run deterministically, and regression-tests it in CI. Its headline feature is cross-branch reproduction.">
+<style>
+  :root {
+    --bg: #ffffff;
+    --panel: #f6f7f9;
+    --border: #e5e7eb;
+    --text: #14161a;
+    --muted: #565b66;
+    --accent: #4f46e5;
+    --accent-soft: #eef2ff;
+    --code-bg: #0f1117;
+    --code-text: #e6e8ee;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d12;
+      --panel: #12151c;
+      --border: #232833;
+      --text: #eceef2;
+      --muted: #9aa1ad;
+      --accent: #8b8bff;
+      --accent-soft: #191a2e;
+      --code-bg: #05060a;
+      --code-text: #e6e8ee;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  header { padding: 20px 0; border-bottom: 1px solid var(--border); }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; }
+  .brand { font-weight: 700; font-size: 20px; letter-spacing: -0.02em; }
+  .brand .py { color: var(--muted); }
+  nav a { color: var(--muted); margin-left: 22px; font-size: 15px; }
+
+  .hero { padding: 84px 0 56px; text-align: center; }
+  .hero h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.05; letter-spacing: -0.03em; margin: 0 0 18px; }
+  .hero p.lede { font-size: clamp(17px, 2.6vw, 21px); color: var(--muted); max-width: 640px; margin: 0 auto 32px; }
+  .pill { display: inline-block; font-size: 13px; color: var(--accent); background: var(--accent-soft);
+          border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; margin-bottom: 26px; }
+  .cta { display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .btn { display: inline-block; padding: 11px 20px; border-radius: 10px; font-weight: 600; font-size: 15px; }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.primary:hover { text-decoration: none; opacity: 0.92; }
+  .btn.ghost { border: 1px solid var(--border); color: var(--text); }
+  .btn.ghost:hover { text-decoration: none; border-color: var(--accent); }
+
+  .frameworks { text-align: center; color: var(--muted); font-size: 14px; padding: 8px 0 56px; }
+  .frameworks span { display: inline-block; margin: 0 10px; }
+
+  section { padding: 40px 0; }
+  h2 { font-size: 26px; letter-spacing: -0.02em; margin: 0 0 8px; }
+  .section-sub { color: var(--muted); margin: 0 0 28px; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+  .card h3 { margin: 0 0 8px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .step-n { font-family: var(--mono); font-size: 13px; color: var(--accent); font-weight: 700; }
+
+  .install { background: var(--code-bg); color: var(--code-text); border-radius: 14px;
+             font-family: var(--mono); font-size: 15px; padding: 20px 22px; overflow-x: auto; }
+  .install .c { color: #7c8698; }
+
+  footer { border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; padding: 30px 0 48px; }
+  footer .wrap { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+
+  @media (max-width: 720px) {
+    .grid { grid-template-columns: 1fr; }
+    nav { display: none; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand"><span class="py">py</span>Tracer</div>
+      <nav>
+        <a href="#how">How it works</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/vi6120/pyTracer">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="wrap">
+        <span class="pill">Agent test and replay platform</span>
+        <h1>Test and replay your AI agents.</h1>
+        <p class="lede">
+          pyTracer captures what an agent does, replays a past run deterministically
+          by injecting the recorded responses, and regression-tests it in CI. Its
+          headline feature is <strong>cross-branch reproduction</strong>: take a
+          captured failure and re-run it on another branch with the model and tool
+          responses held frozen, so you learn whether a branch actually fixed the bug.
+        </p>
+        <div class="cta">
+          <a class="btn primary" href="https://github.com/vi6120/pyTracer">View on GitHub</a>
+          <a class="btn ghost" href="https://github.com/vi6120/pyTracer/tree/main/examples/quickstart">Quickstart</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="frameworks">
+      Works with
+      <span>LangGraph</span><span>CrewAI</span><span>AutoGen</span><span>OpenAI Agents SDK</span>
+      or any Python agent you instrument by hand.
+    </div>
+
+    <section id="how" class="wrap">
+      <h2>How a team uses it</h2>
+      <p class="section-sub">Instrument once, turn failures into tests, then gate your branches on them.</p>
+      <div class="grid">
+        <div class="card">
+          <div class="step-n">STEP 1</div>
+          <h3>Instrument your agent</h3>
+          <p>Add the <code>@op</code> decorator to the functions that call models and
+          tools. One or two lines each, and it does not change their behavior.</p>
+        </div>
+        <div class="card">
+          <div class="step-n">STEP 2</div>
+          <h3>Turn a failure into a test</h3>
+          <p>Browse captured runs, and scaffold a runnable test collection from a
+          failing one. Replays are deterministic and touch no live services.</p>
+        </div>
+        <div class="card">
+          <div class="step-n">STEP 3</div>
+          <h3>Gate branches in CI</h3>
+          <p>Run the collection on every pull request, comment the results, and
+          reproduce a failure on any branch to confirm a fix.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="install" class="wrap">
+      <h2>Install</h2>
+      <p class="section-sub">One package pulls in the whole platform; or install just the SDK in your agent.</p>
+      <div class="install">
+        <span class="c"># the whole platform</span><br>
+        pip install pytracer<br><br>
+        <span class="c"># or just the SDK</span><br>
+        pip install pytracer-sdk
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>pyTracer &middot; Apache-2.0</div>
+      <div><a href="https://github.com/vi6120/pyTracer">github.com/vi6120/pyTracer</a></div>
+    </div>
+  </footer>
+</body>
+</html>

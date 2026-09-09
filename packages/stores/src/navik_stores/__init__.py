@@ -5,7 +5,7 @@ from __future__ import annotations
 from .config import ClickHouseConfig, PostgresConfig
 from .hashing import canonical_json, input_hash
 from .mock_store import MockRecord, MockStore
-from .trace_store import TraceStore
+from .trace_store import TraceStore, TraceSummary
 
 __all__ = [
     "ClickHouseConfig",
@@ -13,6 +13,7 @@ __all__ = [
     "MockStore",
     "PostgresConfig",
     "TraceStore",
+    "TraceSummary",
     "canonical_json",
     "input_hash",
 ]

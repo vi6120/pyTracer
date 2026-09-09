@@ -31,7 +31,7 @@ Seven packages, each an installable Python package under `packages/`:
 | Package | Layer | What it does |
 | --- | --- | --- |
 | `navik-sdk` | 1. Instrumentation | `@op` decorator captures agent actions as OpenTelemetry-compatible spans, with local secret/PII redaction and non-blocking flush |
-| `navik-gateway` | 2. Ingestion | FastAPI service that validates spans, authenticates per project by API key, and writes them through to storage without blocking; an optional Redis Streams queue makes ingestion durable across restarts |
+| `navik-gateway` | 2. Ingestion | FastAPI service that validates spans, authenticates per project by API key (static map or managed keys in Postgres, with per-key rate limiting), and writes them through to storage without blocking; an optional Redis Streams queue makes ingestion durable across restarts |
 | `navik-stores` | 3. Storage | Trace store (ClickHouse) for captured spans, mock store (PostgreSQL) for recorded tool responses |
 | `navik-replay` | 4. Replay engine | Deterministic replay in three modes, an assertion framework, run diffing, failure fingerprinting, a three-way outcome classifier, and a network sandbox |
 | `navik-runner` | 4. Isolation | Per-commit isolated runner: check out any ref into a clean workspace and replay a frozen trace against it |
@@ -218,16 +218,17 @@ To run the gateway and its stores together as containers, see
 Every package is covered by tests and checked with `ruff` and `mypy --strict`:
 
 ```bash
-pytest packages            # 196 tests
+pytest packages            # 216 tests
 ruff check packages
 mypy packages/*/src
 ```
 
 ## Status
 
-All seven layers have working, tested engines, and ingestion is durable (the
-gateway's queue and dead-letter list survive a restart on Redis Streams).
+All seven layers have working, tested engines. Ingestion is durable (the
+gateway's queue and dead-letter list survive a restart on Redis Streams), and
+API keys are managed in Postgres with create/revoke and per-key rate limiting.
 Remaining work is CI glue (wiring a "try on this branch" PR-comment trigger to
-the runner, webhooks, live GitHub issue updates), real API-key management, the
-registry web UI, and the cross-cutting security and performance tracks. See
-[PLAN.md](PLAN.md) for the full breakdown.
+the runner, webhooks, live GitHub issue updates), the security baseline (TLS and
+at-rest encryption), the registry web UI, and the cross-cutting performance
+track. See [PLAN.md](PLAN.md) for the full breakdown.

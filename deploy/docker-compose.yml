@@ -1,0 +1,69 @@
+# Navik deployment: the ingestion gateway alongside its stores.
+# Run from the repository root:
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#
+# Set NAVIK_GATEWAY_API_KEYS to your own "key:project[,key:project]" mapping,
+# and change the ClickHouse / Postgres passwords before any real use.
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine
+    container_name: navik-clickhouse
+    environment:
+      CLICKHOUSE_DB: navik
+      CLICKHOUSE_USER: navik
+      CLICKHOUSE_PASSWORD: ${NAVIK_CLICKHOUSE_PASSWORD:-navik}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: navik-postgres
+    environment:
+      POSTGRES_DB: navik
+      POSTGRES_USER: navik
+      POSTGRES_PASSWORD: ${NAVIK_POSTGRES_PASSWORD:-navik}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U navik -d navik"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: packages/gateway/Dockerfile
+    container_name: navik-gateway
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      NAVIK_GATEWAY_API_KEYS: ${NAVIK_GATEWAY_API_KEYS:-devkey:default}
+      NAVIK_CLICKHOUSE_HOST: clickhouse
+      NAVIK_CLICKHOUSE_PASSWORD: ${NAVIK_CLICKHOUSE_PASSWORD:-navik}
+      NAVIK_POSTGRES_HOST: postgres
+      NAVIK_POSTGRES_PASSWORD: ${NAVIK_POSTGRES_PASSWORD:-navik}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  clickhouse-data:
+  postgres-data:

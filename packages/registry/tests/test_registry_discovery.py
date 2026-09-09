@@ -6,7 +6,7 @@ import time
 
 from reg_helpers import artifact
 
-from navik_registry import Registry, Visibility
+from pytracer_registry import Registry, Visibility
 
 
 def test_discovery_respects_visibility_and_filters() -> None:

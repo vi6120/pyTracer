@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from navik_registry import CollectionArtifact
+from pytracer_registry import CollectionArtifact
 
 
 def scenario(needle: str = "x") -> dict[str, Any]:

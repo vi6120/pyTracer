@@ -1,13 +1,13 @@
-# navik-registry
+# pytracer-registry
 
-Layer 5 of Navik: turns test collections into shareable, forkable artifacts —
+Layer 5 of pyTracer: turns test collections into shareable, forkable artifacts —
 the role Postman's collections played for API testing. Collections are
 versioned (content-addressed history), forkable with lineage, mergeable with
 conflict detection, access-controlled (private / team / public), and
 discoverable by framework and use case.
 
 ```python
-from navik_registry import Registry, Visibility, CollectionArtifact
+from pytracer_registry import Registry, Visibility, CollectionArtifact
 
 reg = Registry()  # in-memory; pass a FilesystemStore for on-disk JSON
 col = reg.create_collection(

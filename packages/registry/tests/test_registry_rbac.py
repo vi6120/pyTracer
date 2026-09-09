@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from reg_helpers import artifact, scenario
 
-from navik_registry import AccessDenied, NotFoundError, Registry, Visibility
+from pytracer_registry import AccessDenied, NotFoundError, Registry, Visibility
 
 
 def test_private_is_invisible_to_others_everywhere() -> None:

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from reg_helpers import artifact, scenario
 
-from navik_registry import Registry
-from navik_registry.hashing import content_hash
+from pytracer_registry import Registry
+from pytracer_registry.hashing import content_hash
 
 
 def test_create_and_commit_build_history() -> None:

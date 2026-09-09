@@ -3,13 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "navik-registry"
+name = "pytracer-registry"
 version = "0.0.1"
-description = "Navik collaboration registry - versioned, forkable, access-controlled test collections."
+description = "pyTracer collaboration registry - versioned, forkable, access-controlled test collections."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-authors = [{ name = "Navik" }]
+authors = [{ name = "pyTracer" }]
 dependencies = [
     "pydantic>=2.6",
 ]
@@ -22,7 +22,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/navik_registry"]
+packages = ["src/pytracer_registry"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from reg_helpers import artifact, scenario
 
-from navik_registry import AccessDenied, MergeConflict, Registry, Visibility, diff_artifacts
+from pytracer_registry import AccessDenied, MergeConflict, Registry, Visibility, diff_artifacts
 
 
 def _origin_and_fork(reg: Registry) -> tuple[str, str]:

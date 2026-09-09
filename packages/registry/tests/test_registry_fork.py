@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from reg_helpers import artifact, scenario
 
-from navik_registry import Registry, Visibility
+from pytracer_registry import Registry, Visibility
 
 
 def test_fork_records_lineage_and_new_owner() -> None:

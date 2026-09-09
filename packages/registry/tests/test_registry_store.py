@@ -6,7 +6,7 @@ from pathlib import Path
 
 from reg_helpers import artifact, scenario
 
-from navik_registry import FilesystemStore, Registry, Visibility
+from pytracer_registry import FilesystemStore, Registry, Visibility
 
 
 def test_filesystem_persistence(tmp_path: Path) -> None:

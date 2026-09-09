@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import navik_sdk as navik
-from navik_sdk import SpanKind, SpanStatus
+import pytracer_sdk as pytracer
+from pytracer_sdk import SpanKind, SpanStatus
 
-from navik_replay import MockSet, ReplayEngine, ReplayMode
+from pytracer_replay import MockSet, ReplayEngine, ReplayMode
 
 
 def _record(agent: object) -> object:
@@ -16,12 +16,12 @@ def _record(agent: object) -> object:
 def test_full_replay_injects_recorded_and_skips_live_body() -> None:
     calls = {"n": 0}
 
-    @navik.op(kind=SpanKind.TOOL, tool_name="flaky")
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="flaky")
     def flaky(x: int) -> dict[str, int]:
         calls["n"] += 1
         return {"val": x, "call": calls["n"]}
 
-    @navik.op(kind=SpanKind.AGENT, agent_name="a")
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
     def agent() -> dict[str, int]:
         return flaky(7)
 
@@ -44,17 +44,17 @@ def test_partial_mode_mocks_tools_but_runs_model() -> None:
     tool_calls = {"n": 0}
     model_calls = {"n": 0}
 
-    @navik.op(kind=SpanKind.TOOL, tool_name="fetch")
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="fetch")
     def fetch() -> str:
         tool_calls["n"] += 1
         return "data"
 
-    @navik.op(kind=SpanKind.LLM)
+    @pytracer.op(kind=SpanKind.LLM)
     def model(x: str) -> str:
         model_calls["n"] += 1
         return "resp:" + x
 
-    @navik.op(kind=SpanKind.AGENT)
+    @pytracer.op(kind=SpanKind.AGENT)
     def agent() -> str:
         return model(fetch())
 
@@ -71,12 +71,12 @@ def test_partial_mode_mocks_tools_but_runs_model() -> None:
 def test_live_mode_runs_everything() -> None:
     calls = {"n": 0}
 
-    @navik.op(kind=SpanKind.TOOL, tool_name="t")
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="t")
     def t() -> int:
         calls["n"] += 1
         return calls["n"]
 
-    @navik.op(kind=SpanKind.AGENT)
+    @pytracer.op(kind=SpanKind.AGENT)
     def agent() -> int:
         return t()
 
@@ -87,11 +87,11 @@ def test_live_mode_runs_everything() -> None:
 
 
 def test_strict_missing_mock_becomes_error_result() -> None:
-    @navik.op(kind=SpanKind.TOOL, tool_name="x")
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="x")
     def x() -> str:
         return "live"
 
-    @navik.op(kind=SpanKind.AGENT)
+    @pytracer.op(kind=SpanKind.AGENT)
     def agent() -> str:
         return x()
 
@@ -101,7 +101,7 @@ def test_strict_missing_mock_becomes_error_result() -> None:
 
 
 def test_agent_exception_becomes_error_result() -> None:
-    @navik.op(kind=SpanKind.AGENT)
+    @pytracer.op(kind=SpanKind.AGENT)
     def agent() -> None:
         raise ValueError("boom")
 
@@ -111,11 +111,11 @@ def test_agent_exception_becomes_error_result() -> None:
 
 
 def test_replayed_spans_are_marked() -> None:
-    @navik.op(kind=SpanKind.TOOL, tool_name="s")
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="s")
     def s() -> str:
         return "real"
 
-    @navik.op(kind=SpanKind.AGENT)
+    @pytracer.op(kind=SpanKind.AGENT)
     def agent() -> str:
         return s()
 
@@ -123,4 +123,4 @@ def test_replayed_spans_are_marked() -> None:
     mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
     res = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
     tool_span = next(sp for sp in res.spans if sp.tool_name == "s")
-    assert tool_span.attributes.get("navik.replayed") is True
+    assert tool_span.attributes.get("pytracer.replayed") is True

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from navik_sdk import SpanStatus
+from pytracer_sdk import SpanStatus
 
-from navik_replay import (
+from pytracer_replay import (
     Contains,
     ExactMatch,
     LLMJudge,

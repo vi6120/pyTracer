@@ -10,11 +10,11 @@ import socket
 import urllib.error
 import urllib.request
 
-import navik_sdk as navik
 import pytest
-from navik_sdk import SpanKind
+import pytracer_sdk as pytracer
+from pytracer_sdk import SpanKind
 
-from navik_replay import (
+from pytracer_replay import (
     BlockedNetworkError,
     MockSet,
     NetworkSandbox,
@@ -82,12 +82,12 @@ def test_socket_is_restored_after_exit() -> None:
 def test_engine_sandbox_blocks_unmocked_live_call() -> None:
     # In PARTIAL mode the model runs live; with the sandbox on, a model that
     # reaches the network is blocked and the replay is recorded as failed.
-    @navik.op(kind=SpanKind.LLM)
+    @pytracer.op(kind=SpanKind.LLM)
     def model(x: str) -> str:
         urllib.request.urlopen(f"http://{BLOCKED_HOST}/", timeout=2)
         return "unreachable"
 
-    @navik.op(kind=SpanKind.AGENT)
+    @pytracer.op(kind=SpanKind.AGENT)
     def agent() -> str:
         return model("hi")
 
@@ -98,12 +98,12 @@ def test_engine_sandbox_blocks_unmocked_live_call() -> None:
 def test_engine_sandbox_allows_fully_mocked_replay() -> None:
     # In FULL mode the tool is mocked, so no network is attempted even with the
     # sandbox on.
-    @navik.op(kind=SpanKind.TOOL, tool_name="fetch")
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="fetch")
     def fetch() -> str:
         urllib.request.urlopen(f"http://{BLOCKED_HOST}/", timeout=2)  # would be blocked
         return "live"
 
-    @navik.op(kind=SpanKind.AGENT)
+    @pytracer.op(kind=SpanKind.AGENT)
     def agent() -> str:
         return fetch()
 

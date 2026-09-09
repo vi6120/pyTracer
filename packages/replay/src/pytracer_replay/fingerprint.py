@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import hashlib
 
-from navik_sdk.schema import Span, SpanStatus
+from pytracer_sdk.schema import Span, SpanStatus
 
 from .engine import ReplayResult
 from .hashing import canonical_json

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from replay_helpers import failing_result, passing_result, span
 
-from navik_replay import failure_fingerprint, fingerprint
+from pytracer_replay import failure_fingerprint, fingerprint
 
 
 def test_no_failure_has_no_fingerprint() -> None:

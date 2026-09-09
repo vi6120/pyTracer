@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from replay_helpers import failing_result, passing_result
 
-from navik_replay import Outcome, classify
+from pytracer_replay import Outcome, classify
 
 
 def test_fixed_when_candidate_passes() -> None:

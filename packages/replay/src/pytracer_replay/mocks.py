@@ -11,7 +11,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from navik_sdk.schema import Span, SpanKind
+from pytracer_sdk.schema import Span, SpanKind
 
 from .hashing import input_hash
 

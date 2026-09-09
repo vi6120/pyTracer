@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from navik_sdk.schema import Span
+from pytracer_sdk.schema import Span
 
 from .engine import ReplayResult
 

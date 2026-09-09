@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from navik_sdk import SpanStatus
+from pytracer_sdk import SpanStatus
 from replay_helpers import span
 
-from navik_replay import ReplayMode, ReplayResult, diff_results, diff_traces
+from pytracer_replay import ReplayMode, ReplayResult, diff_results, diff_traces
 
 
 def test_identical_traces() -> None:

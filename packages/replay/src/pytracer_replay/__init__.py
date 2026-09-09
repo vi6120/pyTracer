@@ -1,4 +1,4 @@
-"""Navik replay & test engine - deterministic replay, assertions, diffing, and
+"""pyTracer replay & test engine - deterministic replay, assertions, diffing, and
 cross-branch outcome classification.
 """
 

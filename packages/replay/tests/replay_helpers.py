@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from navik_sdk import new_span_id, new_trace_id
-from navik_sdk.schema import Resource, Span, SpanKind, SpanStatus
+from pytracer_sdk import new_span_id, new_trace_id
+from pytracer_sdk.schema import Resource, Span, SpanKind, SpanStatus
 
-from navik_replay import ReplayMode, ReplayResult
+from pytracer_replay import ReplayMode, ReplayResult
 
 RES = Resource(service_name="test", branch="main", commit="abc123")
 

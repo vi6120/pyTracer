@@ -12,8 +12,8 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from enum import Enum
 
-import navik_sdk as navik
-from navik_sdk import InMemoryTransport, Intercept, Resource, Span, SpanKind, SpanStatus, Tracer
+import pytracer_sdk as pytracer
+from pytracer_sdk import InMemoryTransport, Intercept, Resource, Span, SpanKind, SpanStatus, Tracer
 
 from .mocks import MockSet, _identifier
 from .sandbox import NetworkSandbox
@@ -100,8 +100,8 @@ class ReplayEngine:
             resource=resource or Resource(service_name="replay", branch="replay", commit="replay"),
             interceptor=interceptor,
         )
-        previous = navik.get_tracer()
-        navik.set_tracer(tracer)
+        previous = pytracer.get_tracer()
+        pytracer.set_tracer(tracer)
         status = SpanStatus.OK
         error_type: str | None = None
         error_message: str | None = None
@@ -119,7 +119,7 @@ class ReplayEngine:
         finally:
             tracer.flush()
             tracer.shutdown()
-            navik.set_tracer(previous)
+            pytracer.set_tracer(previous)
 
         spans = sorted(sink.spans, key=lambda s: s.start_time_ns)
         if any(s.status is SpanStatus.ERROR for s in spans):

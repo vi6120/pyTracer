@@ -3,15 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "navik-replay"
+name = "pytracer-replay"
 version = "0.0.1"
-description = "Navik replay & test engine - deterministic replay, assertions, diffing, and cross-branch classification."
+description = "pyTracer replay & test engine - deterministic replay, assertions, diffing, and cross-branch classification."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-authors = [{ name = "Navik" }]
+authors = [{ name = "pyTracer" }]
 dependencies = [
-    "navik-sdk==0.0.1",
+    "pytracer-sdk==0.0.1",
     "pydantic>=2.6",
 ]
 
@@ -24,7 +24,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/navik_replay"]
+packages = ["src/pytracer_replay"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -9,16 +9,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import navik_sdk as navik
+import pytracer_sdk as pytracer
 from agent import run
 
 
 def main() -> None:
-    sink = navik.InMemoryTransport()
-    navik.configure(sink, service_name="researcher", branch="main", commit="quickstart")
+    sink = pytracer.InMemoryTransport()
+    pytracer.configure(sink, service_name="researcher", branch="main", commit="quickstart")
 
     result = run("climate change")
-    navik.flush()
+    pytracer.flush()
 
     traces_dir = Path(__file__).parent / "traces"
     traces_dir.mkdir(exist_ok=True)

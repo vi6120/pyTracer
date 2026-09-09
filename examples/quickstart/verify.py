@@ -20,7 +20,7 @@ def main() -> int:
 
     capture.main()
 
-    from navik_cli import run_path
+    from pytracer_cli import run_path
 
     result = run_path(here / "collection.yaml")
     for scenario in result.scenarios:

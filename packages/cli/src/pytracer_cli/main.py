@@ -6,14 +6,18 @@ run behaves identically locally and in CI.
 
 from __future__ import annotations
 
+import json
+import os
+import urllib.error
 from pathlib import Path
 from typing import Any
 
 import typer
 
 from . import __version__
+from .github import GitHubClient, sync_issue
 from .keys import format_key_table, format_new_key
-from .report import dumps_json, to_junit, to_markdown
+from .report import dumps_json, issue_body_from_json, issue_title, to_junit, to_markdown
 from .runner import CollectionResult, run_path
 from .traces import format_summary_table, format_trace_tree, parse_entry, record_trace
 
@@ -22,6 +26,8 @@ traces_app = typer.Typer(add_completion=False, help="Browse captured traces.")
 app.add_typer(traces_app, name="traces")
 keys_app = typer.Typer(add_completion=False, help="Manage gateway API keys.")
 app.add_typer(keys_app, name="keys")
+issues_app = typer.Typer(add_completion=False, help="Open or update GitHub issues for failures.")
+app.add_typer(issues_app, name="issues")
 
 
 def _open_trace_store() -> Any:
@@ -241,6 +247,79 @@ def keys_list(
         typer.echo("no keys found")
         return
     typer.echo(format_key_table(rows))
+
+
+@issues_app.command("sync")
+def issues_sync(
+    results: Path = typer.Argument(..., help="Results JSON from `pytracer run --json`."),
+    repo: str | None = typer.Option(None, help="Target repo 'owner/name' (default: $GITHUB_REPOSITORY)."),
+    token: str | None = typer.Option(
+        None, help="GitHub token (default: $GITHUB_TOKEN or $PYTRACER_GITHUB_TOKEN)."
+    ),
+    branch: str | None = typer.Option(None, help="Branch to record (default: $GITHUB_REF_NAME)."),
+    commit: str | None = typer.Option(None, help="Commit to record (default: $GITHUB_SHA)."),
+    label: list[str] = typer.Option(
+        ["pytracer-failure"], "--label", help="Label to add to new issues (repeatable)."
+    ),
+    api_url: str = typer.Option(
+        "https://api.github.com", help="GitHub API base URL (set for GitHub Enterprise)."
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print planned actions; call no API."),
+) -> None:
+    """Open or update a deduplicated GitHub issue for each failed scenario.
+
+    Reads the JSON that `pytracer run --json` writes. A failure's fingerprint is
+    embedded in the issue body, so a recurring failure updates one issue (a
+    comment, reopening it if closed) instead of opening duplicates.
+    """
+    try:
+        data = json.loads(results.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        typer.echo(f"error: cannot read results {results}: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    failures = [s for s in data.get("scenarios", []) if not s.get("passed")]
+    if not failures:
+        typer.echo("no failures to document")
+        return
+
+    repo = repo or os.getenv("GITHUB_REPOSITORY")
+    branch = branch or os.getenv("GITHUB_REF_NAME")
+    commit = commit or os.getenv("GITHUB_SHA")
+
+    if dry_run:
+        for s in failures:
+            fp = s.get("fingerprint") or "none"
+            typer.echo(f"would sync issue for {s['name']!r} (fingerprint {fp})")
+        return
+
+    token = token or os.getenv("GITHUB_TOKEN") or os.getenv("PYTRACER_GITHUB_TOKEN")
+    if not repo or not token:
+        typer.echo(
+            "error: a repo (--repo or $GITHUB_REPOSITORY) and a token "
+            "(--token or $GITHUB_TOKEN) are required",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    client = GitHubClient(token, repo, api_url=api_url)
+    for s in failures:
+        # A fingerprint dedups by failure; fall back to the scenario name so
+        # distinct un-fingerprinted failures still get distinct issues.
+        fingerprint = s.get("fingerprint") or f"name:{s['name']}"
+        body = issue_body_from_json(s, branch=branch, commit=commit)
+        try:
+            outcome = sync_issue(
+                client,
+                fingerprint=fingerprint,
+                title=issue_title(s["name"]),
+                body=body,
+                labels=list(label),
+            )
+        except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+            typer.echo(f"error: GitHub API call failed for {s['name']!r}: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"{outcome.action} #{outcome.number}: {outcome.url}")
 
 
 @app.command()

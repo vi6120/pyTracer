@@ -1,0 +1,10 @@
+name: quickstart
+scenarios:
+  - name: researcher-happy-path
+    agent: agent:run
+    entry: { task: "climate change" }
+    trace: traces/run.jsonl
+    mode: full
+    assertions:
+      - { type: no_errors }
+      - { type: contains, needle: "Summary" }

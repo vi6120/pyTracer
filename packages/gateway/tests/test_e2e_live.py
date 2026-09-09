@@ -13,13 +13,13 @@ import time
 import uuid
 from collections.abc import Callable
 
-import navik_sdk as navik
 import pytest
+import pytracer_sdk as pytracer
 import uvicorn
 from fastapi import FastAPI
 from helpers import FakeWriter
 
-from navik_gateway import TraceStoreWriter, create_app
+from pytracer_gateway import TraceStoreWriter, create_app
 
 API_KEYS = {"livekey": "live-proj"}
 
@@ -56,7 +56,7 @@ class _LiveServer:
 def _clickhouse_up() -> bool:
     try:
         import clickhouse_connect
-        from navik_stores.config import ClickHouseConfig
+        from pytracer_stores.config import ClickHouseConfig
 
         cfg = ClickHouseConfig()
         client = clickhouse_connect.get_client(
@@ -73,13 +73,13 @@ def _clickhouse_up() -> bool:
 def test_sdk_http_transport_to_gateway(wait_until: Callable[..., bool]) -> None:
     writer = FakeWriter()
     with _LiveServer(create_app(writer=writer, api_keys=API_KEYS)) as server:
-        transport = navik.HTTPTransport(server.base_url, api_key="livekey")
-        tracer = navik.Tracer(
+        transport = pytracer.HTTPTransport(server.base_url, api_key="livekey")
+        tracer = pytracer.Tracer(
             transport,
-            resource=navik.Resource(service_name="live", branch="main", commit="c0ffee"),
+            resource=pytracer.Resource(service_name="live", branch="main", commit="c0ffee"),
         )
 
-        @tracer.op(kind=navik.SpanKind.TOOL)
+        @tracer.op(kind=pytracer.SpanKind.TOOL)
         def work(x: int) -> int:
             return x + 1
 
@@ -94,10 +94,10 @@ def test_sdk_http_transport_to_gateway(wait_until: Callable[..., bool]) -> None:
 
 def test_sdk_http_transport_survives_unreachable_gateway() -> None:
     # Point at a dead port: the SDK must not crash; spans count as send errors.
-    transport = navik.HTTPTransport(f"http://127.0.0.1:{_free_port()}", api_key="x")
-    tracer = navik.Tracer(
+    transport = pytracer.HTTPTransport(f"http://127.0.0.1:{_free_port()}", api_key="x")
+    tracer = pytracer.Tracer(
         transport,
-        resource=navik.Resource(service_name="live", branch="main", commit="c0ffee"),
+        resource=pytracer.Resource(service_name="live", branch="main", commit="c0ffee"),
     )
 
     @tracer.op()
@@ -112,7 +112,7 @@ def test_sdk_http_transport_survives_unreachable_gateway() -> None:
 
 @pytest.mark.skipif(not _clickhouse_up(), reason="ClickHouse not reachable")
 def test_end_to_end_into_clickhouse(wait_until: Callable[..., bool]) -> None:
-    from navik_stores import TraceStore
+    from pytracer_stores import TraceStore
 
     table = f"spans_e2e_{uuid.uuid4().hex[:8]}"
     # The ClickHouse client is not safe for concurrent queries on one session, so
@@ -124,13 +124,13 @@ def test_end_to_end_into_clickhouse(wait_until: Callable[..., bool]) -> None:
     try:
         app = create_app(writer=TraceStoreWriter(writer_store), api_keys=API_KEYS)
         with _LiveServer(app) as server:
-            transport = navik.HTTPTransport(server.base_url, api_key="livekey")
-            tracer = navik.Tracer(
+            transport = pytracer.HTTPTransport(server.base_url, api_key="livekey")
+            tracer = pytracer.Tracer(
                 transport,
-                resource=navik.Resource(service_name="e2e", branch="feature/x", commit="deadbeef"),
+                resource=pytracer.Resource(service_name="e2e", branch="feature/x", commit="deadbeef"),
             )
 
-            @tracer.op(kind=navik.SpanKind.AGENT, agent_name="planner")
+            @tracer.op(kind=pytracer.SpanKind.AGENT, agent_name="planner")
             def run() -> str:
                 return "done"
 

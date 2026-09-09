@@ -3,23 +3,23 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "navik-gateway"
+name = "pytracer-gateway"
 version = "0.0.1"
-description = "Navik ingestion gateway - receives spans and writes them through to the trace store."
+description = "pyTracer ingestion gateway - receives spans and writes them through to the trace store."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-authors = [{ name = "Navik" }]
+authors = [{ name = "pyTracer" }]
 dependencies = [
-    "navik-sdk==0.0.1",
-    "navik-stores==0.0.1",
+    "pytracer-sdk==0.0.1",
+    "pytracer-stores==0.0.1",
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "pydantic>=2.6",
 ]
 
 [project.optional-dependencies]
-# Durable ingest queue backend (NAVIK_GATEWAY_QUEUE_BACKEND=redis).
+# Durable ingest queue backend (PYTRACER_GATEWAY_QUEUE_BACKEND=redis).
 redis = ["redis>=5.0"]
 dev = [
     "pytest>=8.0",
@@ -31,7 +31,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/navik_gateway"]
+packages = ["src/pytracer_gateway"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

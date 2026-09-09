@@ -7,7 +7,7 @@ from collections.abc import Callable
 from fastapi.testclient import TestClient
 from helpers import FakeWriter, make_span
 
-from navik_gateway import create_app
+from pytracer_gateway import create_app
 
 API_KEYS = {"k": "proj"}
 HEADERS = {"X-API-Key": "k"}

@@ -19,8 +19,8 @@ import uuid
 import pytest
 from helpers import FakeWriter, make_span
 
-from navik_gateway import GatewayConfig, IngestPipeline, RedisQueue
-from navik_gateway.queue import DeadLetter
+from pytracer_gateway import GatewayConfig, IngestPipeline, RedisQueue
+from pytracer_gateway.queue import DeadLetter
 
 
 def _redis_up() -> bool:
@@ -40,7 +40,7 @@ pytestmark = pytest.mark.skipif(not _redis_up(), reason="Redis not reachable")
 
 def _config() -> GatewayConfig:
     # A unique stream per test isolates it from every other run.
-    stream = f"navik:test:{uuid.uuid4().hex[:12]}"
+    stream = f"pytracer:test:{uuid.uuid4().hex[:12]}"
     return GatewayConfig(
         queue_backend="redis",
         redis_stream=stream,
@@ -138,7 +138,7 @@ def test_backpressure_when_backlog_is_full() -> None:
     async def scenario() -> None:
         cfg = GatewayConfig(
             queue_backend="redis",
-            redis_stream=f"navik:test:{uuid.uuid4().hex[:12]}",
+            redis_stream=f"pytracer:test:{uuid.uuid4().hex[:12]}",
             queue_maxsize=4,
         )
         queue = RedisQueue(cfg)
@@ -184,7 +184,7 @@ def test_http_ingest_over_redis_backend() -> None:
     # drains it to the writer, proving the wiring end to end over Redis.
     from fastapi.testclient import TestClient
 
-    from navik_gateway import create_app
+    from pytracer_gateway import create_app
 
     cfg = _config()
     writer = FakeWriter()
@@ -205,7 +205,7 @@ def test_http_ingest_over_redis_backend() -> None:
 
 
 def test_unknown_backend_is_rejected() -> None:
-    from navik_gateway import build_queue
+    from pytracer_gateway import build_queue
 
     with pytest.raises(ValueError, match="unknown queue backend"):
         build_queue(GatewayConfig(queue_backend="rabbitmq"))

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import threading
 
-from navik_sdk import new_span_id, new_trace_id
-from navik_sdk.schema import Resource, Span, SpanKind
+from pytracer_sdk import new_span_id, new_trace_id
+from pytracer_sdk.schema import Resource, Span, SpanKind
 
 RES = Resource(service_name="test", branch="main", commit="abc123")
 

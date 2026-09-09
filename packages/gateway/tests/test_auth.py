@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 from helpers import FakeWriter, make_span
 
-from navik_gateway import create_app
+from pytracer_gateway import create_app
 
 API_KEYS = {"goodkey": "proj-a"}
 

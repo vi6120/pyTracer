@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from helpers import FakeWriter, make_span
 
-from navik_gateway import GatewayConfig, StoreApiKeyAuth, create_app
+from pytracer_gateway import GatewayConfig, StoreApiKeyAuth, create_app
 
 
 class FakeKeyStore:
@@ -69,7 +69,7 @@ def test_invalidate_forces_a_refresh() -> None:
 def _postgres_up() -> bool:
     try:
         import psycopg
-        from navik_stores.config import PostgresConfig
+        from pytracer_stores.config import PostgresConfig
 
         conn = psycopg.connect(PostgresConfig().conninfo(), connect_timeout=3)
         conn.close()
@@ -83,7 +83,7 @@ pg = pytest.mark.skipif(not _postgres_up(), reason="PostgreSQL not reachable")
 
 @pg
 def test_live_gateway_accepts_then_rejects_a_revoked_key() -> None:
-    from navik_stores import ApiKeyStore
+    from pytracer_stores import ApiKeyStore
 
     table = f"api_keys_test_{uuid.uuid4().hex[:8]}"
     store = ApiKeyStore(table=table)

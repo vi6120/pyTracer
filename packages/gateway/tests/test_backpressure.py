@@ -9,7 +9,7 @@ from collections.abc import Callable
 from fastapi.testclient import TestClient
 from helpers import BlockingWriter, make_span
 
-from navik_gateway import GatewayConfig, create_app
+from pytracer_gateway import GatewayConfig, create_app
 
 API_KEYS = {"k": "proj"}
 HEADERS = {"X-API-Key": "k"}

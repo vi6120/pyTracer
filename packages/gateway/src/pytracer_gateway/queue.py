@@ -12,7 +12,7 @@ Two backends implement the same ``SpanQueue`` protocol:
 - ``RedisQueue`` keeps both the queue and the dead letters in Redis Streams, so
   a gateway restart replays in-flight spans (unacknowledged stream entries are
   reclaimed) and the dead-letter list survives. Select it by setting
-  ``NAVIK_GATEWAY_QUEUE_BACKEND=redis``.
+  ``PYTRACER_GATEWAY_QUEUE_BACKEND=redis``.
 
 Delivery is at-least-once: a span is acknowledged only after it has been written
 (or moved to the dead-letter store), so a crash between reserve and acknowledge
@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import uuid4
 
-from navik_sdk.schema import Span
+from pytracer_sdk.schema import Span
 
 from .config import GatewayConfig
 
@@ -325,7 +325,7 @@ def _import_redis() -> Any:
     except ModuleNotFoundError as exc:
         raise RuntimeError(
             "The Redis queue backend needs the 'redis' package. "
-            "Install it with: pip install navik-gateway[redis]"
+            "Install it with: pip install pytracer-gateway[redis]"
         ) from exc
     return redis
 

@@ -1,13 +1,13 @@
-# navik-gateway
+# pytracer-gateway
 
-Layer 2 of Navik: a stateless FastAPI service that receives batched spans from
+Layer 2 of pyTracer: a stateless FastAPI service that receives batched spans from
 deployed SDKs, validates them against the span schema, authenticates each
 project by API key, and writes them through to the ClickHouse trace store via
 an internal queue so a traffic spike never blocks ingestion.
 
 ```bash
 # Run it (writes to ClickHouse from docker-compose):
-NAVIK_GATEWAY_API_KEYS="devkey:my-app" uvicorn navik_gateway.app:build_default_app --factory --port 8080
+PYTRACER_GATEWAY_API_KEYS="devkey:my-app" uvicorn pytracer_gateway.app:build_default_app --factory --port 8080
 ```
 
 ```

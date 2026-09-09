@@ -19,8 +19,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from navik_sdk.schema import Span
 from pydantic import ValidationError
+from pytracer_sdk.schema import Span
 
 from .config import GatewayConfig
 from .queue import DeadLetter, SpanQueue, build_queue
@@ -100,7 +100,7 @@ class IngestPipeline:
     async def start(self) -> None:
         await self._queue.start()
         self._stopping.clear()
-        self._worker = asyncio.create_task(self._run(), name="navik-ingest-writer")
+        self._worker = asyncio.create_task(self._run(), name="pytracer-ingest-writer")
 
     async def stop(self) -> None:
         self._stopping.set()

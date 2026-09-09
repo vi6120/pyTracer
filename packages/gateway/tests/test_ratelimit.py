@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 from helpers import FakeWriter, make_span
 
-from navik_gateway import GatewayConfig, TokenBucketLimiter, create_app
+from pytracer_gateway import GatewayConfig, TokenBucketLimiter, create_app
 
 API_KEYS = {"k": "proj"}
 HEADERS = {"X-API-Key": "k"}

@@ -47,7 +47,7 @@ def create_app(
         finally:
             await pipeline.stop()
 
-    app = FastAPI(title="Navik Ingestion Gateway", version="0.0.1", lifespan=lifespan)
+    app = FastAPI(title="pyTracer Ingestion Gateway", version="0.0.1", lifespan=lifespan)
     app.state.pipeline = pipeline
 
     def require_project(x_api_key: str | None = Header(default=None, alias=API_KEY_HEADER)) -> str:
@@ -139,9 +139,9 @@ def build_default_app() -> FastAPI:
 
     Migrates the spans table on startup (idempotent), so a freshly deployed
     gateway can accept writes without a separate migration step. The auth backend
-    is chosen by ``NAVIK_GATEWAY_AUTH_BACKEND`` (static map or Postgres key store).
+    is chosen by ``PYTRACER_GATEWAY_AUTH_BACKEND`` (static map or Postgres key store).
     """
-    from navik_stores import TraceStore
+    from pytracer_stores import TraceStore
 
     cfg = GatewayConfig()
     store = TraceStore()
@@ -157,7 +157,7 @@ def build_default_app() -> FastAPI:
 def _build_auth(cfg: GatewayConfig) -> AuthBackend | None:
     """Build the store-backed auth for the Postgres backend; None keeps static."""
     if cfg.auth_backend.lower() == "postgres":
-        from navik_stores import ApiKeyStore
+        from pytracer_stores import ApiKeyStore
 
         from .auth import StoreApiKeyAuth
 

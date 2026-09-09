@@ -2,7 +2,7 @@
 
 Two backends resolve an API key to its project:
 
-- ``APIKeyAuth`` reads a fixed key -> project map (the ``NAVIK_GATEWAY_API_KEYS``
+- ``APIKeyAuth`` reads a fixed key -> project map (the ``PYTRACER_GATEWAY_API_KEYS``
   environment variable). Simple, but a key cannot be rotated or revoked without
   a redeploy. This is the default and suits local development.
 - ``StoreApiKeyAuth`` resolves against the PostgreSQL ``ApiKeyStore``, so keys

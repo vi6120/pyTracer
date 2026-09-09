@@ -103,6 +103,44 @@ def to_junit(result: CollectionResult) -> str:
     )
 
 
+def issue_title(name: str) -> str:
+    """Title for an auto-documentation issue about a failed scenario."""
+    return f"Agent test failure: {name}"
+
+
+def _render_issue(
+    *,
+    name: str,
+    status: str,
+    reason: str,
+    error_type: str | None,
+    fingerprint: str | None,
+    branch: str | None,
+    commit: str | None,
+    trace_id: str | None,
+) -> str:
+    """Shared renderer for the auto-doc issue body (dedup marker last)."""
+    lines = [
+        f"### Agent test failure: `{name}`",
+        "",
+        f"- **Status:** {status}",
+        f"- **Reason:** {reason}",
+    ]
+    if error_type:
+        lines.append(f"- **Error type:** `{error_type}`")
+    if branch:
+        lines.append(f"- **Branch:** `{branch}`")
+    if commit:
+        lines.append(f"- **Commit:** `{commit}`")
+    if trace_id:
+        lines.append(f"- **Trace:** `{trace_id}`")
+    if fingerprint:
+        lines.append(f"- **Fingerprint:** `{fingerprint}`")
+    lines.append("")
+    lines.append(FINGERPRINT_MARKER.format(fp=fingerprint or "none"))
+    return "\n".join(lines) + "\n"
+
+
 def issue_body(
     scenario: ScenarioResult,
     *,
@@ -111,26 +149,50 @@ def issue_body(
     trace_id: str | None = None,
 ) -> str:
     """Auto-documentation body for a failed scenario, with a dedup marker."""
-    reason = _scenario_reason(scenario) or "unknown failure"
-    lines = [
-        f"### Agent test failure: `{scenario.name}`",
-        "",
-        f"- **Status:** {scenario.replay.status.value}",
-        f"- **Reason:** {reason}",
-    ]
-    if scenario.replay.error_type:
-        lines.append(f"- **Error type:** `{scenario.replay.error_type}`")
-    if branch:
-        lines.append(f"- **Branch:** `{branch}`")
-    if commit:
-        lines.append(f"- **Commit:** `{commit}`")
-    if trace_id:
-        lines.append(f"- **Trace:** `{trace_id}`")
-    if scenario.fingerprint:
-        lines.append(f"- **Fingerprint:** `{scenario.fingerprint}`")
-    lines.append("")
-    lines.append(FINGERPRINT_MARKER.format(fp=scenario.fingerprint or "none"))
-    return "\n".join(lines) + "\n"
+    return _render_issue(
+        name=scenario.name,
+        status=scenario.replay.status.value,
+        reason=_scenario_reason(scenario) or "unknown failure",
+        error_type=scenario.replay.error_type,
+        fingerprint=scenario.fingerprint,
+        branch=branch,
+        commit=commit,
+        trace_id=trace_id,
+    )
+
+
+def _reason_from_json(s: dict[str, Any]) -> str:
+    """Mirror of :func:`_scenario_reason` for a scenario dict from :func:`to_json`."""
+    if s.get("config_error"):
+        return f"config error: {s['config_error']}"
+    if s.get("status") == "error":
+        return f"replay error: {s.get('error_type')}"
+    failed = [a for a in s.get("assertions", []) if not a["passed"]]
+    if failed:
+        return "; ".join(
+            f"{a['name']} ({a['detail']})" if a.get("detail") else a["name"] for a in failed
+        )
+    return ""
+
+
+def issue_body_from_json(
+    scenario: dict[str, Any],
+    *,
+    branch: str | None = None,
+    commit: str | None = None,
+    trace_id: str | None = None,
+) -> str:
+    """Build an issue body from a scenario dict (as emitted by :func:`to_json`)."""
+    return _render_issue(
+        name=scenario["name"],
+        status=scenario["status"],
+        reason=_reason_from_json(scenario) or "unknown failure",
+        error_type=scenario.get("error_type"),
+        fingerprint=scenario.get("fingerprint"),
+        branch=branch,
+        commit=commit,
+        trace_id=trace_id,
+    )
 
 
 def dumps_json(result: CollectionResult) -> str:

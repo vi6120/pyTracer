@@ -22,6 +22,16 @@ class GatewayConfig:
     retry_backoff: float = float(os.getenv("NAVIK_GATEWAY_RETRY_BACKOFF", "0.1"))
     max_errors_in_response: int = int(os.getenv("NAVIK_GATEWAY_MAX_ERRORS_IN_RESPONSE", "20"))
 
+    # Queue backend: "memory" (default, in-process) or "redis" (durable, so a
+    # restart replays in-flight spans and keeps the dead-letter list).
+    queue_backend: str = os.getenv("NAVIK_GATEWAY_QUEUE_BACKEND", "memory")
+    redis_url: str = os.getenv("NAVIK_REDIS_URL", "redis://localhost:6379/0")
+    redis_stream: str = os.getenv("NAVIK_REDIS_STREAM", "navik:spans")
+    redis_group: str = os.getenv("NAVIK_REDIS_GROUP", "navik-writers")
+    # Idle time (ms) before reclaiming another consumer's pending entries. 0 suits
+    # a single instance; raise it when running several gateways on one stream.
+    reclaim_min_idle_ms: int = int(os.getenv("NAVIK_REDIS_RECLAIM_MIN_IDLE_MS", "0"))
+
 
 def load_api_keys() -> dict[str, str]:
     """Parse ``NAVIK_GATEWAY_API_KEYS`` into a ``{api_key: project}`` mapping."""

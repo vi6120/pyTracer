@@ -208,6 +208,9 @@ Connection defaults for both stores match [docker-compose.yml](docker-compose.ym
 (`navik` / `navik`) and are overridable via `NAVIK_CLICKHOUSE_*` and
 `NAVIK_POSTGRES_*` environment variables.
 
+To run the gateway and its stores together as containers, see
+[deploy/](deploy/): `docker compose -f deploy/docker-compose.yml up -d --build`.
+
 ## Testing and quality
 
 Every package is covered by tests and checked with `ruff` and `mypy --strict`:

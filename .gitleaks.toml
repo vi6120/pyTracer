@@ -1,0 +1,21 @@
+# gitleaks configuration for pyTracer.
+#
+# Extends the default ruleset and allowlists the synthetic secrets that the SDK
+# redaction tests use to prove those patterns get scrubbed. They are not real
+# credentials; the allowlist keeps them from showing up as false positives once
+# the repository is public and secret scanning runs.
+
+title = "pyTracer"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic secrets used only by the redaction/instrumentation tests"
+# Match the exact fake values (not whole files), so a real secret accidentally
+# added later would still be caught.
+regexes = [
+  '''sk-abc123DEF456ghi789JKL012mno''',
+  '''ghp_0123456789abcdefghijklmnopqrstuvwx''',
+  '''AKIAIOSFODNN7EXAMPLE''',
+]

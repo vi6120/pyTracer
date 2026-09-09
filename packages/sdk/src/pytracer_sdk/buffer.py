@@ -52,7 +52,7 @@ class SpanBuffer:
         self._dropped_lock = threading.Lock()
         self._stopping = threading.Event()
         self._worker = threading.Thread(
-            target=self._run, name="navik-span-flush", daemon=True
+            target=self._run, name="pytracer-span-flush", daemon=True
         )
         self._worker.start()
 

@@ -1,12 +1,12 @@
-# navik-sdk
+# pytracer-sdk
 
-Layer 1 of Navik: captures agent actions (LLM calls, tool calls, reasoning steps, handoffs)
+Layer 1 of pyTracer: captures agent actions (LLM calls, tool calls, reasoning steps, handoffs)
 as structured, OpenTelemetry-compliant spans, with local redaction and non-blocking flush.
 
 ```python
-import navik_sdk as navik
+import pytracer_sdk as pytracer
 
-@navik.op(kind="llm")
+@pytracer.op(kind="llm")
 def call_model(prompt: str) -> str:
     ...
 ```

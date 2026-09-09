@@ -6,8 +6,8 @@ import asyncio
 
 import pytest
 
-from navik_sdk import Resource, SpanKind, SpanStatus, Tracer
-from navik_sdk.transport import InMemoryTransport
+from pytracer_sdk import Resource, SpanKind, SpanStatus, Tracer
+from pytracer_sdk.transport import InMemoryTransport
 
 
 def _tracer() -> tuple[Tracer, InMemoryTransport]:

@@ -47,7 +47,7 @@ class Resource(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     service_name: str = "unknown-agent"
-    sdk_name: str = "navik-sdk"
+    sdk_name: str = "pytracer-sdk"
     sdk_version: str = "0.0.1"
     branch: str | None = None
     commit: str | None = None
@@ -167,11 +167,11 @@ class Span(BaseModel):
         """Merge semantic fields into the attribute bag for OTLP export."""
         merged: dict[str, Any] = dict(self.attributes)
         for key, value in {
-            "navik.agent_name": self.agent_name,
-            "navik.tool_name": self.tool_name,
-            "navik.token_count": self.token_count,
-            "navik.cost_usd": self.cost_usd,
-            "navik.kind": self.kind.value,
+            "pytracer.agent_name": self.agent_name,
+            "pytracer.tool_name": self.tool_name,
+            "pytracer.token_count": self.token_count,
+            "pytracer.cost_usd": self.cost_usd,
+            "pytracer.kind": self.kind.value,
         }.items():
             if value is not None:
                 merged[key] = value

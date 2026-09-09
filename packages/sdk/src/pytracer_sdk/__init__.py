@@ -1,10 +1,10 @@
-"""Navik SDK - capture agent runs as OpenTelemetry-compliant spans.
+"""pyTracer SDK - capture agent runs as OpenTelemetry-compliant spans.
 
 Quick start::
 
-    import navik_sdk as navik
+    import pytracer_sdk as pytracer
 
-    @navik.op(kind=navik.SpanKind.LLM)
+    @pytracer.op(kind=pytracer.SpanKind.LLM)
     def call_model(prompt: str) -> str:
         ...
 

@@ -8,9 +8,9 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from navik_sdk import new_span_id, new_trace_id
-from navik_sdk.ids import is_valid_span_id, is_valid_trace_id
-from navik_sdk.schema import Span, SpanKind, SpanStatus
+from pytracer_sdk import new_span_id, new_trace_id
+from pytracer_sdk.ids import is_valid_span_id, is_valid_trace_id
+from pytracer_sdk.schema import Span, SpanKind, SpanStatus
 
 
 def _span(**overrides: object) -> Span:
@@ -88,8 +88,8 @@ def test_otlp_mapping_shape() -> None:
     assert otlp["status"]["code"] == "STATUS_CODE_OK"
     # Semantic fields are merged into OTLP attributes as KeyValue entries.
     keys = {a["key"] for a in otlp["attributes"]}
-    assert "navik.agent_name" in keys
-    assert "navik.token_count" in keys
+    assert "pytracer.agent_name" in keys
+    assert "pytracer.token_count" in keys
 
 
 @given(

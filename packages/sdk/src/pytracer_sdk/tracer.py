@@ -69,7 +69,7 @@ def _make_op_input(meta: _OpMeta, args: tuple[Any, ...], kwargs: dict[str, Any])
 
 
 _current: contextvars.ContextVar[SpanContext | None] = contextvars.ContextVar(
-    "navik_current_span", default=None
+    "pytracer_current_span", default=None
 )
 
 
@@ -269,7 +269,7 @@ class Tracer:
         decision = self.interceptor(kind, name, tool_name, active.span.input)
         if decision is not None:
             active.set_output(decision.output)
-            active.set_attribute("navik.replayed", True)
+            active.set_attribute("pytracer.replayed", True)
         return decision
 
     def flush(self, timeout: float | None = None) -> None:

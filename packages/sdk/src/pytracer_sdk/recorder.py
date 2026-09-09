@@ -1,13 +1,13 @@
 """SpanRecorder - build spans from external framework events.
 
 The ``@op`` decorator captures spans by nesting on the Python call stack, which
-works when Navik controls the code flow. Framework integrations do not: agent
+works when pyTracer controls the code flow. Framework integrations do not: agent
 frameworks (LangGraph, CrewAI, AutoGen, the OpenAI Agents SDK) report work as
 start/end callbacks that carry their own run ids and parent run ids, often from
 different threads. This recorder bridges that model. An adapter calls
 :meth:`start` when the framework begins an LLM call, tool call, or agent step,
 and :meth:`end` when it finishes; the recorder maps the framework's run ids to
-Navik trace/span ids, links parents explicitly, redacts, and buffers the span.
+pyTracer trace/span ids, links parents explicitly, redacts, and buffers the span.
 
 Every framework adapter is a thin translation of that framework's events into
 these two calls.

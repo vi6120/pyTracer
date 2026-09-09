@@ -3,13 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "navik-sdk"
+name = "pytracer-sdk"
 version = "0.0.1"
-description = "Navik instrumentation SDK - capture agent runs as OpenTelemetry-compliant spans."
+description = "pyTracer instrumentation SDK - capture agent runs as OpenTelemetry-compliant spans."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-authors = [{ name = "Navik" }]
+authors = [{ name = "pyTracer" }]
 dependencies = [
     "pydantic>=2.6",
 ]
@@ -24,7 +24,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/navik_sdk"]
+packages = ["src/pytracer_sdk"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

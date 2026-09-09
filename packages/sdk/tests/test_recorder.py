@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from navik_sdk import Resource, SpanKind, SpanRecorder, SpanStatus, Tracer
-from navik_sdk.transport import InMemoryTransport
+from pytracer_sdk import Resource, SpanKind, SpanRecorder, SpanStatus, Tracer
+from pytracer_sdk.transport import InMemoryTransport
 
 
 def _recorder() -> tuple[SpanRecorder, InMemoryTransport, Tracer]:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from navik_sdk.redaction import Redactor
+from pytracer_sdk.redaction import Redactor
 
 SECRETS = [
     ("openai key", "sk-abc123DEF456ghi789JKL012mno", "sk-abc123"),

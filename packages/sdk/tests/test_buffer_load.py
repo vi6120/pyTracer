@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import time
 
-from navik_sdk import new_span_id, new_trace_id
-from navik_sdk.buffer import SpanBuffer
-from navik_sdk.schema import Span, SpanKind
-from navik_sdk.transport import InMemoryTransport
+from pytracer_sdk import new_span_id, new_trace_id
+from pytracer_sdk.buffer import SpanBuffer
+from pytracer_sdk.schema import Span, SpanKind
+from pytracer_sdk.transport import InMemoryTransport
 
 TRACE_ID = new_trace_id()
 

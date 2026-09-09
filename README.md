@@ -228,7 +228,7 @@ To run the gateway and its stores together as containers, see
 Every package is covered by tests and checked with `ruff` and `mypy --strict`:
 
 ```bash
-pytest packages            # 227 tests
+pytest packages            # 232 tests
 ruff check packages
 mypy packages/*/src
 ```
@@ -237,9 +237,10 @@ mypy packages/*/src
 
 All seven layers have working, tested engines. Ingestion is durable (the
 gateway's queue and dead-letter list survive a restart on Redis Streams), API
-keys are managed in Postgres with create/revoke and per-key rate limiting, and
-failures auto-document as deduplicated GitHub issues. Remaining work is the
-last CI glue (wiring a "try on this branch" PR-comment trigger to the runner,
-webhooks), the security baseline (TLS and at-rest encryption), the registry web
+keys are managed in Postgres with create/revoke and per-key rate limiting,
+failures auto-document as deduplicated GitHub issues, and the deploy stack has a
+TLS-terminating reverse proxy with a self-hosting hardening guide
+([SECURITY.md](SECURITY.md)). Remaining work is the last CI glue (wiring a "try
+on this branch" PR-comment trigger to the runner, webhooks), the registry web
 UI, and the cross-cutting performance track. See [PLAN.md](PLAN.md) for the full
 breakdown.

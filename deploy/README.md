@@ -5,6 +5,9 @@ PostgreSQL for mocks) and Redis (the durable ingest queue). It is a
 single-instance setup suitable for a small team or a beta; see "Scaling" below
 for where it grows.
 
+For a full walkthrough of hosting this on your own domain from scratch (VPS
+provisioning, Cloudflare DNS, subdomains, TLS), see [HOSTING.md](HOSTING.md).
+
 ## Run it
 
 From the repository root:

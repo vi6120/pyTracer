@@ -1,6 +1,6 @@
-# Navik
+# pyTracer
 
-Navik is an **agent test and replay platform**. It captures what an AI agent
+pyTracer is an **agent test and replay platform**. It captures what an AI agent
 does (its LLM calls, tool calls, reasoning steps, and handoffs), replays a past
 run deterministically by injecting the recorded responses instead of calling
 live services, and regression-tests agents in CI. Its headline capability is
@@ -19,7 +19,7 @@ with no services.
 ## Why
 
 Agents are non-deterministic and hard to test: a run depends on live model
-output and live tool calls, so you cannot just re-run it. Navik records each run
+output and live tool calls, so you cannot just re-run it. pyTracer records each run
 as structured spans, turns those spans into deterministic mocks, and replays the
 agent against them. A failure captured once can then be reproduced on demand,
 asserted against, diffed between two runs, and re-checked on any branch.
@@ -30,22 +30,22 @@ Seven packages, each an installable Python package under `packages/`:
 
 | Package | Layer | What it does |
 | --- | --- | --- |
-| `navik-sdk` | 1. Instrumentation | `@op` decorator captures agent actions as OpenTelemetry-compatible spans, with local secret/PII redaction and non-blocking flush |
-| `navik-gateway` | 2. Ingestion | FastAPI service that validates spans, authenticates per project by API key (static map or managed keys in Postgres, with per-key rate limiting), and writes them through to storage without blocking; an optional Redis Streams queue makes ingestion durable across restarts |
-| `navik-stores` | 3. Storage | Trace store (ClickHouse) for captured spans, mock store (PostgreSQL) for recorded tool responses |
-| `navik-replay` | 4. Replay engine | Deterministic replay in three modes, an assertion framework, run diffing, failure fingerprinting, a three-way outcome classifier, and a network sandbox |
-| `navik-runner` | 4. Isolation | Per-commit isolated runner: check out any ref into a clean workspace and replay a frozen trace against it |
-| `navik-registry` | 5. Collaboration | Versioned, forkable, access-controlled test collections with pull requests and discovery |
-| `navik-cli` | 6. CI/CD | `navik run` executes test collections locally and in CI; ships a GitHub Action and a GitLab template |
+| `pytracer-sdk` | 1. Instrumentation | `@op` decorator captures agent actions as OpenTelemetry-compatible spans, with local secret/PII redaction and non-blocking flush |
+| `pytracer-gateway` | 2. Ingestion | FastAPI service that validates spans, authenticates per project by API key (static map or managed keys in Postgres, with per-key rate limiting), and writes them through to storage without blocking; an optional Redis Streams queue makes ingestion durable across restarts |
+| `pytracer-stores` | 3. Storage | Trace store (ClickHouse) for captured spans, mock store (PostgreSQL) for recorded tool responses |
+| `pytracer-replay` | 4. Replay engine | Deterministic replay in three modes, an assertion framework, run diffing, failure fingerprinting, a three-way outcome classifier, and a network sandbox |
+| `pytracer-runner` | 4. Isolation | Per-commit isolated runner: check out any ref into a clean workspace and replay a frozen trace against it |
+| `pytracer-registry` | 5. Collaboration | Versioned, forkable, access-controlled test collections with pull requests and discovery |
+| `pytracer-cli` | 6. CI/CD | `pytracer run` executes test collections locally and in CI; ships a GitHub Action and a GitLab template |
 
-A `navik` meta-package ties them together: installing it pulls in all seven, so
-`pip install navik` gives you the whole platform in one command (and `import
-navik` re-exports the SDK's core entrypoints for convenience).
+A `pytracer` meta-package ties them together: installing it pulls in all seven, so
+`pip install pytracer` gives you the whole platform in one command (and `import
+pytracer` re-exports the SDK's core entrypoints for convenience).
 
 Backing services (ClickHouse, PostgreSQL, and Redis for the durable ingest
 queue) run via [docker-compose.yml](docker-compose.yml).
 
-## How a development team uses Navik
+## How a development team uses pyTracer
 
 The workflow has three phases: instrument, turn failures into tests, and gate
 your branches on them.
@@ -56,18 +56,18 @@ Add `@op` to the functions that call models and tools. This is one or two lines
 per function and does not change their behavior.
 
 ```python
-import navik_sdk as navik
-from navik_sdk import SpanKind
+import pytracer_sdk as pytracer
+from pytracer_sdk import SpanKind
 
-@navik.op(kind=SpanKind.TOOL, tool_name="search")
+@pytracer.op(kind=SpanKind.TOOL, tool_name="search")
 def search(query: str) -> dict:
     ...  # your real tool
 
-@navik.op(kind=SpanKind.LLM)
+@pytracer.op(kind=SpanKind.LLM)
 def call_model(prompt: str) -> str:
     ...  # your real model call
 
-@navik.op(kind=SpanKind.AGENT, agent_name="researcher")
+@pytracer.op(kind=SpanKind.AGENT, agent_name="researcher")
 def run(task: str) -> str:
     return call_model(str(search(task)))
 ```
@@ -76,8 +76,8 @@ Point the SDK at the gateway so spans flow into the trace store. Stamp each run
 with the branch and commit so a captured failure is tied to exact code:
 
 ```python
-navik.configure(
-    navik.HTTPTransport("https://gateway.internal", api_key="YOUR_PROJECT_KEY"),
+pytracer.configure(
+    pytracer.HTTPTransport("https://gateway.internal", api_key="YOUR_PROJECT_KEY"),
     service_name="researcher",
     branch="main",
     commit="abc123",
@@ -93,9 +93,9 @@ When a run fails, browse recent captured runs and scaffold a test from one, no
 hand-writing of files required:
 
 ```bash
-navik traces list --failed              # find the failing run
-navik traces show <trace_id>            # inspect its span tree
-navik record <trace_id> --agent myapp.agents:run --entry task="summarize the doc"
+pytracer traces list --failed              # find the failing run
+pytracer traces show <trace_id>            # inspect its span tree
+pytracer record <trace_id> --agent myapp.agents:run --entry task="summarize the doc"
 ```
 
 `record` writes the trace's spans to JSONL and creates a **collection**: a small
@@ -116,15 +116,15 @@ scenarios:
       - { type: contains, needle: "summary" }
 ```
 
-Run it locally. Navik replays the agent with the recorded tool and model
+Run it locally. pyTracer replays the agent with the recorded tool and model
 responses injected, so the run is deterministic and touches no live services:
 
 ```bash
-navik run tests/collection.yaml
+pytracer run tests/collection.yaml
 ```
 
 The `traces` and `record` commands need the store client: `pip install
-navik-cli[stores]`.
+pytracer-cli[stores]`.
 
 ### 3. Gate your branches in CI
 
@@ -139,14 +139,14 @@ When a teammate opens a fix, re-run the failing collection against their branch
 with the mocks frozen, so only the code changes. From the terminal:
 
 ```bash
-navik reproduce --branch feature/fix-bug --baseline main \
+pytracer reproduce --branch feature/fix-bug --baseline main \
   --collection tests/collection.yaml
 ```
 
 It checks out each ref in its own isolated workspace, replays, and prints a
 per-scenario verdict of **fixed**, **still failing**, or **diverged** (a new,
 different failure), exiting non-zero unless every scenario is fixed. Needs the
-runner: `pip install navik-cli[runner]`.
+runner: `pip install pytracer-cli[runner]`.
 
 The same thing is available as a library (`CrossBranchRunner`,
 `classify_reproduction`) for building it into your own tooling.
@@ -166,9 +166,9 @@ worked for API testing.
 Once the packages are published, the whole platform installs with one command:
 
 ```bash
-pip install navik            # installs all seven components
+pip install pytracer            # installs all seven components
 # or install just what you need, e.g. the SDK in your agent:
-pip install navik-sdk
+pip install pytracer-sdk
 ```
 
 Nothing is published to a package index yet, so for now install from this repo
@@ -182,8 +182,8 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # 2. Install every package in editable mode with dev tooling
-#    (order matters: the navik meta-package resolves against the others)
-for p in sdk stores gateway replay runner registry cli navik; do
+#    (order matters: the pytracer meta-package resolves against the others)
+for p in sdk stores gateway replay runner registry cli pytracer; do
   pip install -e "packages/$p[dev]"
 done
 
@@ -202,13 +202,13 @@ anywhere.
 ### Running the gateway
 
 ```bash
-NAVIK_GATEWAY_API_KEYS="devkey:my-app" \
-  uvicorn navik_gateway.app:build_default_app --factory --port 8080
+PYTRACER_GATEWAY_API_KEYS="devkey:my-app" \
+  uvicorn pytracer_gateway.app:build_default_app --factory --port 8080
 ```
 
 Connection defaults for both stores match [docker-compose.yml](docker-compose.yml)
-(`navik` / `navik`) and are overridable via `NAVIK_CLICKHOUSE_*` and
-`NAVIK_POSTGRES_*` environment variables.
+(`pytracer` / `pytracer`) and are overridable via `PYTRACER_CLICKHOUSE_*` and
+`PYTRACER_POSTGRES_*` environment variables.
 
 To run the gateway and its stores together as containers, see
 [deploy/](deploy/): `docker compose -f deploy/docker-compose.yml up -d --build`.

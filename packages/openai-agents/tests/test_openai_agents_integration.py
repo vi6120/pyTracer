@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import importlib.util
 
-import navik_sdk as navik
 import pytest
-from navik_sdk import SpanKind
-from navik_sdk.transport import InMemoryTransport
+import pytracer_sdk as pytracer
+from pytracer_sdk import SpanKind
+from pytracer_sdk.transport import InMemoryTransport
 
-from navik_openai_agents import NavikTracingProcessor
+from pytracer_openai_agents import PyTracerTracingProcessor
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("agents") is None, reason="openai-agents not installed"
@@ -32,8 +32,8 @@ def test_real_tracing_run_is_captured() -> None:
     )
 
     sink = InMemoryTransport()
-    tracer = navik.Tracer(sink, resource=navik.Resource(service_name="oa", branch="main", commit="c0"))
-    set_trace_processors([NavikTracingProcessor(tracer)])
+    tracer = pytracer.Tracer(sink, resource=pytracer.Resource(service_name="oa", branch="main", commit="c0"))
+    set_trace_processors([PyTracerTracingProcessor(tracer)])
     try:
         with trace("weather-run"), agent_span(name="planner"):
             with generation_span(model="gpt-4o", usage={"total_tokens": 12}) as gen:

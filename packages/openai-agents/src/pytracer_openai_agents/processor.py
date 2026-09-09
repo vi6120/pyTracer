@@ -1,9 +1,9 @@
-"""OpenAI Agents SDK tracing processor that records Navik spans.
+"""OpenAI Agents SDK tracing processor that records pyTracer spans.
 
 The Agents SDK emits its own traces and spans (agent runs, model generations,
 function/tool calls, handoffs) and lets you register a ``TracingProcessor`` to
 observe them. This processor translates those into
-:class:`~navik_sdk.SpanRecorder` start/end calls, so an agent is instrumented
+:class:`~pytracer_sdk.SpanRecorder` start/end calls, so an agent is instrumented
 just by registering the processor, with no ``@op`` decorators in the agent code.
 
 Span-data input/output/usage are only populated by the time a span ends, so the
@@ -27,7 +27,7 @@ from agents.tracing import (
     TracingProcessor,
 )
 from agents.tracing import Trace as AgentsTrace
-from navik_sdk import SpanKind, SpanRecorder, Tracer, get_tracer
+from pytracer_sdk import SpanKind, SpanRecorder, Tracer, get_tracer
 
 _MAX_DEPTH = 6
 
@@ -106,8 +106,8 @@ def _error(span: Any) -> str | None:
     return str(getattr(err, "message", None) or err)
 
 
-class NavikTracingProcessor(TracingProcessor):
-    """Records Navik spans from OpenAI Agents SDK trace/span callbacks."""
+class PyTracerTracingProcessor(TracingProcessor):
+    """Records pyTracer spans from OpenAI Agents SDK trace/span callbacks."""
 
     def __init__(self, tracer: Tracer | None = None) -> None:
         self._recorder = SpanRecorder(tracer or get_tracer())

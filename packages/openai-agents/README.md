@@ -1,20 +1,20 @@
-# navik-openai-agents
+# pytracer-openai-agents
 
-Navik adapter for the OpenAI Agents SDK. It auto-instruments an agent through
+pyTracer adapter for the OpenAI Agents SDK. It auto-instruments an agent through
 the SDK's built-in tracing, so you do not add `@op` by hand: agent runs, model
-generations, tool (function) calls, and handoffs are captured as Navik spans.
+generations, tool (function) calls, and handoffs are captured as pyTracer spans.
 
 ```python
-import navik_sdk as navik
+import pytracer_sdk as pytracer
 from agents.tracing import add_trace_processor
-from navik_openai_agents import NavikTracingProcessor
+from pytracer_openai_agents import PyTracerTracingProcessor
 
-navik.configure(
-    navik.HTTPTransport("https://gateway.internal", api_key="YOUR_KEY"),
+pytracer.configure(
+    pytracer.HTTPTransport("https://gateway.internal", api_key="YOUR_KEY"),
     service_name="my-agent", branch="main", commit="abc123",
 )
 
-add_trace_processor(NavikTracingProcessor())   # now every agent run is captured
+add_trace_processor(PyTracerTracingProcessor())   # now every agent run is captured
 ```
 
 Agent spans map to agent spans, generations and responses to LLM spans, function

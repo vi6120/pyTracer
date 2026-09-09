@@ -1,4 +1,4 @@
-"""Hermetic tests: the processor maps SDK span data to Navik spans.
+"""Hermetic tests: the processor maps SDK span data to pyTracer spans.
 
 These use the SDK's real span-data classes but drive the processor with small
 fake Span/Trace wrappers, so they run without the tracing runtime.
@@ -14,11 +14,11 @@ from agents.tracing import (
     GenerationSpanData,
     HandoffSpanData,
 )
-from navik_sdk import Resource, SpanStatus, Tracer
-from navik_sdk import SpanKind as K
-from navik_sdk.transport import InMemoryTransport
+from pytracer_sdk import Resource, SpanStatus, Tracer
+from pytracer_sdk import SpanKind as K
+from pytracer_sdk.transport import InMemoryTransport
 
-from navik_openai_agents import NavikTracingProcessor
+from pytracer_openai_agents import PyTracerTracingProcessor
 
 
 class _FakeTrace:
@@ -39,13 +39,13 @@ class _FakeSpan:
         self.error = error
 
 
-def _setup() -> tuple[NavikTracingProcessor, InMemoryTransport, Tracer]:
+def _setup() -> tuple[PyTracerTracingProcessor, InMemoryTransport, Tracer]:
     sink = InMemoryTransport()
     tracer = Tracer(sink, resource=Resource(service_name="oa", branch="main", commit="c0"))
-    return NavikTracingProcessor(tracer), sink, tracer
+    return PyTracerTracingProcessor(tracer), sink, tracer
 
 
-def _run(proc: NavikTracingProcessor, spans: list[_FakeSpan]) -> None:
+def _run(proc: PyTracerTracingProcessor, spans: list[_FakeSpan]) -> None:
     trace = _FakeTrace("trace_1", "run")
     proc.on_trace_start(trace)  # type: ignore[arg-type]
     for s in spans:

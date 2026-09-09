@@ -86,13 +86,22 @@ unreachable the agent keeps running.
 
 ### 2. Turn a captured failure into a test
 
-When a run fails, you have its trace (a set of spans). Export those spans to a
-JSONL file, then write a **collection**: a small YAML file naming the agent to
-run, the recorded trace to mock from, and the assertions that should hold.
+When a run fails, browse recent captured runs and scaffold a test from one, no
+hand-writing of files required:
+
+```bash
+navik traces list --failed              # find the failing run
+navik traces show <trace_id>            # inspect its span tree
+navik record <trace_id> --agent myapp.agents:run --entry task="summarize the doc"
+```
+
+`record` writes the trace's spans to JSONL and creates a **collection**: a small
+YAML file naming the agent to run, the recorded trace to mock from, and the
+assertions that should hold.
 
 ```yaml
 # tests/collection.yaml
-name: researcher-tests
+name: captured-suite
 scenarios:
   - name: summarize-happy-path
     agent: myapp.agents:run          # import path "module:callable"
@@ -110,6 +119,9 @@ responses injected, so the run is deterministic and touches no live services:
 ```bash
 navik run tests/collection.yaml
 ```
+
+The `traces` and `record` commands need the store client: `pip install
+navik-cli[stores]`.
 
 ### 3. Gate your branches in CI
 

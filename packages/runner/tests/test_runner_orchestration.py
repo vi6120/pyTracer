@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from navik_runner import CrossBranchRunner, ExecResult
+from pytracer_runner import CrossBranchRunner, ExecResult
 
 
 class FakeSource:
@@ -29,7 +29,7 @@ class FakeExecutor:
         arts = artifacts or []
         self.calls.append((workdir, command, list(arts)))
         ref = (workdir / "REF").read_text(encoding="utf-8")  # proves we ran in the checkout
-        (workdir / "navik-out.json").write_text(f'{{"ref":"{ref}"}}', encoding="utf-8")
+        (workdir / "pytracer-out.json").write_text(f'{{"ref":"{ref}"}}', encoding="utf-8")
         read = {a: (workdir / a).read_text(encoding="utf-8") for a in arts if (workdir / a).exists()}
         return ExecResult(0, f"ran for {ref}", "", artifacts=read)
 
@@ -37,9 +37,9 @@ class FakeExecutor:
 def test_runs_inside_checked_out_tree() -> None:
     source, executor = FakeSource(), FakeExecutor()
     runner = CrossBranchRunner(source, executor)
-    result = runner.run_ref("main", "cmd", artifacts=["navik-out.json"])
+    result = runner.run_ref("main", "cmd", artifacts=["pytracer-out.json"])
     assert result.exit_code == 0
-    assert result.artifacts["navik-out.json"] == '{"ref":"main"}'
+    assert result.artifacts["pytracer-out.json"] == '{"ref":"main"}'
     assert source.checkouts[0][0] == "main"
 
 
@@ -89,7 +89,7 @@ def test_reproduce_parses_results_and_injects_trace(tmp_path: Path) -> None:
         ) -> ExecResult:
             injected["present"] = (workdir / "tests/t.jsonl").read_text(encoding="utf-8")
             payload = '{"collection":"c","scenarios":[{"name":"s","passed":true}]}'
-            return ExecResult(0, "", "", artifacts={"navik-out.json": payload})
+            return ExecResult(0, "", "", artifacts={"pytracer-out.json": payload})
 
     runner = CrossBranchRunner(Source(), Executor())
     result = runner.reproduce(

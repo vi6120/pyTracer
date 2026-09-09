@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from navik_runner import LocalExecutor
+from pytracer_runner import LocalExecutor
 
 
 def test_runs_command_and_reads_artifact(tmp_path: Path) -> None:

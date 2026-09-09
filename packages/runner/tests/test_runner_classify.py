@@ -1,12 +1,12 @@
-"""Cross-branch classification from two `navik run --json` outputs."""
+"""Cross-branch classification from two `pytracer run --json` outputs."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from navik_replay import Outcome
+from pytracer_replay import Outcome
 
-from navik_runner import classify_reproduction
+from pytracer_runner import classify_reproduction
 
 
 def _run(scenarios: list[dict[str, Any]]) -> dict[str, Any]:

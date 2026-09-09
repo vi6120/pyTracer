@@ -3,15 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "navik-runner"
+name = "pytracer-runner"
 version = "0.0.1"
-description = "Navik per-commit isolated runner - reproduce a trace against any branch or commit."
+description = "pyTracer per-commit isolated runner - reproduce a trace against any branch or commit."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-authors = [{ name = "Navik" }]
+authors = [{ name = "pyTracer" }]
 dependencies = [
-    "navik-replay==0.0.1",
+    "pytracer-replay==0.0.1",
 ]
 
 [project.optional-dependencies]
@@ -22,7 +22,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/navik_runner"]
+packages = ["src/pytracer_runner"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

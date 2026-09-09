@@ -15,20 +15,25 @@ import sys
 from pathlib import Path
 
 import pytest
-from navik_replay import Outcome
+from pytracer_replay import Outcome
 
-from navik_runner import CrossBranchRunner, GitSourceProvider, LocalExecutor, classify_reproduction
+from pytracer_runner import (
+    CrossBranchRunner,
+    GitSourceProvider,
+    LocalExecutor,
+    classify_reproduction,
+)
 
 GIT = shutil.which("git")
 pytestmark = pytest.mark.skipif(GIT is None, reason="git not available")
 
-# Emits a navik-run-style result file based on whether bug.check() is fixed.
+# Emits a pytracer-run-style result file based on whether bug.check() is fixed.
 _RUN_CHECK = (
     "import json, bug\n"
     "ok = bug.check()\n"
     "json.dump({'collection': 'c', 'scenarios': ["
     "{'name': 'fixes-bug', 'passed': ok, 'fingerprint': None if ok else 'fp1'}]},"
-    " open('navik-out.json', 'w'))\n"
+    " open('pytracer-out.json', 'w'))\n"
 )
 
 
@@ -63,11 +68,11 @@ def test_try_on_this_branch_reports_fixed(tmp_path: Path) -> None:
     runner = CrossBranchRunner(GitSourceProvider(repo), LocalExecutor())
     command = f"{shlex.quote(sys.executable)} run_check.py"
 
-    baseline = runner.run_ref(default_branch, command, artifacts=["navik-out.json"])
-    candidate = runner.run_ref("feature", command, artifacts=["navik-out.json"])
+    baseline = runner.run_ref(default_branch, command, artifacts=["pytracer-out.json"])
+    candidate = runner.run_ref("feature", command, artifacts=["pytracer-out.json"])
 
-    base_json = json.loads(baseline.artifacts["navik-out.json"])
-    cand_json = json.loads(candidate.artifacts["navik-out.json"])
+    base_json = json.loads(baseline.artifacts["pytracer-out.json"])
+    cand_json = json.loads(candidate.artifacts["pytracer-out.json"])
     assert base_json["scenarios"][0]["passed"] is False  # fails on the buggy branch
     assert cand_json["scenarios"][0]["passed"] is True  # passes on the fixed branch
 

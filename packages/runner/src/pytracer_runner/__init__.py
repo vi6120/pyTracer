@@ -1,4 +1,4 @@
-"""Navik per-commit isolated runner - reproduce a trace against any branch."""
+"""pyTracer per-commit isolated runner - reproduce a trace against any branch."""
 
 from __future__ import annotations
 

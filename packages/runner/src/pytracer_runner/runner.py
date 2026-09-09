@@ -17,12 +17,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from navik_replay import Outcome
+from pytracer_replay import Outcome
 
 from .executor import ExecResult, Executor
 from .source import SourceProvider
 
-_RESULT_ARTIFACT = "navik-out.json"
+_RESULT_ARTIFACT = "pytracer-out.json"
 
 
 @dataclass
@@ -31,7 +31,7 @@ class ReproduceResult:
 
     ref: str
     exit_code: int
-    results: dict[str, Any] | None  # parsed `navik run --json` output, or None if missing
+    results: dict[str, Any] | None  # parsed `pytracer run --json` output, or None if missing
     stderr: str = ""
     timed_out: bool = False
 
@@ -57,7 +57,7 @@ class CrossBranchRunner:
         in after checkout - used to freeze the recorded trace/mocks so only the
         agent code varies between refs.
         """
-        workdir = Path(tempfile.mkdtemp(prefix="navik-xbranch-"))
+        workdir = Path(tempfile.mkdtemp(prefix="pytracer-xbranch-"))
         try:
             self._source.checkout(ref, workdir)
             for dest_rel, src in (inject or {}).items():
@@ -80,12 +80,12 @@ class CrossBranchRunner:
         """Run a collection at ``ref`` with the frozen trace injected.
 
         The command installs the ref's own dependencies (in its clean workspace),
-        then runs ``navik run`` emitting JSON results, which are parsed back.
+        then runs ``pytracer run`` emitting JSON results, which are parsed back.
         """
         inject: dict[str, Path] = {}
         if frozen_trace is not None and trace_dest is not None:
             inject[trace_dest] = Path(frozen_trace)
-        command = f"{install} && navik run {collection_path} --json {_RESULT_ARTIFACT}"
+        command = f"{install} && pytracer run {collection_path} --json {_RESULT_ARTIFACT}"
         result = self.run_ref(ref, command, artifacts=[_RESULT_ARTIFACT], inject=inject)
         parsed = (
             json.loads(result.artifacts[_RESULT_ARTIFACT])
@@ -104,7 +104,7 @@ class CrossBranchRunner:
 def classify_reproduction(
     baseline: Mapping[str, Any], candidate: Mapping[str, Any]
 ) -> dict[str, Outcome]:
-    """Per-scenario cross-branch verdicts from two `navik run --json` outputs.
+    """Per-scenario cross-branch verdicts from two `pytracer run --json` outputs.
 
     For each scenario in the candidate run: if it now passes it is FIXED; if it
     still fails with the same failure fingerprint as the baseline it is

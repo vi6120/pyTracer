@@ -1,9 +1,9 @@
-# navik-runner
+# pytracer-runner
 
-Layer 4 infrastructure for Navik: the per-commit isolated runner behind
+Layer 4 infrastructure for pyTracer: the per-commit isolated runner behind
 "try on this branch". It checks out an arbitrary branch or commit into a clean
 workspace, runs a command there (typically installing dependencies and running
-`navik run`), and returns the result, so a captured failing trace can be
+`pytracer run`), and returns the result, so a captured failing trace can be
 replayed against a different branch with the model version and recorded tool
 responses held frozen and only the agent code varying (guide section 5).
 
@@ -11,7 +11,7 @@ Each run happens in its own fresh workspace, because two branches may have
 different dependency versions and must not share an environment.
 
 ```python
-from navik_runner import CrossBranchRunner, GitSourceProvider, DockerExecutor
+from pytracer_runner import CrossBranchRunner, GitSourceProvider, DockerExecutor
 
 runner = CrossBranchRunner(GitSourceProvider("/path/to/repo"), DockerExecutor())
 result = runner.reproduce(

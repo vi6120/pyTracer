@@ -1,8 +1,8 @@
-# Navik agent-tests GitHub Action (composite) - a thin wrapper around `navik run`.
-# Drop this in as `.github/actions/navik/action.yml` and reference it from a
+# pyTracer agent-tests GitHub Action (composite) - a thin wrapper around `pytracer run`.
+# Drop this in as `.github/actions/pytracer/action.yml` and reference it from a
 # workflow, or adapt the steps directly into a workflow job.
-name: "Navik Agent Tests"
-description: "Run a Navik agent test collection and comment the results on the PR."
+name: "pyTracer Agent Tests"
+description: "Run a pyTracer agent test collection and comment the results on the PR."
 inputs:
   collection:
     description: "Path to the collection YAML/JSON file"
@@ -18,16 +18,16 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
 
-    - name: Install navik-cli
+    - name: Install pytracer-cli
       shell: bash
-      run: pip install navik-cli
+      run: pip install pytracer-cli
 
     - name: Run agent test collection
-      id: navik
+      id: pytracer
       shell: bash
       run: |
         set +e
-        navik run "${{ inputs.collection }}" --comment navik-comment.md --junit navik-results.xml
+        pytracer run "${{ inputs.collection }}" --comment pytracer-comment.md --junit pytracer-results.xml
         echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
     - name: Comment results on the PR
@@ -36,7 +36,7 @@ runs:
       with:
         script: |
           const fs = require('fs');
-          const body = fs.readFileSync('navik-comment.md', 'utf8');
+          const body = fs.readFileSync('pytracer-comment.md', 'utf8');
           await github.rest.issues.createComment({
             owner: context.repo.owner,
             repo: context.repo.repo,
@@ -45,6 +45,6 @@ runs:
           });
 
     - name: Fail the job if any scenario failed
-      if: steps.navik.outputs.exit_code != '0'
+      if: steps.pytracer.outputs.exit_code != '0'
       shell: bash
       run: exit 1

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from navik_replay import MockSet, ReplayEngine, ReplayMode
+from pytracer_replay import MockSet, ReplayEngine, ReplayMode
 
 
 def record_trace(agent: Any, entry: dict[str, Any], path: Path) -> None:

@@ -1,9 +1,9 @@
-"""Cross-branch reproduction: back the ``navik reproduce`` command.
+"""Cross-branch reproduction: back the ``pytracer reproduce`` command.
 
 Given a collection and a candidate branch, this replays the collection (with its
 frozen recorded trace) on a baseline ref and on the candidate ref in isolation,
 then classifies each scenario as fixed, still failing, or diverged. The runner
-and classifier come from ``navik-runner``; this module holds the orchestration
+and classifier come from ``pytracer-runner``; this module holds the orchestration
 and formatting so it can be tested with a fake runner.
 """
 

@@ -1,13 +1,13 @@
-# navik-cli
+# pytracer-cli
 
-Layer 6 of Navik: a CLI that runs agent **test collections** locally and in CI,
+Layer 6 of pyTracer: a CLI that runs agent **test collections** locally and in CI,
 matching exactly what runs in a GitHub Action so there are no environment
 surprises. The GitHub Action and GitLab CI templates are thin wrappers around
 this command.
 
 ```bash
-navik run tests/collection.yaml            # human summary; exit 1 if any scenario fails
-navik run tests/collection.yaml --json out.json --junit out.xml --comment pr.md
+pytracer run tests/collection.yaml            # human summary; exit 1 if any scenario fails
+pytracer run tests/collection.yaml --json out.json --junit out.xml --comment pr.md
 ```
 
 A collection (`collection.yaml`):

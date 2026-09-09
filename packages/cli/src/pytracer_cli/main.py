@@ -1,4 +1,4 @@
-"""``navik`` command-line interface.
+"""``pytracer`` command-line interface.
 
 The GitHub Action and GitLab CI templates are thin wrappers around this, so a
 run behaves identically locally and in CI.
@@ -27,11 +27,11 @@ app.add_typer(keys_app, name="keys")
 def _open_trace_store() -> Any:
     """Open the trace store, or exit with guidance if the extra is not installed."""
     try:
-        from navik_stores import TraceStore
+        from pytracer_stores import TraceStore
     except ImportError as exc:
         typer.echo(
             "error: trace commands need the store client. Install with "
-            "`pip install navik-cli[stores]`.",
+            "`pip install pytracer-cli[stores]`.",
             err=True,
         )
         raise typer.Exit(code=2) from exc
@@ -41,11 +41,11 @@ def _open_trace_store() -> Any:
 def _open_key_store() -> Any:
     """Open the API-key store (migrating it), or exit if the extra is missing."""
     try:
-        from navik_stores import ApiKeyStore
+        from pytracer_stores import ApiKeyStore
     except ImportError as exc:
         typer.echo(
             "error: key commands need the store client. Install with "
-            "`pip install navik-cli[stores]`.",
+            "`pip install pytracer-cli[stores]`.",
             err=True,
         )
         raise typer.Exit(code=2) from exc
@@ -148,7 +148,7 @@ def record(
     )
     typer.echo(f"wrote {jsonl}")
     typer.echo(f"wrote {collection}")
-    typer.echo(f"run it with: navik run {collection}")
+    typer.echo(f"run it with: pytracer run {collection}")
 
 
 @app.command()
@@ -169,7 +169,7 @@ def reproduce(
 ) -> None:
     """Reproduce a captured failure on another branch (fixed / still failing / diverged)."""
     try:
-        from navik_runner import (
+        from pytracer_runner import (
             CrossBranchRunner,
             DockerExecutor,
             GitSourceProvider,
@@ -178,7 +178,7 @@ def reproduce(
         )
     except ImportError as exc:
         typer.echo(
-            "error: reproduce needs the runner. Install with `pip install navik-cli[runner]`.",
+            "error: reproduce needs the runner. Install with `pip install pytracer-cli[runner]`.",
             err=True,
         )
         raise typer.Exit(code=2) from exc

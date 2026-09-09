@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from navik_replay import AssertionResult, ReplayMode, ReplayResult
-from navik_sdk import SpanStatus
+from pytracer_replay import AssertionResult, ReplayMode, ReplayResult
+from pytracer_sdk import SpanStatus
 
-from navik_cli import CollectionResult, ScenarioResult, issue_body, to_json, to_junit, to_markdown
+from pytracer_cli import (
+    CollectionResult,
+    ScenarioResult,
+    issue_body,
+    to_json,
+    to_junit,
+    to_markdown,
+)
 
 
 def _ok_scenario() -> ScenarioResult:
@@ -49,6 +56,6 @@ def test_junit_reports_failures() -> None:
 def test_issue_body_carries_fingerprint_marker() -> None:
     body = issue_body(_failed_scenario(), branch="feature/x", commit="deadbeef", trace_id="t1")
     assert "abc123" in body
-    assert "<!-- navik-fingerprint: abc123 -->" in body  # dedup marker for CI
+    assert "<!-- pytracer-fingerprint: abc123 -->" in body  # dedup marker for CI
     assert "feature/x" in body
     assert "deadbeef" in body

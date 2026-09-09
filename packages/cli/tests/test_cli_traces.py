@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 import yaml
-from navik_sdk import new_span_id, new_trace_id
-from navik_sdk.schema import Resource, Span, SpanKind, SpanStatus
+from pytracer_sdk import new_span_id, new_trace_id
+from pytracer_sdk.schema import Resource, Span, SpanKind, SpanStatus
 
-from navik_cli.traces import format_summary_table, format_trace_tree, parse_entry, record_trace
+from pytracer_cli.traces import format_summary_table, format_trace_tree, parse_entry, record_trace
 
 RES = Resource(service_name="t", branch="main", commit="abc123")
 

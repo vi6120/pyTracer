@@ -21,7 +21,7 @@ _FAIL = "FAIL"
 
 # Hidden marker embedded in an auto-doc issue body; the fingerprint is the
 # dedup key CI matches on to decide "update existing" vs "open new".
-FINGERPRINT_MARKER = "<!-- navik-fingerprint: {fp} -->"
+FINGERPRINT_MARKER = "<!-- pytracer-fingerprint: {fp} -->"
 
 
 def to_json(result: CollectionResult) -> dict[str, Any]:
@@ -63,7 +63,7 @@ def to_markdown(result: CollectionResult) -> str:
     c = result.counts
     status = _PASS if result.passed else _FAIL
     lines = [
-        f"## Navik agent tests: `{result.name}` ({status})",
+        f"## pyTracer agent tests: `{result.name}` ({status})",
         "",
         f"**{c['passed']}/{c['total']} scenarios passed**"
         + (f", {c['failed']} failed" if c["failed"] else ""),

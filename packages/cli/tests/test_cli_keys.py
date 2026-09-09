@@ -1,4 +1,4 @@
-"""Command tests for `navik keys` using a fake key store (no Postgres needed)."""
+"""Command tests for `pytracer keys` using a fake key store (no Postgres needed)."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from navik_cli import main
-from navik_cli.keys import format_key_table
-from navik_cli.main import app
+from pytracer_cli import main
+from pytracer_cli.keys import format_key_table
+from pytracer_cli.main import app
 
 runner = CliRunner()
 

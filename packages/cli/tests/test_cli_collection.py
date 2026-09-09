@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from navik_replay import ReplayMode
+from pytracer_replay import ReplayMode
 
-from navik_cli import load_collection
+from pytracer_cli import load_collection
 
 
 def test_loads_yaml(tmp_path: Path) -> None:

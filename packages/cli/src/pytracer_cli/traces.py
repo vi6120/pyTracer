@@ -1,6 +1,6 @@
 """Browse captured traces and turn one into a test collection.
 
-These back the ``navik traces`` and ``navik record`` commands. The formatting
+These back the ``pytracer traces`` and ``pytracer record`` commands. The formatting
 and scaffolding helpers are pure (they take spans/summaries), so they are tested
 without a running trace store; the commands wire them to the store.
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from navik_sdk.schema import Span
+from pytracer_sdk.schema import Span
 
 
 def parse_entry(items: list[str] | None) -> dict[str, Any]:

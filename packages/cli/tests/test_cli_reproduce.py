@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from navik_replay import Outcome
-from navik_runner import classify_reproduction
+from pytracer_replay import Outcome
+from pytracer_runner import classify_reproduction
 
-from navik_cli.reproduce import all_fixed, format_verdicts, run_reproduction
+from pytracer_cli.reproduce import all_fixed, format_verdicts, run_reproduction
 
 
 class _Result:

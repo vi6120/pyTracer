@@ -1,4 +1,4 @@
-"""Formatting for the ``navik keys`` commands.
+"""Formatting for the ``pytracer keys`` commands.
 
 The command bodies live in ``main.py`` and wire these pure helpers to the
 PostgreSQL ``ApiKeyStore``; keeping the formatting here lets it be tested without

@@ -9,8 +9,8 @@ import cli_sample_agent
 import pytest
 from cli_testkit import record_trace, write_collection
 
-from navik_cli import run_path
-from navik_cli.runner import load_agent
+from pytracer_cli import run_path
+from pytracer_cli.runner import load_agent
 
 
 def _make(tmp_path: Path, assertions: list[dict[str, object]]) -> Path:

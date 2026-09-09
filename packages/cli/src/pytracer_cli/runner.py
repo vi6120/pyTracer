@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from navik_replay import (
+from pytracer_replay import (
     Assertion,
     AssertionResult,
     Contains,
@@ -27,7 +27,7 @@ from navik_replay import (
     fingerprint,
     run_assertions,
 )
-from navik_sdk.schema import Span, SpanStatus
+from pytracer_sdk.schema import Span, SpanStatus
 
 from .collection import AssertionSpec, Collection, ScenarioSpec, load_collection
 
@@ -74,7 +74,7 @@ def load_agent(path: str) -> Callable[..., object]:
     """Import an agent callable from a ``"module:attribute"`` path.
 
     The current working directory is put on the import path, so an agent module
-    that lives in the project being tested is importable when ``navik run`` is
+    that lives in the project being tested is importable when ``pytracer run`` is
     invoked from that project (the console script does not add cwd by default).
     """
     module_name, sep, attr = path.partition(":")

@@ -1,4 +1,4 @@
-"""Command tests for `navik traces` and `navik record` using a fake store."""
+"""Command tests for `pytracer traces` and `pytracer record` using a fake store."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from typing import Any
 
 import pytest
 import yaml
-from navik_sdk import new_span_id, new_trace_id
-from navik_sdk.schema import Resource, Span, SpanKind, SpanStatus
+from pytracer_sdk import new_span_id, new_trace_id
+from pytracer_sdk.schema import Resource, Span, SpanKind, SpanStatus
 from typer.testing import CliRunner
 
-from navik_cli import main
-from navik_cli.main import app
+from pytracer_cli import main
+from pytracer_cli.main import app
 
 runner = CliRunner()
 RES = Resource(service_name="t", branch="main", commit="abc123")

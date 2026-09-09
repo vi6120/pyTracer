@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from navik_replay import ReplayMode
 from pydantic import BaseModel, ConfigDict, Field
+from pytracer_replay import ReplayMode
 
 # Assertion types expressible declaratively in a file (predicate / llm_judge
 # need Python callables and are used programmatically, not from a collection).

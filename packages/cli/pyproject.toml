@@ -3,16 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "navik-cli"
+name = "pytracer-cli"
 version = "0.0.1"
-description = "Navik CLI - run agent test collections locally and in CI."
+description = "pyTracer CLI - run agent test collections locally and in CI."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-authors = [{ name = "Navik" }]
+authors = [{ name = "pyTracer" }]
 dependencies = [
-    "navik-sdk==0.0.1",
-    "navik-replay==0.0.1",
+    "pytracer-sdk==0.0.1",
+    "pytracer-replay==0.0.1",
     "typer>=0.12",
     "pyyaml>=6.0",
     "pydantic>=2.6",
@@ -20,23 +20,23 @@ dependencies = [
 
 [project.optional-dependencies]
 # Trace browsing / recording commands need the store client.
-stores = ["navik-stores==0.0.1"]
+stores = ["pytracer-stores==0.0.1"]
 # The reproduce command needs the cross-branch runner.
-runner = ["navik-runner==0.0.1"]
+runner = ["pytracer-runner==0.0.1"]
 dev = [
     "pytest>=8.0",
-    "navik-stores==0.0.1",
-    "navik-runner==0.0.1",
+    "pytracer-stores==0.0.1",
+    "pytracer-runner==0.0.1",
     "ruff>=0.5",
     "mypy>=1.10",
     "types-PyYAML>=6.0",
 ]
 
 [project.scripts]
-navik = "navik_cli.main:app"
+pytracer = "pytracer_cli.main:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/navik_cli"]
+packages = ["src/pytracer_cli"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -47,7 +47,7 @@ target-version = "py310"
 
 [tool.ruff.lint.per-file-ignores]
 # Typer uses typer.Option/Argument calls as parameter defaults by design.
-"src/navik_cli/main.py" = ["B008"]
+"src/pytracer_cli/main.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"

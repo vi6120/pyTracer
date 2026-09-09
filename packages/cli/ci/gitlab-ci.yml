@@ -1,14 +1,14 @@
-# Navik agent-tests GitLab CI template - a thin wrapper around `navik run`.
+# pyTracer agent-tests GitLab CI template - a thin wrapper around `pytracer run`.
 # Include this job in your .gitlab-ci.yml. JUnit output is surfaced in the
 # merge-request test report.
-navik-agent-tests:
+pytracer-agent-tests:
   image: python:3.12
   script:
-    - pip install navik-cli
-    - navik run tests/collection.yaml --junit navik-results.xml --comment navik-comment.md
+    - pip install pytracer-cli
+    - pytracer run tests/collection.yaml --junit pytracer-results.xml --comment pytracer-comment.md
   artifacts:
     when: always
     paths:
-      - navik-comment.md
+      - pytracer-comment.md
     reports:
-      junit: navik-results.xml
+      junit: pytracer-results.xml

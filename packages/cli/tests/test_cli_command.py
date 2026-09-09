@@ -1,4 +1,4 @@
-"""The ``navik`` command: exit codes and output artifacts, via Typer's runner."""
+"""The ``pytracer`` command: exit codes and output artifacts, via Typer's runner."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import cli_sample_agent
 from cli_testkit import record_trace, write_collection
 from typer.testing import CliRunner
 
-from navik_cli.main import app
+from pytracer_cli.main import app
 
 runner = CliRunner()
 

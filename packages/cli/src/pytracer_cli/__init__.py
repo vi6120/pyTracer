@@ -1,4 +1,4 @@
-"""Navik CLI - run agent test collections locally and in CI."""
+"""pyTracer CLI - run agent test collections locally and in CI."""
 
 from __future__ import annotations
 

@@ -1,27 +1,27 @@
-"""Command test for `navik reproduce` (runner orchestration is faked)."""
+"""Command test for `pytracer reproduce` (runner orchestration is faked)."""
 
 from __future__ import annotations
 
 from typing import Any
 
 import pytest
-from navik_replay import Outcome
+from pytracer_replay import Outcome
 from typer.testing import CliRunner
 
-from navik_cli.main import app
+from pytracer_cli.main import app
 
 runner = CliRunner()
 
 
 def _patch(monkeypatch: pytest.MonkeyPatch, result: Any) -> None:
-    # The command imports run_reproduction from navik_cli.reproduce at call time,
+    # The command imports run_reproduction from pytracer_cli.reproduce at call time,
     # so patching it there controls the (otherwise git+docker) reproduction.
     def fake(runner: Any, **kwargs: Any) -> Any:
         if isinstance(result, Exception):
             raise result
         return (None, None, result)
 
-    monkeypatch.setattr("navik_cli.reproduce.run_reproduction", fake)
+    monkeypatch.setattr("pytracer_cli.reproduce.run_reproduction", fake)
 
 
 def test_all_fixed_exits_zero(monkeypatch: pytest.MonkeyPatch) -> None:

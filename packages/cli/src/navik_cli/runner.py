@@ -7,6 +7,8 @@ run behaves identically on a laptop and in a GitHub Action.
 from __future__ import annotations
 
 import importlib
+import os
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -69,10 +71,18 @@ class CollectionResult:
 
 
 def load_agent(path: str) -> Callable[..., object]:
-    """Import an agent callable from a ``"module:attribute"`` path."""
+    """Import an agent callable from a ``"module:attribute"`` path.
+
+    The current working directory is put on the import path, so an agent module
+    that lives in the project being tested is importable when ``navik run`` is
+    invoked from that project (the console script does not add cwd by default).
+    """
     module_name, sep, attr = path.partition(":")
     if not sep or not attr:
         raise ScenarioError(f"agent must be 'module:callable', got {path!r}")
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
     try:
         module = importlib.import_module(module_name)
     except ImportError as exc:

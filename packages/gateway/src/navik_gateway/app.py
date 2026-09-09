@@ -120,10 +120,16 @@ def _validation_dead_letter(project: str, err: dict[str, Any]) -> Any:
 
 
 def build_default_app() -> FastAPI:
-    """Factory used by uvicorn: wires the ClickHouse trace store from env config."""
+    """Factory used by uvicorn: wires the ClickHouse trace store from env config.
+
+    Migrates the spans table on startup (idempotent), so a freshly deployed
+    gateway can accept writes without a separate migration step.
+    """
     from navik_stores import TraceStore
 
+    store = TraceStore()
+    store.migrate()
     return create_app(
-        writer=TraceStoreWriter(TraceStore()),
+        writer=TraceStoreWriter(store),
         api_keys=load_api_keys(),
     )

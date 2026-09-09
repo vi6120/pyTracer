@@ -1,18 +1,18 @@
-# Navik deployment: the ingestion gateway alongside its stores.
+# pyTracer deployment: the ingestion gateway alongside its stores.
 # Run from the repository root:
 #   docker compose -f deploy/docker-compose.yml up -d --build
 #
-# Set NAVIK_GATEWAY_API_KEYS to your own "key:project[,key:project]" mapping,
+# Set PYTRACER_GATEWAY_API_KEYS to your own "key:project[,key:project]" mapping,
 # and change the ClickHouse / Postgres passwords before any real use.
 
 services:
   clickhouse:
     image: clickhouse/clickhouse-server:24.8-alpine
-    container_name: navik-clickhouse
+    container_name: pytracer-clickhouse
     environment:
-      CLICKHOUSE_DB: navik
-      CLICKHOUSE_USER: navik
-      CLICKHOUSE_PASSWORD: ${NAVIK_CLICKHOUSE_PASSWORD:-navik}
+      CLICKHOUSE_DB: pytracer
+      CLICKHOUSE_USER: pytracer
+      CLICKHOUSE_PASSWORD: ${PYTRACER_CLICKHOUSE_PASSWORD:-pytracer}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
@@ -26,22 +26,22 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: navik-postgres
+    container_name: pytracer-postgres
     environment:
-      POSTGRES_DB: navik
-      POSTGRES_USER: navik
-      POSTGRES_PASSWORD: ${NAVIK_POSTGRES_PASSWORD:-navik}
+      POSTGRES_DB: pytracer
+      POSTGRES_USER: pytracer
+      POSTGRES_PASSWORD: ${PYTRACER_POSTGRES_PASSWORD:-pytracer}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U navik -d navik"]
+      test: ["CMD-SHELL", "pg_isready -U pytracer -d pytracer"]
       interval: 5s
       timeout: 3s
       retries: 20
 
   redis:
     image: redis:7-alpine
-    container_name: navik-redis
+    container_name: pytracer-redis
     # Append-only persistence so the durable ingest backlog survives a restart.
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
@@ -56,7 +56,7 @@ services:
     build:
       context: ..
       dockerfile: packages/gateway/Dockerfile
-    container_name: navik-gateway
+    container_name: pytracer-gateway
     depends_on:
       clickhouse:
         condition: service_healthy
@@ -65,15 +65,15 @@ services:
       redis:
         condition: service_healthy
     environment:
-      NAVIK_GATEWAY_API_KEYS: ${NAVIK_GATEWAY_API_KEYS:-devkey:default}
-      NAVIK_CLICKHOUSE_HOST: clickhouse
-      NAVIK_CLICKHOUSE_PASSWORD: ${NAVIK_CLICKHOUSE_PASSWORD:-navik}
-      NAVIK_POSTGRES_HOST: postgres
-      NAVIK_POSTGRES_PASSWORD: ${NAVIK_POSTGRES_PASSWORD:-navik}
+      PYTRACER_GATEWAY_API_KEYS: ${PYTRACER_GATEWAY_API_KEYS:-devkey:default}
+      PYTRACER_CLICKHOUSE_HOST: clickhouse
+      PYTRACER_CLICKHOUSE_PASSWORD: ${PYTRACER_CLICKHOUSE_PASSWORD:-pytracer}
+      PYTRACER_POSTGRES_HOST: postgres
+      PYTRACER_POSTGRES_PASSWORD: ${PYTRACER_POSTGRES_PASSWORD:-pytracer}
       # Durable ingest queue: in-flight spans and the dead-letter list survive a
       # gateway restart instead of living only in process memory.
-      NAVIK_GATEWAY_QUEUE_BACKEND: ${NAVIK_GATEWAY_QUEUE_BACKEND:-redis}
-      NAVIK_REDIS_URL: redis://redis:6379/0
+      PYTRACER_GATEWAY_QUEUE_BACKEND: ${PYTRACER_GATEWAY_QUEUE_BACKEND:-redis}
+      PYTRACER_REDIS_URL: redis://redis:6379/0
     ports:
       - "8080:8080"
     restart: unless-stopped

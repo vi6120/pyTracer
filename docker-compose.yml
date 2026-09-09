@@ -1,5 +1,5 @@
 # Navik backing services for local development.
-# Trace store (ClickHouse) + mock store (PostgreSQL).
+# Trace store (ClickHouse) + mock store (PostgreSQL) + durable ingest queue (Redis).
 # Start with: docker compose up -d   (requires Docker Desktop running)
 
 services:
@@ -43,6 +43,22 @@ services:
       timeout: 3s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: navik-redis
+    # Append-only persistence so the ingest backlog survives a Redis restart.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   clickhouse-data:
   postgres-data:
+  redis-data:

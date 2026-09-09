@@ -39,6 +39,7 @@ Set these before a real deployment (defaults are for local trials only):
 | `PYTRACER_GATEWAY_AUTH_BACKEND` | `static` (env map) or `postgres` (managed keys) | `static` |
 | `PYTRACER_GATEWAY_RATE_LIMIT_PER_SEC` | Per-key request rate; `0` disables limiting | `0` |
 | `PYTRACER_GATEWAY_RATE_LIMIT_BURST` | Per-key burst ceiling; defaults to the rate | `0` |
+| `PYTRACER_DOMAIN` | Gateway hostname for the `tls` profile's auto-HTTPS | (unset) |
 
 For example:
 
@@ -110,11 +111,28 @@ Set `PYTRACER_GATEWAY_QUEUE_BACKEND=memory` to fall back to the in-process queue
 (no Redis needed, but a restart drops whatever it holds). This is the default
 only when you run the gateway outside this compose stack.
 
+## TLS
+
+The gateway speaks plain HTTP so it can sit behind your TLS terminator. The
+stack ships a Caddy reverse proxy behind a `tls` profile that obtains and renews
+a certificate automatically:
+
+```bash
+PYTRACER_DOMAIN=gateway.pytracer.com \
+  docker compose -f deploy/docker-compose.yml --profile tls up -d --build
+```
+
+Point the domain's DNS at this host, open ports 80 and 443, and stop publishing
+the gateway's own port 8080 publicly. Prefer your own proxy or load balancer?
+Terminate TLS there and forward to the gateway on the internal network. Either
+way, point the SDK at the `https://` endpoint (see
+[SECURITY.md](../SECURITY.md#tls-in-transit) for verifying an internal CA).
+
 ## Production notes
 
-- **TLS**: the gateway speaks plain HTTP. Terminate TLS at a reverse proxy
-  (nginx, Caddy, a cloud load balancer) in front of it, and expose only the
-  proxy. Do not expose ClickHouse, PostgreSQL, or Redis publicly.
+- **TLS**: terminate it at the bundled Caddy proxy (the `tls` profile above) or
+  your own, and expose only the proxy. Do not expose ClickHouse, PostgreSQL, or
+  Redis publicly. Full hardening guide: [SECURITY.md](../SECURITY.md).
 - **Secrets**: change the store passwords and use real API keys. Manage them
   through your orchestrator's secret store rather than committing them.
 - **Persistence**: trace and mock data live in the `clickhouse-data` and

@@ -16,20 +16,27 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
-from .auth import API_KEY_HEADER, APIKeyAuth
+from .auth import API_KEY_HEADER, APIKeyAuth, AuthBackend
 from .config import GatewayConfig, load_api_keys
 from .ingest import IngestPipeline, TraceStoreWriter, Writer, validate_spans
+from .ratelimit import TokenBucketLimiter
 
 
 def create_app(
     *,
     writer: Writer,
-    api_keys: dict[str, str],
+    api_keys: dict[str, str] | None = None,
+    auth: AuthBackend | None = None,
     config: GatewayConfig | None = None,
 ) -> FastAPI:
-    """Build a gateway app around a given writer and API-key map."""
+    """Build a gateway app around a writer and an auth backend.
+
+    Pass ``auth`` to use a specific backend (e.g. the store-backed one); when it
+    is omitted, a static backend is built from ``api_keys``.
+    """
     cfg = config or GatewayConfig()
-    auth = APIKeyAuth(api_keys)
+    resolver: AuthBackend = auth if auth is not None else APIKeyAuth(api_keys or {})
+    limiter = TokenBucketLimiter(cfg.rate_limit_per_sec, cfg.rate_limit_burst)
     pipeline = IngestPipeline(writer, cfg)
 
     @asynccontextmanager
@@ -44,12 +51,19 @@ def create_app(
     app.state.pipeline = pipeline
 
     def require_project(x_api_key: str | None = Header(default=None, alias=API_KEY_HEADER)) -> str:
-        project = auth.project_for(x_api_key)
+        project = resolver.project_for(x_api_key)
         if project is None:
             # Reject before any span processing happens.
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="missing or invalid API key",
+            )
+        # Authenticated: apply the per-key rate limit before accepting work.
+        if limiter.enabled and x_api_key is not None and not limiter.allow(x_api_key):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="rate limit exceeded",
+                headers={"Retry-After": "1"},
             )
         return project
 
@@ -124,13 +138,30 @@ def build_default_app() -> FastAPI:
     """Factory used by uvicorn: wires the ClickHouse trace store from env config.
 
     Migrates the spans table on startup (idempotent), so a freshly deployed
-    gateway can accept writes without a separate migration step.
+    gateway can accept writes without a separate migration step. The auth backend
+    is chosen by ``NAVIK_GATEWAY_AUTH_BACKEND`` (static map or Postgres key store).
     """
     from navik_stores import TraceStore
 
+    cfg = GatewayConfig()
     store = TraceStore()
     store.migrate()
     return create_app(
         writer=TraceStoreWriter(store),
         api_keys=load_api_keys(),
+        auth=_build_auth(cfg),
+        config=cfg,
     )
+
+
+def _build_auth(cfg: GatewayConfig) -> AuthBackend | None:
+    """Build the store-backed auth for the Postgres backend; None keeps static."""
+    if cfg.auth_backend.lower() == "postgres":
+        from navik_stores import ApiKeyStore
+
+        from .auth import StoreApiKeyAuth
+
+        key_store = ApiKeyStore()
+        key_store.migrate()
+        return StoreApiKeyAuth(key_store, ttl=cfg.auth_cache_ttl)
+    return None

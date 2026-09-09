@@ -39,6 +39,19 @@ services:
       timeout: 3s
       retries: 20
 
+  redis:
+    image: redis:7-alpine
+    container_name: navik-redis
+    # Append-only persistence so the durable ingest backlog survives a restart.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   gateway:
     build:
       context: ..
@@ -49,12 +62,18 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       NAVIK_GATEWAY_API_KEYS: ${NAVIK_GATEWAY_API_KEYS:-devkey:default}
       NAVIK_CLICKHOUSE_HOST: clickhouse
       NAVIK_CLICKHOUSE_PASSWORD: ${NAVIK_CLICKHOUSE_PASSWORD:-navik}
       NAVIK_POSTGRES_HOST: postgres
       NAVIK_POSTGRES_PASSWORD: ${NAVIK_POSTGRES_PASSWORD:-navik}
+      # Durable ingest queue: in-flight spans and the dead-letter list survive a
+      # gateway restart instead of living only in process memory.
+      NAVIK_GATEWAY_QUEUE_BACKEND: ${NAVIK_GATEWAY_QUEUE_BACKEND:-redis}
+      NAVIK_REDIS_URL: redis://redis:6379/0
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -67,3 +86,4 @@ services:
 volumes:
   clickhouse-data:
   postgres-data:
+  redis-data:

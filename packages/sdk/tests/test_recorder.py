@@ -83,6 +83,17 @@ def test_open_count_tracks_in_flight_spans() -> None:
     assert rec.open_count() == 1
 
 
+def test_input_can_be_supplied_at_end() -> None:
+    # Some frameworks only know a call's input by the time it finishes.
+    rec, sink, tracer = _recorder()
+    rec.start("r", name="chat", kind=SpanKind.LLM)
+    rec.end("r", input={"prompt": "hi"}, output="ok")
+    tracer.flush()
+    (span,) = sink.spans
+    assert span.input == {"prompt": "hi"}
+    assert span.output == "ok"
+
+
 def test_orphan_parent_starts_new_trace() -> None:
     rec, sink, tracer = _recorder()
     # Parent id refers to a run we never saw: treat as a root, do not crash.

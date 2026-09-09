@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import cli_sample_agent
+import pytest
 from cli_testkit import record_trace, write_collection
 
 from navik_cli import run_path
+from navik_cli.runner import load_agent
 
 
 def _make(tmp_path: Path, assertions: list[dict[str, object]]) -> Path:
@@ -70,6 +73,15 @@ def test_missing_trace_is_config_error(tmp_path: Path) -> None:
     result = run_path(collection)
     assert not result.passed
     assert "trace file not found" in (result.scenarios[0].config_error or "")
+
+
+def test_load_agent_imports_from_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # An agent module living in the project dir is importable when run from there.
+    (tmp_path / "myagent.py").write_text("def run():\n    return 'ok'\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delitem(sys.modules, "myagent", raising=False)
+    agent = load_agent("myagent:run")
+    assert agent() == "ok"
 
 
 def test_deterministic_replay_does_not_call_live_tools(tmp_path: Path) -> None:

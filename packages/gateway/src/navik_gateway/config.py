@@ -32,6 +32,17 @@ class GatewayConfig:
     # a single instance; raise it when running several gateways on one stream.
     reclaim_min_idle_ms: int = int(os.getenv("NAVIK_REDIS_RECLAIM_MIN_IDLE_MS", "0"))
 
+    # Auth backend: "static" (default, the NAVIK_GATEWAY_API_KEYS map) or
+    # "postgres" (keys created/revoked at runtime via the ApiKeyStore).
+    auth_backend: str = os.getenv("NAVIK_GATEWAY_AUTH_BACKEND", "static")
+    # Seconds a resolved key is cached; also the window a revoked key keeps working.
+    auth_cache_ttl: float = float(os.getenv("NAVIK_GATEWAY_AUTH_CACHE_TTL", "30"))
+
+    # Per-key rate limit (token bucket). rate <= 0 disables limiting; burst
+    # defaults to the rate when left at 0.
+    rate_limit_per_sec: float = float(os.getenv("NAVIK_GATEWAY_RATE_LIMIT_PER_SEC", "0"))
+    rate_limit_burst: float = float(os.getenv("NAVIK_GATEWAY_RATE_LIMIT_BURST", "0"))
+
 
 def load_api_keys() -> dict[str, str]:
     """Parse ``NAVIK_GATEWAY_API_KEYS`` into a ``{api_key: project}`` mapping."""

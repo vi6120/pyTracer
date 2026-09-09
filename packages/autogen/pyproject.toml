@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "navik-autogen"
+version = "0.0.1"
+description = "Navik adapter for AutoGen - capture agent runs via an OpenTelemetry exporter."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Navik" }]
+dependencies = [
+    "navik-sdk==0.0.1",
+    "opentelemetry-sdk>=1.20",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "autogen-core>=0.4",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/navik_autogen"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["opentelemetry.*", "autogen_core.*"]
+ignore_missing_imports = true

@@ -31,7 +31,7 @@ Seven packages, each an installable Python package under `packages/`:
 | Package | Layer | What it does |
 | --- | --- | --- |
 | `navik-sdk` | 1. Instrumentation | `@op` decorator captures agent actions as OpenTelemetry-compatible spans, with local secret/PII redaction and non-blocking flush |
-| `navik-gateway` | 2. Ingestion | FastAPI service that validates spans, authenticates per project by API key, and writes them through to storage without blocking |
+| `navik-gateway` | 2. Ingestion | FastAPI service that validates spans, authenticates per project by API key, and writes them through to storage without blocking; an optional Redis Streams queue makes ingestion durable across restarts |
 | `navik-stores` | 3. Storage | Trace store (ClickHouse) for captured spans, mock store (PostgreSQL) for recorded tool responses |
 | `navik-replay` | 4. Replay engine | Deterministic replay in three modes, an assertion framework, run diffing, failure fingerprinting, a three-way outcome classifier, and a network sandbox |
 | `navik-runner` | 4. Isolation | Per-commit isolated runner: check out any ref into a clean workspace and replay a frozen trace against it |
@@ -42,7 +42,8 @@ A `navik` meta-package ties them together: installing it pulls in all seven, so
 `pip install navik` gives you the whole platform in one command (and `import
 navik` re-exports the SDK's core entrypoints for convenience).
 
-Backing services (ClickHouse, PostgreSQL) run via [docker-compose.yml](docker-compose.yml).
+Backing services (ClickHouse, PostgreSQL, and Redis for the durable ingest
+queue) run via [docker-compose.yml](docker-compose.yml).
 
 ## How a development team uses Navik
 
@@ -194,8 +195,9 @@ pytest packages
 ```
 
 Store-backed tests skip automatically when ClickHouse or PostgreSQL is not
-reachable, and the Docker-backed runner test skips when Docker is not available,
-so the suite runs anywhere.
+reachable, the durable-queue tests skip when Redis is not reachable, and the
+Docker-backed runner test skips when Docker is not available, so the suite runs
+anywhere.
 
 ### Running the gateway
 
@@ -216,14 +218,16 @@ To run the gateway and its stores together as containers, see
 Every package is covered by tests and checked with `ruff` and `mypy --strict`:
 
 ```bash
-pytest packages            # 136 tests
+pytest packages            # 196 tests
 ruff check packages
 mypy packages/*/src
 ```
 
 ## Status
 
-All seven layers have working, tested engines. Remaining work is CI glue (wiring
-a "try on this branch" PR-comment trigger to the runner, webhooks, live GitHub
-issue updates), the registry web UI, and the cross-cutting security and
-performance tracks. See [PLAN.md](PLAN.md) for the full breakdown.
+All seven layers have working, tested engines, and ingestion is durable (the
+gateway's queue and dead-letter list survive a restart on Redis Streams).
+Remaining work is CI glue (wiring a "try on this branch" PR-comment trigger to
+the runner, webhooks, live GitHub issue updates), real API-key management, the
+registry web UI, and the cross-cutting security and performance tracks. See
+[PLAN.md](PLAN.md) for the full breakdown.

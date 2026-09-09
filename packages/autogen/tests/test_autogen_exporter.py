@@ -1,24 +1,24 @@
 """Exporter tests against the real OpenTelemetry SDK.
 
-These emit GenAI-convention OTel spans through the Navik exporter (no AutoGen
+These emit GenAI-convention OTel spans through the pyTracer exporter (no AutoGen
 needed, only opentelemetry-sdk, a runtime dependency) and assert the mapping.
 """
 
 from __future__ import annotations
 
-import navik_sdk as navik
-from navik_sdk import SpanKind as K
-from navik_sdk import SpanStatus
-from navik_sdk.transport import InMemoryTransport
+import pytracer_sdk as pytracer
 from opentelemetry.trace import Status, StatusCode
+from pytracer_sdk import SpanKind as K
+from pytracer_sdk import SpanStatus
+from pytracer_sdk.transport import InMemoryTransport
 
-from navik_autogen import navik_tracer_provider
+from pytracer_autogen import pytracer_tracer_provider
 
 
-def _setup() -> tuple[object, InMemoryTransport, navik.Tracer]:
+def _setup() -> tuple[object, InMemoryTransport, pytracer.Tracer]:
     sink = InMemoryTransport()
-    tracer = navik.Tracer(sink, resource=navik.Resource(service_name="ag", branch="main", commit="c0"))
-    return navik_tracer_provider(tracer).get_tracer("test"), sink, tracer
+    tracer = pytracer.Tracer(sink, resource=pytracer.Resource(service_name="ag", branch="main", commit="c0"))
+    return pytracer_tracer_provider(tracer).get_tracer("test"), sink, tracer
 
 
 def test_kinds_and_parent_linkage() -> None:

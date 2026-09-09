@@ -1,9 +1,9 @@
-"""OpenTelemetry span exporter that records Navik spans.
+"""OpenTelemetry span exporter that records pyTracer spans.
 
 AutoGen (0.4+) instruments agents, tool calls, and model calls with OpenTelemetry
 using the GenAI semantic conventions. Rather than hooking framework internals,
-this adapter plugs a Navik exporter into an OpenTelemetry ``TracerProvider`` that
-AutoGen's runtime uses, and maps each finished OTel span to a Navik span. Because
+this adapter plugs a pyTracer exporter into an OpenTelemetry ``TracerProvider`` that
+AutoGen's runtime uses, and maps each finished OTel span to a pyTracer span. Because
 it keys off the standard GenAI attributes, it also works for any other
 GenAI-instrumented library, not just AutoGen.
 """
@@ -13,10 +13,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from navik_sdk import Span, SpanKind, SpanStatus, Tracer, get_tracer
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
+from pytracer_sdk import Span, SpanKind, SpanStatus, Tracer, get_tracer
 
 # GenAI semantic-convention attribute keys.
 _OP = "gen_ai.operation.name"
@@ -52,8 +52,8 @@ def _tokens(attrs: dict[str, Any]) -> int | None:
     return None
 
 
-class NavikSpanExporter(SpanExporter):
-    """Maps finished OpenTelemetry spans to Navik spans."""
+class PyTracerSpanExporter(SpanExporter):
+    """Maps finished OpenTelemetry spans to pyTracer spans."""
 
     def __init__(self, tracer: Tracer | None = None) -> None:
         self._tracer = tracer or get_tracer()
@@ -73,7 +73,7 @@ class NavikSpanExporter(SpanExporter):
                 if span.status.status_code is StatusCode.ERROR
                 else SpanStatus.OK
             )
-            navik_span = Span(
+            pytracer_span = Span(
                 trace_id=f"{context.trace_id:032x}",
                 span_id=f"{context.span_id:016x}",
                 parent_span_id=f"{span.parent.span_id:016x}" if span.parent else None,
@@ -91,7 +91,7 @@ class NavikSpanExporter(SpanExporter):
                 attributes={"framework": "autogen", **safe_attrs},
                 resource=self._tracer.resource,
             )
-            self._tracer.buffer.record(Span.model_validate(navik_span.model_dump()))
+            self._tracer.buffer.record(Span.model_validate(pytracer_span.model_dump()))
         return SpanExportResult.SUCCESS
 
     def shutdown(self) -> None:
@@ -101,13 +101,13 @@ class NavikSpanExporter(SpanExporter):
         return True
 
 
-def navik_tracer_provider(tracer: Tracer | None = None) -> TracerProvider:
-    """Build an OpenTelemetry TracerProvider that records into Navik.
+def pytracer_tracer_provider(tracer: Tracer | None = None) -> TracerProvider:
+    """Build an OpenTelemetry TracerProvider that records into pyTracer.
 
     Pass the result to AutoGen's runtime (``SingleThreadedAgentRuntime(
     tracer_provider=...)``) or register it globally so AutoGen's spans are
-    captured as Navik spans.
+    captured as pyTracer spans.
     """
     provider = TracerProvider()
-    provider.add_span_processor(SimpleSpanProcessor(NavikSpanExporter(tracer)))
+    provider.add_span_processor(SimpleSpanProcessor(PyTracerSpanExporter(tracer)))
     return provider

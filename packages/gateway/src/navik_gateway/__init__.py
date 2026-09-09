@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .app import build_default_app, create_app
-from .auth import APIKeyAuth
+from .auth import APIKeyAuth, AuthBackend, StoreApiKeyAuth
 from .config import GatewayConfig, load_api_keys
 from .ingest import (
     IngestPipeline,
@@ -20,9 +20,11 @@ from .queue import (
     SpanQueue,
     build_queue,
 )
+from .ratelimit import TokenBucketLimiter
 
 __all__ = [
     "APIKeyAuth",
+    "AuthBackend",
     "DeadLetter",
     "GatewayConfig",
     "InProcessQueue",
@@ -31,6 +33,8 @@ __all__ = [
     "Reserved",
     "SpanQueue",
     "Stats",
+    "StoreApiKeyAuth",
+    "TokenBucketLimiter",
     "TraceStoreWriter",
     "Writer",
     "build_default_app",

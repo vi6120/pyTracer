@@ -12,6 +12,7 @@ from typing import Any
 import typer
 
 from . import __version__
+from .keys import format_key_table, format_new_key
 from .report import dumps_json, to_junit, to_markdown
 from .runner import CollectionResult, run_path
 from .traces import format_summary_table, format_trace_tree, parse_entry, record_trace
@@ -19,6 +20,8 @@ from .traces import format_summary_table, format_trace_tree, parse_entry, record
 app = typer.Typer(add_completion=False, help="Run and manage agent tests.")
 traces_app = typer.Typer(add_completion=False, help="Browse captured traces.")
 app.add_typer(traces_app, name="traces")
+keys_app = typer.Typer(add_completion=False, help="Manage gateway API keys.")
+app.add_typer(keys_app, name="keys")
 
 
 def _open_trace_store() -> Any:
@@ -33,6 +36,22 @@ def _open_trace_store() -> Any:
         )
         raise typer.Exit(code=2) from exc
     return TraceStore()
+
+
+def _open_key_store() -> Any:
+    """Open the API-key store (migrating it), or exit if the extra is missing."""
+    try:
+        from navik_stores import ApiKeyStore
+    except ImportError as exc:
+        typer.echo(
+            "error: key commands need the store client. Install with "
+            "`pip install navik-cli[stores]`.",
+            err=True,
+        )
+        raise typer.Exit(code=2) from exc
+    store = ApiKeyStore()
+    store.migrate()
+    return store
 
 
 def _emit(result: CollectionResult) -> None:
@@ -184,6 +203,44 @@ def reproduce(
 
     typer.echo(format_verdicts(verdicts))
     raise typer.Exit(code=0 if all_fixed(verdicts) else 1)
+
+
+@keys_app.command("create")
+def keys_create(
+    project: str = typer.Argument(..., help="Project the key authorizes."),
+    name: str = typer.Option("", help="A human label for the key (e.g. 'ci')."),
+) -> None:
+    """Mint an API key for a project. The secret is printed once."""
+    store = _open_key_store()
+    record, full_key = store.create(project, name=name)
+    typer.echo(format_new_key(record, full_key))
+
+
+@keys_app.command("revoke")
+def keys_revoke(
+    key_id: str = typer.Argument(..., help="The public key id to revoke."),
+) -> None:
+    """Revoke a key by its id so it stops authenticating."""
+    store = _open_key_store()
+    if store.revoke(key_id):
+        typer.echo(f"revoked {key_id}")
+    else:
+        typer.echo(f"error: no active key with id {key_id!r}", err=True)
+        raise typer.Exit(code=2)
+
+
+@keys_app.command("list")
+def keys_list(
+    project: str | None = typer.Option(None, help="Only keys for this project."),
+    show_revoked: bool = typer.Option(False, "--all", help="Include revoked keys."),
+) -> None:
+    """List API keys (never shows the secret)."""
+    store = _open_key_store()
+    rows = store.list(project=project, include_revoked=show_revoked)
+    if not rows:
+        typer.echo("no keys found")
+        return
+    typer.echo(format_key_table(rows))
 
 
 @app.command()

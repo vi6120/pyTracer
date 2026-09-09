@@ -6,23 +6,35 @@ from .app import build_default_app, create_app
 from .auth import APIKeyAuth
 from .config import GatewayConfig, load_api_keys
 from .ingest import (
-    DeadLetter,
     IngestPipeline,
     Stats,
     TraceStoreWriter,
     Writer,
     validate_spans,
 )
+from .queue import (
+    DeadLetter,
+    InProcessQueue,
+    RedisQueue,
+    Reserved,
+    SpanQueue,
+    build_queue,
+)
 
 __all__ = [
     "APIKeyAuth",
     "DeadLetter",
     "GatewayConfig",
+    "InProcessQueue",
     "IngestPipeline",
+    "RedisQueue",
+    "Reserved",
+    "SpanQueue",
     "Stats",
     "TraceStoreWriter",
     "Writer",
     "build_default_app",
+    "build_queue",
     "create_app",
     "load_api_keys",
     "validate_spans",

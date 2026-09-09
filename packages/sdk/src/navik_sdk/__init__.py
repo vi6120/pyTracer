@@ -21,6 +21,7 @@ from typing import Any
 
 from .buffer import SpanBuffer
 from .ids import new_span_id, new_trace_id
+from .recorder import SpanRecorder
 from .redaction import DEFAULT_RULES, RedactionRule, Redactor
 from .schema import Resource, Span, SpanKind, SpanStatus
 from .tracer import ActiveSpan, Intercept, Interceptor, SpanContext, Tracer, _OpMeta
@@ -40,6 +41,7 @@ __all__ = [
     "SpanBuffer",
     "SpanContext",
     "SpanKind",
+    "SpanRecorder",
     "SpanStatus",
     "Tracer",
     "Transport",

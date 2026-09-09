@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -23,6 +24,20 @@ from .config import ClickHouseConfig
 from .hashing import canonical_json
 
 NANOS_PER_SECOND = 1_000_000_000
+
+
+@dataclass
+class TraceSummary:
+    """One row of ``list_traces``: a captured run summarized for browsing."""
+
+    trace_id: str
+    project: str
+    root_agent: str | None
+    branch: str
+    commit: str
+    span_count: int
+    failed: bool
+    started_at: datetime
 SECONDS_PER_DAY = 86_400
 
 # Column order used for both the DDL and every INSERT.
@@ -226,6 +241,59 @@ class TraceStore:
     def get_trace(self, trace_id: str, *, project: str | None = None) -> list[Span]:
         """All spans of one trace, ordered for replay reconstruction."""
         return self.query(trace_id=trace_id, project=project, limit=100_000)
+
+    def list_traces(
+        self,
+        *,
+        project: str | None = None,
+        failed_only: bool = False,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        limit: int = 100,
+    ) -> list[TraceSummary]:
+        """Summarize captured traces (one row per trace), newest first.
+
+        Used by the CLI to let a developer browse recent runs and pick a failure
+        to turn into a test.
+        """
+        where: list[str] = []
+        params: dict[str, Any] = {}
+        if project is not None:
+            where.append("project = {project:String}")
+            params["project"] = project
+        if start is not None:
+            where.append("start_time_ns >= {start_ns:UInt64}")
+            params["start_ns"] = int(start.timestamp() * NANOS_PER_SECOND)
+        if end is not None:
+            where.append("start_time_ns < {end_ns:UInt64}")
+            params["end_ns"] = int(end.timestamp() * NANOS_PER_SECOND)
+        clause = f" WHERE {' AND '.join(where)}" if where else ""
+        having = " HAVING failed = 1" if failed_only else ""
+        sql = (
+            "SELECT trace_id, project, "
+            "anyIf(agent_name, kind = 'agent') AS root_agent, "
+            "any(branch) AS root_branch, any(commit) AS root_commit, count() AS span_count, "
+            "max(status = 'error') AS failed, min(start_time) AS started_at "
+            f"FROM {self.qualified_table}{clause} "
+            f"GROUP BY trace_id, project{having} ORDER BY started_at DESC LIMIT {int(limit)}"
+        )
+        result = self._client.query(sql, parameters=params)
+        summaries: list[TraceSummary] = []
+        for row in result.result_rows:
+            d = dict(zip(result.column_names, row, strict=True))
+            summaries.append(
+                TraceSummary(
+                    trace_id=d["trace_id"],
+                    project=d["project"],
+                    root_agent=d["root_agent"] or None,
+                    branch=d["root_branch"],
+                    commit=d["root_commit"],
+                    span_count=int(d["span_count"]),
+                    failed=bool(d["failed"]),
+                    started_at=d["started_at"],
+                )
+            )
+        return summaries
 
     @staticmethod
     def _row_to_span(d: dict[str, Any]) -> Span:

@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from navik_sdk import Resource, SpanStatus, Tracer
-from navik_sdk import SpanKind as K
-from navik_sdk.transport import InMemoryTransport
+from pytracer_sdk import Resource, SpanStatus, Tracer
+from pytracer_sdk import SpanKind as K
+from pytracer_sdk.transport import InMemoryTransport
 
-from navik_crewai import NavikEventListener
+from pytracer_crewai import PyTracerEventListener
 
 
 class _E:
@@ -23,10 +23,10 @@ class _E:
         self.__dict__.update(kwargs)
 
 
-def _setup() -> tuple[NavikEventListener, InMemoryTransport, Tracer]:
+def _setup() -> tuple[PyTracerEventListener, InMemoryTransport, Tracer]:
     sink = InMemoryTransport()
     tracer = Tracer(sink, resource=Resource(service_name="cw", branch="main", commit="c0"))
-    return NavikEventListener(tracer, register=False), sink, tracer
+    return PyTracerEventListener(tracer, register=False), sink, tracer
 
 
 def test_tool_under_agent_linkage() -> None:

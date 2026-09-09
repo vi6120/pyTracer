@@ -1,10 +1,10 @@
-"""CrewAI event-bus listener that records Navik spans.
+"""CrewAI event-bus listener that records pyTracer spans.
 
 CrewAI emits typed events on a global event bus for crew kickoffs, task and
 agent execution, tool usage, and LLM calls. The bus stamps each event with an
 ``event_id``, a ``parent_event_id`` (the enclosing event), and, on completion
 events, a ``started_event_id`` (the matching start event). This listener uses
-those ids to drive :class:`~navik_sdk.SpanRecorder`: start events open a span
+those ids to drive :class:`~pytracer_sdk.SpanRecorder`: start events open a span
 keyed by ``event_id`` under ``parent_event_id``, and completion/failure events
 close the span keyed by ``started_event_id``.
 
@@ -41,7 +41,7 @@ from crewai.events.types.tool_usage_events import (
     ToolUsageFinishedEvent,
     ToolUsageStartedEvent,
 )
-from navik_sdk import SpanKind, SpanRecorder, Tracer, get_tracer
+from pytracer_sdk import SpanKind, SpanRecorder, Tracer, get_tracer
 
 _MAX_DEPTH = 6
 
@@ -76,8 +76,8 @@ def _tokens(usage: Any) -> int | None:
     return None
 
 
-class NavikEventListener(BaseEventListener):
-    """Records Navik spans from CrewAI's event bus."""
+class PyTracerEventListener(BaseEventListener):
+    """Records pyTracer spans from CrewAI's event bus."""
 
     def __init__(self, tracer: Tracer | None = None, *, register: bool = True) -> None:
         self._recorder = SpanRecorder(tracer or get_tracer())

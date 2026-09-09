@@ -12,12 +12,12 @@ import datetime
 import importlib.util
 from typing import Any
 
-import navik_sdk as navik
 import pytest
-from navik_sdk import SpanKind
-from navik_sdk.transport import InMemoryTransport
+import pytracer_sdk as pytracer
+from pytracer_sdk import SpanKind
+from pytracer_sdk.transport import InMemoryTransport
 
-from navik_crewai import NavikEventListener
+from pytracer_crewai import PyTracerEventListener
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("crewai") is None, reason="crewai not installed"
@@ -35,10 +35,10 @@ def test_real_bus_tool_usage_is_captured() -> None:
     from crewai.events.types.tool_usage_events import ToolUsageFinishedEvent, ToolUsageStartedEvent
 
     sink = InMemoryTransport()
-    tracer = navik.Tracer(sink, resource=navik.Resource(service_name="cw", branch="main", commit="c0"))
+    tracer = pytracer.Tracer(sink, resource=pytracer.Resource(service_name="cw", branch="main", commit="c0"))
 
     with crewai_event_bus.scoped_handlers():
-        NavikEventListener(tracer)  # registers on the scoped bus
+        PyTracerEventListener(tracer)  # registers on the scoped bus
         _emit(crewai_event_bus, "src", ToolUsageStartedEvent(tool_name="search", tool_args={"q": "cats"}))
         now = datetime.datetime.now(datetime.timezone.utc)
         _emit(

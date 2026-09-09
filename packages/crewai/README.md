@@ -1,19 +1,19 @@
-# navik-crewai
+# pytracer-crewai
 
-Navik adapter for CrewAI. It auto-instruments a crew through CrewAI's event bus,
+pyTracer adapter for CrewAI. It auto-instruments a crew through CrewAI's event bus,
 so you do not add `@op` by hand: crew kickoffs, task and agent execution, tool
-usage, and LLM calls are captured as Navik spans.
+usage, and LLM calls are captured as pyTracer spans.
 
 ```python
-import navik_sdk as navik
-from navik_crewai import NavikEventListener
+import pytracer_sdk as pytracer
+from pytracer_crewai import PyTracerEventListener
 
-navik.configure(
-    navik.HTTPTransport("https://gateway.internal", api_key="YOUR_KEY"),
+pytracer.configure(
+    pytracer.HTTPTransport("https://gateway.internal", api_key="YOUR_KEY"),
     service_name="my-crew", branch="main", commit="abc123",
 )
 
-NavikEventListener()          # registers on the global bus; every crew run is now captured
+PyTracerEventListener()          # registers on the global bus; every crew run is now captured
 crew.kickoff(inputs={...})
 ```
 

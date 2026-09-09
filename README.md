@@ -133,6 +133,16 @@ On every pull request it runs the collection and posts a pass/fail summary as a
 PR comment, and fails the check if any scenario regresses. A GitLab template is
 included too.
 
+On a push (not a PR), it also **auto-documents failures as GitHub issues**:
+`pytracer issues sync` opens an issue per failing scenario, keyed by the
+failure's fingerprint so a recurring failure updates one issue (a new comment,
+reopening it if closed) instead of piling up duplicates. Run it yourself with:
+
+```bash
+pytracer run tests/collection.yaml --json results.json
+pytracer issues sync results.json --repo owner/name   # needs a GitHub token
+```
+
 ### 4. Reproduce a failure on any branch
 
 When a teammate opens a fix, re-run the failing collection against their branch
@@ -218,7 +228,7 @@ To run the gateway and its stores together as containers, see
 Every package is covered by tests and checked with `ruff` and `mypy --strict`:
 
 ```bash
-pytest packages            # 216 tests
+pytest packages            # 227 tests
 ruff check packages
 mypy packages/*/src
 ```
@@ -226,9 +236,10 @@ mypy packages/*/src
 ## Status
 
 All seven layers have working, tested engines. Ingestion is durable (the
-gateway's queue and dead-letter list survive a restart on Redis Streams), and
-API keys are managed in Postgres with create/revoke and per-key rate limiting.
-Remaining work is CI glue (wiring a "try on this branch" PR-comment trigger to
-the runner, webhooks, live GitHub issue updates), the security baseline (TLS and
-at-rest encryption), the registry web UI, and the cross-cutting performance
-track. See [PLAN.md](PLAN.md) for the full breakdown.
+gateway's queue and dead-letter list survive a restart on Redis Streams), API
+keys are managed in Postgres with create/revoke and per-key rate limiting, and
+failures auto-document as deduplicated GitHub issues. Remaining work is the
+last CI glue (wiring a "try on this branch" PR-comment trigger to the runner,
+webhooks), the security baseline (TLS and at-rest encryption), the registry web
+UI, and the cross-cutting performance track. See [PLAN.md](PLAN.md) for the full
+breakdown.

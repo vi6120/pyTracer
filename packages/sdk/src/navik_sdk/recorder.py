@@ -74,6 +74,7 @@ class SpanRecorder:
         self,
         run_id: str,
         *,
+        input: Any | None = None,
         output: Any | None = None,
         token_count: int | None = None,
         cost_usd: float | None = None,
@@ -81,8 +82,10 @@ class SpanRecorder:
     ) -> None:
         """Finish the span for ``run_id`` and hand it to the buffer.
 
-        An unknown ``run_id`` (never started, or already ended) is ignored, so a
-        stray end callback can never crash the host agent.
+        ``input`` may be supplied here (not only at :meth:`start`) for frameworks
+        that only populate a call's input by the time it completes. An unknown
+        ``run_id`` (never started, or already ended) is ignored, so a stray end
+        callback can never crash the host agent.
         """
         with self._lock:
             span = self._open.pop(run_id, None)
@@ -91,6 +94,8 @@ class SpanRecorder:
 
         redactor = self._tracer.redactor
         span.end_time_ns = time.time_ns()
+        if input is not None:
+            span.input = redactor.redact(input)
         if output is not None:
             span.output = redactor.redact(output)
         if token_count is not None:

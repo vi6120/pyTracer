@@ -7,14 +7,32 @@ run behaves identically locally and in CI.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import typer
 
 from . import __version__
 from .report import dumps_json, to_junit, to_markdown
 from .runner import CollectionResult, run_path
+from .traces import format_summary_table, format_trace_tree, parse_entry, record_trace
 
-app = typer.Typer(add_completion=False, help="Run agent test collections.")
+app = typer.Typer(add_completion=False, help="Run and manage agent tests.")
+traces_app = typer.Typer(add_completion=False, help="Browse captured traces.")
+app.add_typer(traces_app, name="traces")
+
+
+def _open_trace_store() -> Any:
+    """Open the trace store, or exit with guidance if the extra is not installed."""
+    try:
+        from navik_stores import TraceStore
+    except ImportError as exc:
+        typer.echo(
+            "error: trace commands need the store client. Install with "
+            "`pip install navik-cli[stores]`.",
+            err=True,
+        )
+        raise typer.Exit(code=2) from exc
+    return TraceStore()
 
 
 def _emit(result: CollectionResult) -> None:
@@ -59,6 +77,59 @@ def run(
         comment_out.write_text(to_markdown(result), encoding="utf-8")
 
     raise typer.Exit(code=0 if result.passed else 1)
+
+
+@traces_app.command("list")
+def traces_list(
+    project: str | None = typer.Option(None, help="Only this project."),
+    failed: bool = typer.Option(False, "--failed", help="Only failed traces."),
+    limit: int = typer.Option(20, help="Maximum traces to list."),
+) -> None:
+    """List recent captured traces, newest first."""
+    store = _open_trace_store()
+    rows = store.list_traces(project=project, failed_only=failed, limit=limit)
+    if not rows:
+        typer.echo("no traces found")
+        return
+    typer.echo(format_summary_table(rows))
+
+
+@traces_app.command("show")
+def traces_show(
+    trace_id: str = typer.Argument(..., help="The trace id to inspect."),
+    project: str | None = typer.Option(None, help="Project the trace belongs to."),
+) -> None:
+    """Show a single trace as a span tree."""
+    store = _open_trace_store()
+    spans = store.get_trace(trace_id, project=project)
+    if not spans:
+        typer.echo(f"error: no spans for trace {trace_id!r}", err=True)
+        raise typer.Exit(code=2)
+    typer.echo(format_trace_tree(spans))
+
+
+@app.command()
+def record(
+    trace_id: str = typer.Argument(..., help="The captured trace to turn into a test."),
+    agent: str = typer.Option(..., help="Agent entrypoint, 'module:callable'."),
+    entry: list[str] = typer.Option([], "--entry", help="Agent kwargs as key=value."),
+    project: str | None = typer.Option(None, help="Project the trace belongs to."),
+    out: Path = typer.Option(Path("tests"), help="Directory to write the collection into."),
+    name: str | None = typer.Option(None, help="Scenario name."),
+    mode: str = typer.Option("full", help="Replay mode: full | partial | live."),
+) -> None:
+    """Scaffold a test collection from a captured trace."""
+    store = _open_trace_store()
+    spans = store.get_trace(trace_id, project=project)
+    if not spans:
+        typer.echo(f"error: no spans for trace {trace_id!r}", err=True)
+        raise typer.Exit(code=2)
+    jsonl, collection = record_trace(
+        spans, agent=agent, entry=parse_entry(entry), out_dir=out, name=name, mode=mode
+    )
+    typer.echo(f"wrote {jsonl}")
+    typer.echo(f"wrote {collection}")
+    typer.echo(f"run it with: navik run {collection}")
 
 
 @app.command()

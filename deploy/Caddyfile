@@ -1,0 +1,14 @@
+# TLS termination for the pyTracer ingestion gateway.
+#
+# Caddy obtains and renews a certificate automatically (Let's Encrypt) for the
+# domain in PYTRACER_DOMAIN and reverse-proxies to the gateway over the internal
+# Docker network. Used only with the "tls" compose profile:
+#
+#   PYTRACER_DOMAIN=gateway.pytracer.com \
+#     docker compose -f deploy/docker-compose.yml --profile tls up -d --build
+#
+# Automatic certificates need the domain's DNS to point at this host and ports
+# 80 and 443 reachable from the internet.
+{$PYTRACER_DOMAIN} {
+    reverse_proxy gateway:8080
+}

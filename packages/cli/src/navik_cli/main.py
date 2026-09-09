@@ -133,6 +133,60 @@ def record(
 
 
 @app.command()
+def reproduce(
+    branch: str = typer.Option(..., help="Candidate branch or commit to try the failure on."),
+    collection: Path = typer.Option(
+        Path("tests/collection.yaml"), help="Collection path, relative to the repo."
+    ),
+    repo: Path = typer.Option(Path("."), help="Path to the git repository."),
+    baseline: str = typer.Option("main", help="Baseline ref to compare against."),
+    isolation: str = typer.Option("docker", help="Isolation backend: docker | local."),
+    freeze_trace: Path | None = typer.Option(
+        None, help="A recorded trace to freeze into the run (holds the mocks fixed)."
+    ),
+    trace_dest: str | None = typer.Option(
+        None, help="Repo-relative path to inject the frozen trace at."
+    ),
+) -> None:
+    """Reproduce a captured failure on another branch (fixed / still failing / diverged)."""
+    try:
+        from navik_runner import (
+            CrossBranchRunner,
+            DockerExecutor,
+            GitSourceProvider,
+            LocalExecutor,
+            classify_reproduction,
+        )
+    except ImportError as exc:
+        typer.echo(
+            "error: reproduce needs the runner. Install with `pip install navik-cli[runner]`.",
+            err=True,
+        )
+        raise typer.Exit(code=2) from exc
+
+    from .reproduce import all_fixed, format_verdicts, run_reproduction
+
+    executor = DockerExecutor() if isolation == "docker" else LocalExecutor()
+    runner = CrossBranchRunner(GitSourceProvider(repo), executor)
+    try:
+        _, _, verdicts = run_reproduction(
+            runner,
+            collection_path=str(collection),
+            baseline_ref=baseline,
+            candidate_ref=branch,
+            classify=classify_reproduction,
+            frozen_trace=str(freeze_trace) if freeze_trace else None,
+            trace_dest=trace_dest,
+        )
+    except (RuntimeError, OSError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    typer.echo(format_verdicts(verdicts))
+    raise typer.Exit(code=0 if all_fixed(verdicts) else 1)
+
+
+@app.command()
 def version() -> None:
     """Print the CLI version."""
     typer.echo(__version__)

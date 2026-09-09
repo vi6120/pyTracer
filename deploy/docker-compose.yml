@@ -83,7 +83,32 @@ services:
       timeout: 3s
       retries: 10
 
+  # TLS-terminating reverse proxy (opt-in: `docker compose --profile tls up`).
+  # Caddy fetches and renews a certificate automatically for $PYTRACER_DOMAIN and
+  # forwards to the gateway over the internal network. Point DNS at this host and
+  # open 80/443; in this mode stop publishing the gateway's own 8080 publicly.
+  caddy:
+    image: caddy:2-alpine
+    container_name: pytracer-caddy
+    profiles: ["tls"]
+    depends_on:
+      gateway:
+        condition: service_healthy
+    environment:
+      # Required for the tls profile; Caddy fails clearly if it is empty.
+      PYTRACER_DOMAIN: ${PYTRACER_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
 volumes:
   clickhouse-data:
   postgres-data:
   redis-data:
+  caddy-data:
+  caddy-config:

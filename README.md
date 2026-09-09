@@ -132,28 +132,21 @@ included too.
 
 ### 4. Reproduce a failure on any branch
 
-When a teammate opens a fix, re-run the exact failing trace against their branch
-with the mocks frozen, so only the code changes:
+When a teammate opens a fix, re-run the failing collection against their branch
+with the mocks frozen, so only the code changes. From the terminal:
 
-```python
-from navik_runner import CrossBranchRunner, GitSourceProvider, DockerExecutor
-
-runner = CrossBranchRunner(GitSourceProvider("/path/to/repo"), DockerExecutor())
-result = runner.reproduce(
-    ref="feature/fix-bug",
-    collection_path="tests/collection.yaml",
-    frozen_trace="baseline.jsonl",             # the failing trace, held frozen
-    trace_dest="tests/traces/summarize.jsonl",
-)
+```bash
+navik reproduce --branch feature/fix-bug --baseline main \
+  --collection tests/collection.yaml
 ```
 
-Compare two runs to get a per-scenario verdict of **fixed**, **still failing**,
-or **diverged** (a new, different failure):
+It checks out each ref in its own isolated workspace, replays, and prints a
+per-scenario verdict of **fixed**, **still failing**, or **diverged** (a new,
+different failure), exiting non-zero unless every scenario is fixed. Needs the
+runner: `pip install navik-cli[runner]`.
 
-```python
-from navik_runner import classify_reproduction
-verdicts = classify_reproduction(baseline_json, candidate_json)
-```
+The same thing is available as a library (`CrossBranchRunner`,
+`classify_reproduction`) for building it into your own tooling.
 
 Each ref runs in its own clean workspace with its own dependencies, so branches
 never interfere with each other.

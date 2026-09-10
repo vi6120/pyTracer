@@ -1,0 +1,7 @@
+# Cloudflare Workers config for the pyTracer static landing site.
+# Assets-only (no Worker script): Cloudflare serves the files in ./site directly.
+name = "pytracer-site"
+compatibility_date = "2026-09-01"
+
+[assets]
+directory = "./site"

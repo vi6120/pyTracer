@@ -81,10 +81,9 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
   max-width: var(--maxw); margin: 0 auto; padding: 14px 24px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
 }
-.brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 700; font-size: 21px; letter-spacing: -0.02em; color: var(--accent); }
+.brand { font-weight: 700; font-size: 21px; letter-spacing: -0.02em; color: var(--accent); }
 .brand:hover { text-decoration: none; }
 .brand .py { color: var(--navy); }
-.brand img { height: 30px; width: auto; display: block; }
 .nav { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .nav a { color: var(--muted); font-size: 15px; }
 .nav a:hover { color: var(--text); text-decoration: none; }
@@ -143,11 +142,9 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
 .site-footer a { color: var(--muted); }
 .site-footer .links { display: flex; gap: 18px; flex-wrap: wrap; }
 
-/* Logo in the hero. The white tile matches the page on light mode (invisible)
-   and reads as a clean card on dark mode, so the logo's white background never
-   shows as a hard box. */
-.hero-logo { max-width: 440px; width: 100%; height: auto; margin: 0 auto 22px; display: block;
-             background: #fff; border-radius: 16px; padding: 14px; }
+/* Logo in the hero. The PNG has a transparent background, so it sits cleanly on
+   both light and dark themes. */
+.hero-logo { max-width: 360px; width: 100%; height: auto; margin: 0 auto 24px; display: block; }
 
 /* Scale up on wide desktop screens */
 @media (min-width: 1100px) {
@@ -160,5 +157,4 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
   .grid { grid-template-columns: 1fr; }
   .toc ul { columns: 1; }
   .nav { gap: 14px; }
-  .brand img { height: 26px; }
 }

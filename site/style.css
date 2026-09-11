@@ -6,17 +6,18 @@
   --border: #e5e7eb;
   --text: #14161a;
   --muted: #565b66;
-  --accent: #4f46e5;
-  --accent-soft: #eef2ff;
+  --accent: #1f74c9;
+  --accent-soft: #e6f1fb;
   --code-bg: #0f1117;
   --code-text: #e6e8ee;
   --note-bg: #fff8e6;
   --note-border: #f2d98a;
   --note-text: #6b5510;
+  --navy: #12345f;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --maxw: 1000px;
-  --prose: 760px;
+  --maxw: 1120px;
+  --prose: 780px;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -26,8 +27,9 @@
     --border: #232833;
     --text: #eceef2;
     --muted: #9aa1ad;
-    --accent: #8b8bff;
-    --accent-soft: #191a2e;
+    --accent: #5cb0ef;
+    --accent-soft: #10233a;
+    --navy: #cfe0f2;
     --code-bg: #05060a;
     --code-text: #e6e8ee;
     --note-bg: #1e1a10;
@@ -40,6 +42,7 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0;
   font-family: var(--sans);
+  font-size: 16px;
   color: var(--text);
   background: var(--bg);
   line-height: 1.65;
@@ -78,9 +81,10 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
   max-width: var(--maxw); margin: 0 auto; padding: 14px 24px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
 }
-.brand { font-weight: 700; font-size: 19px; letter-spacing: -0.02em; color: var(--text); }
+.brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 700; font-size: 21px; letter-spacing: -0.02em; color: var(--accent); }
 .brand:hover { text-decoration: none; }
-.brand .py { color: var(--muted); }
+.brand .py { color: var(--navy); }
+.brand img { height: 30px; width: auto; display: block; }
 .nav { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .nav a { color: var(--muted); font-size: 15px; }
 .nav a:hover { color: var(--text); text-decoration: none; }
@@ -139,8 +143,19 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
 .site-footer a { color: var(--muted); }
 .site-footer .links { display: flex; gap: 18px; flex-wrap: wrap; }
 
+/* Logo in the hero */
+.hero-logo { max-width: 460px; width: 100%; height: auto; margin: 0 auto 20px; display: block; }
+
+/* Scale up on wide desktop screens */
+@media (min-width: 1100px) {
+  body { font-size: 17px; }
+  .prose h1 { font-size: 40px; }
+  .prose h2 { font-size: 27px; }
+}
+
 @media (max-width: 720px) {
   .grid { grid-template-columns: 1fr; }
   .toc ul { columns: 1; }
   .nav { gap: 14px; }
+  .brand img { height: 26px; }
 }

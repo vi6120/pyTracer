@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/vi6120/pyTracer/blob/main/SECURITY.md
+    about: Please report security issues privately as described here, not as a public issue.

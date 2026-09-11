@@ -8,7 +8,10 @@ import pytracer
 
 
 def test_version() -> None:
-    assert pytracer.__version__ == "0.0.1"
+    # A dotted version string; not pinned to a literal so version bumps do not
+    # break the test.
+    assert isinstance(pytracer.__version__, str)
+    assert pytracer.__version__.count(".") == 2
 
 
 def test_reexports_sdk_entrypoints() -> None:

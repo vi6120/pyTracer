@@ -19,7 +19,7 @@ services:
     volumes:
       - clickhouse-data:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8123/ping"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -75,7 +75,10 @@ services:
       PYTRACER_GATEWAY_QUEUE_BACKEND: ${PYTRACER_GATEWAY_QUEUE_BACKEND:-redis}
       PYTRACER_REDIS_URL: redis://redis:6379/0
     ports:
-      - "8080:8080"
+      # Defaults to publishing on all interfaces for local use. On a public host
+      # set PYTRACER_GATEWAY_PUBLISH=127.0.0.1:8080:8080 so only the TLS proxy is
+      # exposed (Docker's published ports otherwise bypass the host firewall).
+      - "${PYTRACER_GATEWAY_PUBLISH:-8080:8080}"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]

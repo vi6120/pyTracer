@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pyTracer Docs - install and user guide</title>
+<meta name="description" content="Install pyTracer and use it: instrument your agent, capture runs, turn failures into tests, gate CI, and reproduce failures across branches.">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="inner">
+      <a class="brand" href="/"><span class="py">py</span>Tracer</a>
+      <nav class="nav">
+        <a href="/docs.html" class="active">Docs</a>
+        <a href="/license.html">License</a>
+        <a href="/privacy.html">Privacy</a>
+        <a href="/terms.html">Terms</a>
+        <a href="https://github.com/vi6120/pyTracer">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="prose">
+    <h1>pyTracer documentation</h1>
+    <p class="lead">Everything from installation to running pyTracer in your own use cases.</p>
+
+    <div class="toc">
+      <strong>On this page</strong>
+      <ul>
+        <li><a href="#what">What pyTracer is</a></li>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#install">Installation</a></li>
+        <li><a href="#quickstart">Quickstart (no services)</a></li>
+        <li><a href="#instrument">1. Instrument your agent</a></li>
+        <li><a href="#ship">2. Ship spans to a gateway</a></li>
+        <li><a href="#capture">3. Turn a failure into a test</a></li>
+        <li><a href="#run">4. Run a collection</a></li>
+        <li><a href="#ci">5. Gate branches in CI</a></li>
+        <li><a href="#reproduce">6. Reproduce on any branch</a></li>
+        <li><a href="#frameworks">Framework adapters</a></li>
+        <li><a href="#selfhost">Self-hosting the gateway</a></li>
+        <li><a href="#usecases">Use cases</a></li>
+      </ul>
+    </div>
+
+    <h2 id="what">What pyTracer is</h2>
+    <p>pyTracer is an agent test and replay platform. It captures what an AI agent
+    does (its LLM calls, tool calls, reasoning steps, and handoffs), replays a past
+    run deterministically by injecting the recorded responses instead of calling
+    live services, and regression-tests agents in CI. Its headline capability is
+    <strong>cross-branch reproduction</strong>: take a captured failing run and
+    re-run it against a different branch with the model version and recorded tool
+    responses held frozen, so you learn whether a branch actually fixed the bug.</p>
+
+    <h2 id="requirements">Requirements</h2>
+    <ul>
+      <li>Python 3.10 or newer (3.12 recommended).</li>
+      <li>Nothing else to just instrument and replay locally.</li>
+      <li>For capturing to a gateway and browsing traces: a running pyTracer gateway
+      with its stores (ClickHouse, PostgreSQL, Redis), self-hosted or the hosted service.</li>
+    </ul>
+
+    <h2 id="install">Installation</h2>
+    <p>Install the whole platform, or just the SDK in your agent:</p>
+    <pre><code># the whole platform
+pip install pytracer
+
+# or just the client SDK
+pip install pytracer-sdk
+
+# the CLI, with the extras you need
+pip install pytracer-cli[stores]   # browse/record traces
+pip install pytracer-cli[runner]   # cross-branch reproduce</code></pre>
+
+    <h2 id="quickstart">Quickstart (no services)</h2>
+    <p>You can run the whole loop locally with no gateway or database, using an
+    in-memory transport. This instruments an agent, captures its run, and replays it.</p>
+    <pre><code>import pytracer_sdk as pytracer
+from pytracer_sdk import SpanKind
+
+sink = pytracer.InMemoryTransport()
+pytracer.configure(sink, service_name="researcher", branch="main", commit="quickstart")
+
+@pytracer.op(kind=SpanKind.TOOL, tool_name="search")
+def search(q): return [f"doc about {q} #1", f"doc about {q} #2"]
+
+@pytracer.op(kind=SpanKind.AGENT, agent_name="researcher")
+def run(task): return "Summary: " + "; ".join(search(task))
+
+print(run("climate change"))
+pytracer.flush()
+print(f"captured {len(sink.spans)} spans")</code></pre>
+    <p>A complete, runnable version lives in the repository under
+    <a href="https://github.com/vi6120/pyTracer/tree/main/examples/quickstart">examples/quickstart</a>.</p>
+
+    <h2 id="instrument">1. Instrument your agent</h2>
+    <p>Add <code>@op</code> to the functions that call models and tools. This is one
+    or two lines per function and does not change their behavior.</p>
+    <pre><code>import pytracer_sdk as pytracer
+from pytracer_sdk import SpanKind
+
+@pytracer.op(kind=SpanKind.TOOL, tool_name="search")
+def search(query: str) -> dict:
+    ...  # your real tool
+
+@pytracer.op(kind=SpanKind.LLM)
+def call_model(prompt: str) -> str:
+    ...  # your real model call
+
+@pytracer.op(kind=SpanKind.AGENT, agent_name="researcher")
+def run(task: str) -> str:
+    return call_model(str(search(task)))</code></pre>
+    <p>Capture is fire-and-forget: it never blocks your agent, and if the gateway is
+    unreachable your agent keeps running.</p>
+
+    <h2 id="ship">2. Ship spans to a gateway</h2>
+    <p>Point the SDK at your gateway so spans flow into the trace store. Stamp each
+    run with the branch and commit so a captured failure is tied to exact code.
+    Use an <code>https://</code> endpoint in production.</p>
+    <pre><code>pytracer.configure(
+    pytracer.HTTPTransport("https://gateway.pytracer.com", api_key="YOUR_PROJECT_KEY"),
+    service_name="researcher",
+    branch="main",
+    commit="abc123",
+)</code></pre>
+
+    <h2 id="capture">3. Turn a failure into a test</h2>
+    <p>When a run fails, browse recent captured runs and scaffold a test from one,
+    with no hand-writing of files. These commands need the store client
+    (<code>pip install pytracer-cli[stores]</code>).</p>
+    <pre><code>pytracer traces list --failed           # find the failing run
+pytracer traces show &lt;trace_id&gt;          # inspect its span tree
+pytracer record &lt;trace_id&gt; --agent myapp.agents:run --entry task="summarize the doc"</code></pre>
+    <p><code>record</code> writes the trace's spans to JSONL and creates a
+    <strong>collection</strong>: a small YAML file naming the agent to run, the
+    recorded trace to mock from, and the assertions that should hold.</p>
+    <pre><code># tests/collection.yaml
+name: captured-suite
+scenarios:
+  - name: summarize-happy-path
+    agent: myapp.agents:run          # import path "module:callable"
+    entry: { task: "summarize the doc" }
+    trace: traces/summarize.jsonl    # the recorded spans
+    mode: full                       # full | partial | live
+    assertions:
+      - { type: no_errors }
+      - { type: contains, needle: "summary" }</code></pre>
+
+    <h2 id="run">4. Run a collection</h2>
+    <p>Replays inject the recorded tool and model responses, so the run is
+    deterministic and touches no live services.</p>
+    <pre><code>pytracer run tests/collection.yaml</code></pre>
+    <p>Replay modes: <code>full</code> (recorded model and tools), <code>partial</code>
+    (recorded tools, live model), and <code>live</code>.</p>
+
+    <h2 id="ci">5. Gate branches in CI</h2>
+    <p>Add the GitHub Action (see
+    <a href="https://github.com/vi6120/pyTracer/blob/main/packages/cli/ci/github-action.yml">packages/cli/ci/github-action.yml</a>).
+    On every pull request it runs the collection and posts a pass/fail summary as a
+    PR comment, failing the check if any scenario regresses. On a push it also
+    auto-documents failures as deduplicated GitHub issues. A GitLab template is
+    included too.</p>
+    <pre><code>pytracer run tests/collection.yaml --json results.json
+pytracer issues sync results.json --repo owner/name   # needs a GitHub token</code></pre>
+
+    <h2 id="reproduce">6. Reproduce on any branch</h2>
+    <p>When a teammate opens a fix, re-run the failing collection against their
+    branch with the mocks frozen, so only the code changes. Needs the runner
+    (<code>pip install pytracer-cli[runner]</code>).</p>
+    <pre><code>pytracer reproduce --branch feature/fix-bug --baseline main \
+  --collection tests/collection.yaml</code></pre>
+    <p>It checks out each ref in its own isolated workspace, replays, and prints a
+    per-scenario verdict of <strong>fixed</strong>, <strong>still failing</strong>,
+    or <strong>diverged</strong> (a new, different failure), exiting non-zero unless
+    every scenario is fixed.</p>
+
+    <h2 id="frameworks">Framework adapters</h2>
+    <p>Instead of manual <code>@op</code> decorators, drop in an adapter for your
+    framework and its LLM/tool/agent steps are captured automatically:</p>
+    <pre><code>pip install pytracer-langgraph        # LangGraph / LangChain
+pip install pytracer-openai-agents    # OpenAI Agents SDK
+pip install pytracer-crewai           # CrewAI
+pip install pytracer-autogen          # AutoGen</code></pre>
+
+    <h2 id="selfhost">Self-hosting the gateway</h2>
+    <p>The gateway plus its stores run as a Docker stack. A single-instance setup
+    suits a small team or a beta. The full walkthrough (from provisioning a server
+    to Cloudflare DNS and TLS) is in the repository:</p>
+    <ul>
+      <li><a href="https://github.com/vi6120/pyTracer/blob/main/deploy/README.md">deploy/README.md</a> - the deploy stack and configuration</li>
+      <li><a href="https://github.com/vi6120/pyTracer/blob/main/deploy/HOSTING.md">deploy/HOSTING.md</a> - hosting on your own domain, step by step</li>
+      <li><a href="https://github.com/vi6120/pyTracer/blob/main/SECURITY.md">SECURITY.md</a> - the hardening checklist</li>
+    </ul>
+
+    <h2 id="usecases">Use cases</h2>
+    <h3>Regression-test a customer-support agent</h3>
+    <p>Capture real conversations, turn the ones that went wrong into a collection,
+    and run it on every pull request so a prompt or tool change can't silently
+    reintroduce the same failure.</p>
+    <h3>Prove a fix actually works</h3>
+    <p>A user reports a bug. Capture the failing run, then use
+    <code>pytracer reproduce</code> to re-run it against the fix branch with the
+    model and tools frozen, so you know the code change is what fixed it, not luck.</p>
+    <h3>Compare model or prompt versions deterministically</h3>
+    <p>Freeze the tool responses and replay in <code>partial</code> mode against a
+    new model or prompt, isolating the effect of that one change.</p>
+    <h3>Share test suites across a team</h3>
+    <p>The registry turns collections into versioned, forkable, access-controlled
+    artifacts with pull requests and discovery, the way Postman collections worked
+    for API testing.</p>
+
+    <hr>
+    <p class="updated">Questions or gaps? Open an issue on
+    <a href="https://github.com/vi6120/pyTracer/issues">GitHub</a>.</p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="inner">
+      <div>pyTracer &middot; Apache-2.0 (client) &amp; AGPL-3.0 (server)</div>
+      <div class="links">
+        <a href="/docs.html">Docs</a>
+        <a href="/license.html">License</a>
+        <a href="/privacy.html">Privacy</a>
+        <a href="/terms.html">Terms</a>
+        <a href="https://github.com/vi6120/pyTracer">GitHub</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

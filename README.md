@@ -1,4 +1,6 @@
-# pyTracer
+<p align="center">
+  <img src="site/assets/logo.png" alt="pyTracer" width="440">
+</p>
 
 pyTracer is an **agent test and replay platform**. It captures what an AI agent
 does (its LLM calls, tool calls, reasoning steps, and handoffs), replays a past

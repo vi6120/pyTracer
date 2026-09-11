@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pytracer"
-version = "0.0.1"
+name = "pytracer-all"
+version = "0.1.0"
 description = "pyTracer - install the full agent test and replay platform."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,13 +12,13 @@ license = "Apache-2.0"
 authors = [{ name = "pyTracer" }]
 # Installing `pytracer` pulls in every component of the platform.
 dependencies = [
-    "pytracer-sdk==0.0.1",
-    "pytracer-stores==0.0.1",
-    "pytracer-gateway==0.0.1",
-    "pytracer-replay==0.0.1",
-    "pytracer-runner==0.0.1",
-    "pytracer-registry==0.0.1",
-    "pytracer-cli==0.0.1",
+    "pytracer-sdk==0.1.0",
+    "pytracer-stores==0.1.0",
+    "pytracer-gateway==0.1.0",
+    "pytracer-replay==0.1.0",
+    "pytracer-runner==0.1.0",
+    "pytracer-registry==0.1.0",
+    "pytracer-cli==0.1.0",
 ]
 
 [project.optional-dependencies]

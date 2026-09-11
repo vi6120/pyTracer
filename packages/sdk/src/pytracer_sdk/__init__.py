@@ -57,7 +57,7 @@ __all__ = [
     "start_span",
 ]
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 _default_tracer: Tracer | None = None
 

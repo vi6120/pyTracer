@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytracer-cli"
-version = "0.0.1"
+version = "0.1.0"
 description = "pyTracer CLI - run agent test collections locally and in CI."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "pyTracer" }]
 dependencies = [
-    "pytracer-sdk==0.0.1",
-    "pytracer-replay==0.0.1",
+    "pytracer-sdk==0.1.0",
+    "pytracer-replay==0.1.0",
     "typer>=0.12",
     "pyyaml>=6.0",
     "pydantic>=2.6",
@@ -20,13 +20,13 @@ dependencies = [
 
 [project.optional-dependencies]
 # Trace browsing / recording commands need the store client.
-stores = ["pytracer-stores==0.0.1"]
+stores = ["pytracer-stores==0.1.0"]
 # The reproduce command needs the cross-branch runner.
-runner = ["pytracer-runner==0.0.1"]
+runner = ["pytracer-runner==0.1.0"]
 dev = [
     "pytest>=8.0",
-    "pytracer-stores==0.0.1",
-    "pytracer-runner==0.0.1",
+    "pytracer-stores==0.1.0",
+    "pytracer-runner==0.1.0",
     "ruff>=0.5",
     "mypy>=1.10",
     "types-PyYAML>=6.0",

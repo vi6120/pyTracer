@@ -6,4 +6,4 @@ from .exporter import PyTracerSpanExporter, pytracer_tracer_provider
 
 __all__ = ["PyTracerSpanExporter", "pytracer_tracer_provider"]
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"

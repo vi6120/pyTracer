@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytracer-runner"
-version = "0.0.1"
+version = "0.1.0"
 description = "pyTracer per-commit isolated runner - reproduce a trace against any branch or commit."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "pyTracer" }]
 dependencies = [
-    "pytracer-replay==0.0.1",
+    "pytracer-replay==0.1.0",
 ]
 
 [project.optional-dependencies]

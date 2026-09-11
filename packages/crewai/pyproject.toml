@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytracer-crewai"
-version = "0.0.1"
+version = "0.1.0"
 description = "pyTracer adapter for CrewAI - auto-instrument crews via the event bus."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "pyTracer" }]
 dependencies = [
-    "pytracer-sdk==0.0.1",
+    "pytracer-sdk==0.1.0",
     "crewai>=0.100",
 ]
 

@@ -244,3 +244,13 @@ TLS-terminating reverse proxy with a self-hosting hardening guide
 on this branch" PR-comment trigger to the runner, webhooks), the registry web
 UI, and the cross-cutting performance track. See [PLAN.md](PLAN.md) for the full
 breakdown.
+
+## License
+
+pyTracer is split-licensed. The client toolchain you embed and run yourself (the
+SDK, framework adapters, replay engine, runner, and CLI) is **Apache-2.0**; the
+hosted-server components (`pytracer-gateway` and `pytracer-registry`) are
+**AGPL-3.0-or-later**. So you can embed the SDK in a proprietary agent freely,
+while a competing hosted service built on the server components must share its
+changes. See [LICENSING.md](LICENSING.md) for the per-package breakdown and what
+it means in practice.

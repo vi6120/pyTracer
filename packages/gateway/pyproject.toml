@@ -8,7 +8,7 @@ version = "0.0.1"
 description = "pyTracer ingestion gateway - receives spans and writes them through to the trace store."
 readme = "README.md"
 requires-python = ">=3.10"
-license = "Apache-2.0"
+license = "AGPL-3.0-or-later"
 authors = [{ name = "pyTracer" }]
 dependencies = [
     "pytracer-sdk==0.0.1",

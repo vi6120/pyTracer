@@ -51,12 +51,11 @@ Docker publishes container ports by writing its own iptables rules that bypass
 `ufw`, so a published `8080` can be reachable from the internet even with the
 firewall above. In a TLS deployment nothing outside the host should reach the
 gateway directly (Caddy proxies to it over the internal Docker network), so bind
-the gateway's published port to localhost. Edit the `gateway` service's `ports`
-in `deploy/docker-compose.yml` on the server:
+the gateway's published port to localhost. Set this in your env file (Step 3), no
+file edit needed:
 
-```yaml
-    ports:
-      - "127.0.0.1:8080:8080"   # was "8080:8080"; keep it off the public interface
+```
+PYTRACER_GATEWAY_PUBLISH=127.0.0.1:8080:8080
 ```
 
 Leave the store services with no published ports at all (they already have none
@@ -76,20 +75,30 @@ cd pyTracer
 
 ## Step 3: Configure secrets and start the stack
 
-Set real passwords and API keys (never the defaults), and the gateway hostname,
-then bring up the stack with the TLS profile:
+Put real secrets in an env file (never the defaults). Keeping them in a file (not
+edits to tracked files) means `git pull` stays clean on later updates:
 
 ```bash
-PYTRACER_DOMAIN=gateway.pytracer.com \
-PYTRACER_GATEWAY_API_KEYS="$(openssl rand -hex 16):web-agent" \
-PYTRACER_CLICKHOUSE_PASSWORD="$(openssl rand -hex 24)" \
-PYTRACER_POSTGRES_PASSWORD="$(openssl rand -hex 24)" \
-  docker compose -f deploy/docker-compose.yml --profile tls up -d --build
+cat > deploy/prod.env <<EOF
+PYTRACER_DOMAIN=gateway.pytracer.com
+PYTRACER_GATEWAY_API_KEYS=$(openssl rand -hex 16):web-agent
+PYTRACER_CLICKHOUSE_PASSWORD=$(openssl rand -hex 24)
+PYTRACER_POSTGRES_PASSWORD=$(openssl rand -hex 24)
+PYTRACER_GATEWAY_PUBLISH=127.0.0.1:8080:8080
+EOF
+chmod 600 deploy/prod.env
+cat deploy/prod.env    # note your API key (the hex before ":web-agent")
 ```
 
-For real use, put these in an env file or your secret manager rather than the
-shell. Consider the Postgres-backed key store so keys can be rotated and revoked
-without a redeploy (see [README.md](README.md#managing-api-keys)):
+Then build and launch with the TLS profile:
+
+```bash
+docker compose --env-file deploy/prod.env -f deploy/docker-compose.yml --profile tls up -d --build
+```
+
+For real use manage these through your orchestrator's secret store. Consider the
+Postgres-backed key store so keys can be rotated and revoked without a redeploy
+(see [README.md](README.md#managing-api-keys)):
 
 ```bash
 # add PYTRACER_GATEWAY_AUTH_BACKEND=postgres to the command above, then:

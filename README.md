@@ -13,10 +13,8 @@ frozen, so you learn whether a branch actually fixed the bug.
 It works with agents built on LangGraph, CrewAI, AutoGen, and the OpenAI Agents
 SDK, or any Python agent you instrument by hand.
 
-Built from [agent-test-platform-guide.md](agent-test-platform-guide.md). See
-[PLAN.md](PLAN.md) for the build tracker. New here? Run the
-[quickstart](examples/quickstart) to try the whole loop in a couple of minutes,
-with no services.
+New here? Run the [quickstart](examples/quickstart) to try the whole loop in a
+couple of minutes, with no services.
 
 ## Why
 
@@ -244,8 +242,7 @@ failures auto-document as deduplicated GitHub issues, and the deploy stack has a
 TLS-terminating reverse proxy with a self-hosting hardening guide
 ([SECURITY.md](SECURITY.md)). Remaining work is the last CI glue (wiring a "try
 on this branch" PR-comment trigger to the runner, webhooks), the registry web
-UI, and the cross-cutting performance track. See [PLAN.md](PLAN.md) for the full
-breakdown.
+UI, and the cross-cutting performance track.
 
 ## Contributing
 

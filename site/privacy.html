@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pyTracer Privacy Policy</title>
+<meta name="description" content="How pyTracer handles data across the website and the hosted service.">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="inner">
+      <a class="brand" href="/"><span class="py">py</span>Tracer</a>
+      <nav class="nav">
+        <a href="/docs.html">Docs</a>
+        <a href="/license.html">License</a>
+        <a href="/privacy.html" class="active">Privacy</a>
+        <a href="/terms.html">Terms</a>
+        <a href="https://github.com/vi6120/pyTracer">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="prose">
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: September 2026</p>
+
+    <div class="note">
+      <strong>Template notice:</strong> this policy is a starting draft, not legal
+      advice. Have it reviewed by a qualified lawyer and adjusted to your actual data
+      practices and the laws that apply to you (for example GDPR and CCPA) before you
+      rely on it.
+    </div>
+
+    <p>This Privacy Policy explains how vi6120 ("we", "us") handles information in
+    connection with the pyTracer website at pytracer.com (the "Site") and the hosted
+    pyTracer service (the "Service"). The open-source pyTracer software that you run
+    yourself is covered by its licenses, not by this policy; when you self-host, you
+    are the controller of the data you process.</p>
+
+    <h2>Information we handle</h2>
+    <h3>The website</h3>
+    <p>The Site is a static site. We do not require an account to browse it and we do
+    not use tracking cookies for advertising. If you email us, we receive the
+    information you choose to send (such as your email address and message).</p>
+
+    <h3>The hosted service</h3>
+    <ul>
+      <li><strong>Account information</strong> you provide to use the Service, such
+      as your name, email address, and organization.</li>
+      <li><strong>Trace data</strong> that you send to the Service through the SDK or
+      gateway: the records of what your agents do (LLM calls, tool calls, reasoning
+      steps, metadata such as branch and commit). This data may include content that
+      you or your end users provide.</li>
+      <li><strong>Operational data</strong> such as API request metadata and logs
+      needed to run and secure the Service.</li>
+    </ul>
+
+    <h2>Redaction happens before data leaves your systems</h2>
+    <p>The pyTracer SDK applies a redaction ruleset (for secrets and common personal
+    data patterns) to span content at capture time, before anything is transmitted.
+    You control the rules and remain responsible for what you choose to send. We
+    recommend not sending data you do not need to capture.</p>
+
+    <h2>How we use information</h2>
+    <ul>
+      <li>To provide, operate, secure, and improve the Service.</li>
+      <li>To store and return your trace data to you and your authorized team.</li>
+      <li>To communicate with you about the Service and respond to your requests.</li>
+      <li>To comply with legal obligations.</li>
+    </ul>
+    <p>For the hosted Service, we handle your trace data on your behalf as a data
+    processor; you remain the controller of that data.</p>
+
+    <h2>Storage, retention, and security</h2>
+    <p>Trace and mock data are stored in our databases. Data in transit is protected
+    with TLS, and we apply access controls and the hardening measures described in
+    our security documentation. You can configure retention to age out old traces;
+    when you delete data or close your account, we delete or de-identify the
+    associated data within a reasonable period, subject to legal retention needs.</p>
+
+    <h2>Sharing and subprocessors</h2>
+    <p>We do not sell your data. We share it only with service providers who help us
+    run the Service (for example cloud hosting, content delivery, and DNS providers),
+    under agreements that limit their use of it, and where required by law.</p>
+
+    <h2>Your rights</h2>
+    <p>Depending on where you live, you may have rights to access, correct, delete,
+    export, or restrict the processing of your personal data. To exercise them,
+    contact us at the address below. If you are an end user whose data was sent to
+    us by a pyTracer customer, please contact that customer, who controls the data.</p>
+
+    <h2>International transfers</h2>
+    <p>We may process and store data in countries other than yours. Where required,
+    we use appropriate safeguards for such transfers.</p>
+
+    <h2>Children</h2>
+    <p>The Service is not directed to children and is not intended for use by them.</p>
+
+    <h2>Changes</h2>
+    <p>We may update this policy. We will post the updated version here and revise the
+    date above.</p>
+
+    <h2>Contact</h2>
+    <p>Questions or requests: <a href="mailto:privacy@pytracer.com">privacy@pytracer.com</a>.</p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="inner">
+      <div>pyTracer &middot; Apache-2.0 (client) &amp; AGPL-3.0 (server)</div>
+      <div class="links">
+        <a href="/docs.html">Docs</a>
+        <a href="/license.html">License</a>
+        <a href="/privacy.html">Privacy</a>
+        <a href="/terms.html">Terms</a>
+        <a href="https://github.com/vi6120/pyTracer">GitHub</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

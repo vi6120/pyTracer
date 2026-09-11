@@ -65,6 +65,8 @@ def test_run_missing_file_exit_two(tmp_path: Path) -> None:
 
 
 def test_version_command() -> None:
+    from pytracer_cli import __version__
+
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "0.0.1" in result.stdout
+    assert __version__ in result.stdout

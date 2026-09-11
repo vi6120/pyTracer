@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest an idea or improvement for pyTracer
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: For anything substantial, opening this issue first lets us agree on the approach before you invest time.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What are you trying to do, and what is hard or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to see? An API sketch or example is welcome.
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

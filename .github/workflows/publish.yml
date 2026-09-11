@@ -1,0 +1,63 @@
+name: Publish to PyPI
+
+# Builds all pyTracer packages and publishes them via PyPI Trusted Publishing
+# (OIDC, no stored token). Publishing to PyPI happens when a GitHub Release is
+# published; a manual run can target TestPyPI for a dry run.
+#
+# One-time setup: configure a Trusted Publisher for each package on PyPI (and
+# TestPyPI) pointing at this repository and this workflow file. See RELEASING.md.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Index to publish to
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade build
+      - name: Build all packages
+        run: |
+          rm -rf dist && mkdir -p dist
+          for p in sdk stores gateway replay runner registry cli pytracer \
+                   langgraph openai-agents crewai autogen; do
+            python -m build --outdir dist "packages/$p"
+          done
+          ls -1 dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # required for Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to TestPyPI
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+      - name: Publish to PyPI
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+        uses: pypa/gh-action-pypi-publish@release/v1

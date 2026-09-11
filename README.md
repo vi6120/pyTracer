@@ -261,3 +261,7 @@ hosted-server components (`pytracer-gateway` and `pytracer-registry`) are
 while a competing hosted service built on the server components must share its
 changes. See [LICENSING.md](LICENSING.md) for the per-package breakdown and what
 it means in practice.
+
+The license covers the code; the **pyTracer** name and logo are trademarks. See
+[TRADEMARK.md](TRADEMARK.md) for how you may use them (you can say "works with
+pyTracer"; you can't name a fork "pyTracer").

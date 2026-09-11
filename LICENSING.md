@@ -17,7 +17,7 @@ competing hosted service has to share its changes.
 | `pytracer-runner` | Apache-2.0 | The cross-branch runner you run locally and in CI. |
 | `pytracer-cli` | Apache-2.0 | You run it locally and in CI. |
 | `pytracer-stores` | Apache-2.0 | Client library for reading traces/mocks. |
-| `pytracer` (meta) | Apache-2.0 | Convenience bundle; see the note below. |
+| `pytracer-all` (meta) | Apache-2.0 | Convenience bundle; see the note below. |
 | **`pytracer-gateway`** | **AGPL-3.0-or-later** | The ingestion server someone would host as a service. |
 | **`pytracer-registry`** | **AGPL-3.0-or-later** | The collaboration platform someone would host as a service. |
 
@@ -41,7 +41,7 @@ AGPL package's own `LICENSE` file
 
 ## The meta-package
 
-`pip install pytracer` is a convenience bundle that pulls in every component,
+`pip install pytracer-all` is a convenience bundle that pulls in every component,
 each under its own license (this is mere aggregation, not a single combined
 license). Because the bundle includes `pytracer-gateway` and `pytracer-registry`,
 installing it brings in AGPL-3.0 components alongside the Apache-2.0 ones. Install

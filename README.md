@@ -38,9 +38,9 @@ Seven packages, each an installable Python package under `packages/`:
 | `pytracer-registry` | 5. Collaboration | Versioned, forkable, access-controlled test collections with pull requests and discovery |
 | `pytracer-cli` | 6. CI/CD | `pytracer run` executes test collections locally and in CI; ships a GitHub Action and a GitLab template |
 
-A `pytracer` meta-package ties them together: installing it pulls in all seven, so
-`pip install pytracer` gives you the whole platform in one command (and `import
-pytracer` re-exports the SDK's core entrypoints for convenience).
+A `pytracer-all` meta-package ties them together: installing it pulls in all seven,
+so `pip install pytracer-all` gives you the whole platform in one command (and
+`import pytracer` re-exports the SDK's core entrypoints for convenience).
 
 Backing services (ClickHouse, PostgreSQL, and Redis for the durable ingest
 queue) run via [docker-compose.yml](docker-compose.yml).
@@ -176,7 +176,7 @@ worked for API testing.
 Once the packages are published, the whole platform installs with one command:
 
 ```bash
-pip install pytracer            # installs all seven components
+pip install pytracer-all        # installs all seven components
 # or install just what you need, e.g. the SDK in your agent:
 pip install pytracer-sdk
 ```

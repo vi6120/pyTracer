@@ -245,6 +245,13 @@ on this branch" PR-comment trigger to the runner, webhooks), the registry web
 UI, and the cross-cutting performance track. See [PLAN.md](PLAN.md) for the full
 breakdown.
 
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the
+quality gates, and the pull-request process, and note that a one-time
+[CLA](CLA.md) signature is required. All participants follow the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 pyTracer is split-licensed. The client toolchain you embed and run yourself (the

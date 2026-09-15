@@ -42,6 +42,14 @@ class IssueRef:
 
 
 @dataclass
+class CommentRef:
+    """A reference to a GitHub issue or pull-request comment."""
+
+    id: int
+    url: str
+
+
+@dataclass
 class SyncResult:
     """Outcome of syncing one failure to an issue."""
 
@@ -131,6 +139,39 @@ class GitHubClient:
 
     def reopen_issue(self, number: int) -> None:
         self._request("PATCH", f"/repos/{self._repo}/issues/{number}", {"state": "open"})
+
+    def find_comment_by_marker(self, number: int, marker: str) -> CommentRef | None:
+        """Return the issue/PR comment on ``number`` carrying ``marker``, or None.
+
+        Comments live under the issues endpoint (a pull request is an issue for
+        comment purposes), so this works for both.
+        """
+        page = 1
+        while True:
+            comments = self._request(
+                "GET",
+                f"/repos/{self._repo}/issues/{number}/comments",
+                params={"per_page": 100, "page": page},
+            )
+            if not comments:
+                return None
+            for comment in comments:
+                if marker in (comment.get("body") or ""):
+                    return CommentRef(comment["id"], comment["html_url"])
+            if len(comments) < 100:
+                return None
+            page += 1
+
+    def create_comment(self, number: int, body: str) -> CommentRef:
+        comment = self._request(
+            "POST", f"/repos/{self._repo}/issues/{number}/comments", {"body": body}
+        )
+        return CommentRef(comment["id"], comment["html_url"])
+
+    def update_comment(self, comment_id: int, body: str) -> None:
+        self._request(
+            "PATCH", f"/repos/{self._repo}/issues/comments/{comment_id}", {"body": body}
+        )
 
 
 def sync_issue(

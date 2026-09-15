@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="site/assets/logo.png" alt="pyTracer" width="440">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="site/assets/logo-dark.png">
+    <img src="site/assets/logo.png" alt="pyTracer" width="440">
+  </picture>
 </p>
 
 <p align="center">
@@ -256,7 +259,7 @@ To run the gateway and its stores together as containers, see
 Every package is covered by tests and checked with `ruff` and `mypy --strict`:
 
 ```bash
-pytest packages            # 232 tests
+pytest packages            # 234 tests
 ruff check packages
 mypy packages/*/src
 ```

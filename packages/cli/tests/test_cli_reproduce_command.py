@@ -42,3 +42,49 @@ def test_run_error_exits_two(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch(monkeypatch, RuntimeError("dependency install failed"))
     result = runner.invoke(app, ["reproduce", "--branch", "feature", "--isolation", "local"])
     assert result.exit_code == 2
+
+
+@pytest.fixture(autouse=True)
+def _clear_github_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Behave the same locally and inside GitHub Actions (which sets these).
+    for var in ("GITHUB_REPOSITORY", "GITHUB_TOKEN", "PYTRACER_GITHUB_TOKEN"):
+        monkeypatch.delenv(var, raising=False)
+
+
+def test_pr_dry_run_prints_comment(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch(monkeypatch, {"s": Outcome.FIXED})
+    result = runner.invoke(
+        app,
+        ["reproduce", "--branch", "feature", "--isolation", "local", "--pr", "5", "--pr-dry-run"],
+    )
+    assert result.exit_code == 0
+    assert "try on this branch" in result.stdout
+    assert "fixed" in result.stdout
+
+
+def test_pr_posts_comment(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch(monkeypatch, {"s": Outcome.FIXED})
+    posted: dict[str, Any] = {}
+
+    def fake_post(client: Any, *, number: int, **kwargs: Any) -> str:
+        posted["number"] = number
+        return "https://github.example/pr/5#comment-1"
+
+    monkeypatch.setattr("pytracer_cli.pr_comment.post_reproduction_comment", fake_post)
+    result = runner.invoke(
+        app,
+        ["reproduce", "--branch", "feature", "--isolation", "local",
+         "--pr", "5", "--pr-repo", "o/n", "--token", "t"],
+    )
+    assert result.exit_code == 0
+    assert posted["number"] == 5
+    assert "posted verdict to https://github.example/pr/5#comment-1" in result.stdout
+
+
+def test_pr_without_credentials_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch(monkeypatch, {"s": Outcome.FIXED})
+    result = runner.invoke(
+        app, ["reproduce", "--branch", "feature", "--isolation", "local", "--pr", "5"]
+    )
+    assert result.exit_code == 2
+    assert "needs a repo" in result.stdout or "needs a repo" in (result.stderr or "")

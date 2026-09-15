@@ -64,6 +64,7 @@ class ReplayEngine:
         strict: bool = False,
         sandbox: bool = False,
         network_allow: Iterable[str] = (),
+        fuzzy_match: bool = False,
     ) -> None:
         self.mode = mode
         self.strict = strict
@@ -71,6 +72,9 @@ class ReplayEngine:
         # (except network_allow), so a replay cannot fire a real side effect.
         self.sandbox = sandbox
         self.network_allow = tuple(network_allow)
+        # When on, an exact mock miss falls back to the identifier's recordings
+        # (nearest by input similarity), so small input drift still replays.
+        self.fuzzy_match = fuzzy_match
 
     def replay(
         self,
@@ -88,7 +92,9 @@ class ReplayEngine:
         ) -> Intercept | None:
             if kind not in mocked:
                 return None
-            hit, output = mocks.lookup(_identifier(kind, name, tool_name), inp)
+            hit, output = mocks.lookup(
+                _identifier(kind, name, tool_name), inp, fuzzy=self.fuzzy_match
+            )
             if hit:
                 return Intercept(output)
             if self.strict:

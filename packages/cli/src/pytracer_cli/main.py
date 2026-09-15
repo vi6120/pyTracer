@@ -172,6 +172,21 @@ def reproduce(
     trace_dest: str | None = typer.Option(
         None, help="Repo-relative path to inject the frozen trace at."
     ),
+    pr: int | None = typer.Option(
+        None, help="Pull request number to post the verdict on ('try on this branch')."
+    ),
+    pr_repo: str | None = typer.Option(
+        None, help="GitHub 'owner/name' for the PR comment (default: $GITHUB_REPOSITORY)."
+    ),
+    token: str | None = typer.Option(
+        None, help="GitHub token (default: $GITHUB_TOKEN or $PYTRACER_GITHUB_TOKEN)."
+    ),
+    api_url: str = typer.Option(
+        "https://api.github.com", help="GitHub API base URL (set for GitHub Enterprise)."
+    ),
+    pr_dry_run: bool = typer.Option(
+        False, "--pr-dry-run", help="Print the PR comment instead of posting it."
+    ),
 ) -> None:
     """Reproduce a captured failure on another branch (fixed / still failing / diverged)."""
     try:
@@ -208,6 +223,38 @@ def reproduce(
         raise typer.Exit(code=2) from exc
 
     typer.echo(format_verdicts(verdicts))
+
+    if pr is not None:
+        from .pr_comment import post_reproduction_comment, render_comment
+
+        if pr_dry_run:
+            typer.echo(
+                render_comment(candidate_ref=branch, baseline_ref=baseline, verdicts=verdicts)
+            )
+        else:
+            slug = pr_repo or os.getenv("GITHUB_REPOSITORY")
+            gh_token = token or os.getenv("GITHUB_TOKEN") or os.getenv("PYTRACER_GITHUB_TOKEN")
+            if not slug or not gh_token:
+                typer.echo(
+                    "error: --pr needs a repo (--pr-repo or $GITHUB_REPOSITORY) and a "
+                    "token (--token or $GITHUB_TOKEN)",
+                    err=True,
+                )
+                raise typer.Exit(code=2)
+            client = GitHubClient(gh_token, slug, api_url=api_url)
+            try:
+                url = post_reproduction_comment(
+                    client,
+                    number=pr,
+                    candidate_ref=branch,
+                    baseline_ref=baseline,
+                    verdicts=verdicts,
+                )
+            except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+                typer.echo(f"error: could not post the PR comment: {exc}", err=True)
+                raise typer.Exit(code=1) from exc
+            typer.echo(f"posted verdict to {url}")
+
     raise typer.Exit(code=0 if all_fixed(verdicts) else 1)
 
 

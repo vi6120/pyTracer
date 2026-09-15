@@ -201,6 +201,10 @@ pytracer issues sync results.json --repo owner/name   # needs a GitHub token</co
     per-scenario verdict of <strong>fixed</strong>, <strong>still failing</strong>,
     or <strong>diverged</strong> (a new, different failure), exiting non-zero unless
     every scenario is fixed.</p>
+    <p>A runnable, self-contained example of exactly this is in
+    <a href="https://github.com/vi6120/pyTracer/tree/main/examples/reproduce-demo">examples/reproduce-demo</a>:
+    one command builds a buggy branch and a fix branch and reproduces the captured
+    failure across them, with the mocks frozen.</p>
 
     <h2 id="frameworks">Framework adapters</h2>
     <p>Instead of manual <code>@op</code> decorators, drop in an adapter for your

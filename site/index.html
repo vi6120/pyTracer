@@ -42,7 +42,10 @@
   <main>
     <div class="container">
       <div class="hero">
-        <h1 class="hero-heading"><img class="hero-logo" src="/assets/logo.png" alt="pyTracer - Test and replay your AI agents"></h1>
+        <h1 class="hero-heading"><picture>
+            <source srcset="/assets/logo-dark.png" media="(prefers-color-scheme: dark)">
+            <img class="hero-logo" src="/assets/logo.png" alt="pyTracer - Test and replay your AI agents">
+          </picture></h1>
         <p class="lede">
           pyTracer captures what an agent does, replays a past run deterministically
           by injecting the recorded responses, and regression-tests it in CI. Its

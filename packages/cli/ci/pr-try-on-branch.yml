@@ -1,0 +1,70 @@
+# pyTracer "try on this branch".
+#
+# Comment `/pytracer try` on a pull request to reproduce the captured failure on
+# that PR's branch, with the recorded model and tool responses held frozen, and
+# get a fixed / still-failing / diverged verdict posted back as a comment.
+#
+# Drop this in as `.github/workflows/pytracer-try-on-branch.yml`. Adjust the
+# collection path, the frozen trace, and the trigger phrase for your project.
+name: pyTracer try on this branch
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  try:
+    # Only run on pull-request comments that ask for it.
+    if: >-
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/pytracer try')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve the PR base branch
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            core.setOutput('base', pr.data.base.ref);
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Make the base and PR head available as local branches
+        run: |
+          git fetch --no-tags --force origin \
+            "refs/heads/${{ steps.pr.outputs.base }}:refs/heads/pytracer-base" \
+            "refs/pull/${{ github.event.issue.number }}/head:refs/heads/pytracer-head"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pytracer
+        run: pip install "pytracer-cli[runner]"
+
+      - name: Reproduce on the PR branch and comment the verdict
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # `|| true` keeps the job green when the branch has not fixed everything;
+          # drop it to turn "still failing" into a red check.
+          pytracer reproduce \
+            --repo . \
+            --baseline pytracer-base \
+            --branch pytracer-head \
+            --collection tests/collection.yaml \
+            --isolation local \
+            --freeze-trace traces/failure.jsonl \
+            --trace-dest traces/failure.jsonl \
+            --pr ${{ github.event.issue.number }} || true

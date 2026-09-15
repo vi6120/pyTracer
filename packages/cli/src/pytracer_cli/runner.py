@@ -139,7 +139,9 @@ def run_scenario(scenario: ScenarioSpec, base_dir: Path) -> ScenarioResult:
         return ScenarioResult(scenario.name, False, empty, [], None, str(exc))
 
     mocks = MockSet.from_trace(spans)
-    result = ReplayEngine(scenario.mode).replay(lambda: agent(**scenario.entry), mocks)
+    result = ReplayEngine(scenario.mode, fuzzy_match=scenario.fuzzy).replay(
+        lambda: agent(**scenario.entry), mocks
+    )
     assertion_results = run_assertions(result, assertions)
     # A scenario passes when it did not error and every assertion passed.
     passed = not result.failed and all_passed(assertion_results)

@@ -10,10 +10,13 @@ WORKDIR /app
 COPY packages/sdk /app/packages/sdk
 COPY packages/stores /app/packages/stores
 COPY packages/gateway /app/packages/gateway
-# The [redis] extra pulls in the durable ingest queue backend.
+# Extras installed with the gateway. Defaults to [redis] (the durable ingest
+# queue backend); pass --build-arg GATEWAY_EXTRAS=redis,metrics to also expose
+# the Prometheus /metrics endpoint (used by the benchmark stack).
+ARG GATEWAY_EXTRAS=redis
 RUN pip install --no-cache-dir ./packages/sdk \
     && pip install --no-cache-dir ./packages/stores \
-    && pip install --no-cache-dir "./packages/gateway[redis]"
+    && pip install --no-cache-dir "./packages/gateway[${GATEWAY_EXTRAS}]"
 
 # Run as a non-root user.
 RUN useradd --create-home --uid 10001 pytracer

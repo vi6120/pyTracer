@@ -2,6 +2,19 @@
   <img src="site/assets/logo.png" alt="pyTracer" width="440">
 </p>
 
+<p align="center">
+  <a href="https://pytracer.com">Website</a> &middot;
+  <a href="https://pytracer.com/docs">Docs</a> &middot;
+  <a href="https://pytracer.com/docs#packages">Packages</a> &middot;
+  <a href="https://pypi.org/project/pytracer-all/">PyPI</a>
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/pytracer-all/"><img src="https://img.shields.io/pypi/v/pytracer-all.svg?color=2563eb" alt="PyPI"></a>
+  <img src="https://img.shields.io/pypi/pyversions/pytracer-sdk.svg" alt="Python versions">
+  <img src="https://img.shields.io/badge/license-Apache--2.0%20%7C%20AGPL--3.0-blue.svg" alt="License">
+</p>
+
 pyTracer is an **agent test and replay platform**. It captures what an AI agent
 does (its LLM calls, tool calls, reasoning steps, and handoffs), replays a past
 run deterministically by injecting the recorded responses instead of calling
@@ -26,7 +39,7 @@ asserted against, diffed between two runs, and re-checked on any branch.
 
 ## Architecture
 
-Seven packages, each an installable Python package under `packages/`:
+Seven core packages, each an installable Python package under `packages/`:
 
 | Package | Layer | What it does |
 | --- | --- | --- |
@@ -41,6 +54,11 @@ Seven packages, each an installable Python package under `packages/`:
 A `pytracer-all` meta-package ties them together: installing it pulls in all seven,
 so `pip install pytracer-all` gives you the whole platform in one command (and
 `import pytracer` re-exports the SDK's core entrypoints for convenience).
+
+Four framework adapter packages (`pytracer-langgraph`, `pytracer-openai-agents`,
+`pytracer-crewai`, `pytracer-autogen`) auto-instrument agents built on those
+frameworks. Twelve packages in all, published on PyPI; the full list is on the
+[docs site](https://pytracer.com/docs#packages).
 
 Backing services (ClickHouse, PostgreSQL, and Redis for the durable ingest
 queue) run via [docker-compose.yml](docker-compose.yml).
@@ -173,16 +191,26 @@ worked for API testing.
 
 ## Installing
 
-Once the packages are published, the whole platform installs with one command:
+The whole platform installs from PyPI with one command:
 
 ```bash
-pip install pytracer-all        # installs all seven components
+pip install pytracer-all        # the whole platform (the seven core packages)
 # or install just what you need, e.g. the SDK in your agent:
 pip install pytracer-sdk
 ```
 
-Nothing is published to a package index yet, so for now install from this repo
-(see below).
+Framework adapters are separate packages, one per framework:
+
+```bash
+pip install pytracer-langgraph        # LangGraph / LangChain
+pip install pytracer-openai-agents    # OpenAI Agents SDK
+pip install pytracer-crewai           # CrewAI
+pip install pytracer-autogen          # AutoGen
+```
+
+All twelve packages are on PyPI at 0.1.0 (each with a wheel and a source
+distribution); the full list is on the [docs site](https://pytracer.com/docs#packages).
+To hack on pyTracer itself instead, install from this repo (see below).
 
 ## Quick start (local development)
 
@@ -235,14 +263,15 @@ mypy packages/*/src
 
 ## Status
 
-All seven layers have working, tested engines. Ingestion is durable (the
-gateway's queue and dead-letter list survive a restart on Redis Streams), API
-keys are managed in Postgres with create/revoke and per-key rate limiting,
-failures auto-document as deduplicated GitHub issues, and the deploy stack has a
-TLS-terminating reverse proxy with a self-hosting hardening guide
-([SECURITY.md](SECURITY.md)). Remaining work is the last CI glue (wiring a "try
-on this branch" PR-comment trigger to the runner, webhooks), the registry web
-UI, and the cross-cutting performance track.
+pyTracer 0.1.0 is released: all twelve packages are on PyPI. All seven core
+layers have working, tested engines. Ingestion is durable (the gateway's queue
+and dead-letter list survive a restart on Redis Streams), API keys are managed
+in Postgres with create/revoke and per-key rate limiting, failures auto-document
+as deduplicated GitHub issues, the deploy stack has a TLS-terminating reverse
+proxy with a self-hosting hardening guide ([SECURITY.md](SECURITY.md)), and a
+k6 + Prometheus benchmark harness ([benchmarks/](benchmarks/)) load-tests the
+gateway. Remaining work is the last CI glue (a "try on this branch" PR-comment
+trigger, webhooks), the registry web UI, and further replay-fidelity hardening.
 
 ## Contributing
 

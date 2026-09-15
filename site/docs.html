@@ -205,6 +205,12 @@ pytracer issues sync results.json --repo owner/name   # needs a GitHub token</co
     <a href="https://github.com/vi6120/pyTracer/tree/main/examples/reproduce-demo">examples/reproduce-demo</a>:
     one command builds a buggy branch and a fix branch and reproduces the captured
     failure across them, with the mocks frozen.</p>
+    <p><strong>Try on this branch, from a PR.</strong> Add the
+    <a href="https://github.com/vi6120/pyTracer/blob/main/packages/cli/ci/pr-try-on-branch.yml">try-on-branch workflow</a>
+    and comment <code>/pytracer try</code> on any pull request: pyTracer reproduces
+    the failure on that branch and posts the fixed / still-failing / diverged
+    verdict back as a comment, updated in place on each push
+    (<code>pytracer reproduce --pr &lt;number&gt;</code> under the hood).</p>
 
     <h2 id="frameworks">Framework adapters</h2>
     <p>Instead of manual <code>@op</code> decorators, drop in an adapter for your

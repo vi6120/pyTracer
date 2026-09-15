@@ -33,6 +33,7 @@
         <li><a href="#what">What pyTracer is</a></li>
         <li><a href="#requirements">Requirements</a></li>
         <li><a href="#install">Installation</a></li>
+        <li><a href="#packages">Packages on PyPI</a></li>
         <li><a href="#quickstart">Quickstart (no services)</a></li>
         <li><a href="#instrument">1. Instrument your agent</a></li>
         <li><a href="#ship">2. Ship spans to a gateway</a></li>
@@ -74,6 +75,30 @@ pip install pytracer-sdk
 # the CLI, with the extras you need
 pip install pytracer-cli[stores]   # browse/record traces
 pip install pytracer-cli[runner]   # cross-branch reproduce</code></pre>
+
+    <h2 id="packages">Packages on PyPI</h2>
+    <p>All twelve packages are published on PyPI at version 0.1.0 (each with a wheel
+    and a source distribution). Install only what you need; every name below links
+    to its page on PyPI.</p>
+    <table>
+      <thead><tr><th>Package</th><th>What it is</th><th>License</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://pypi.org/project/pytracer-all/"><code>pytracer-all</code></a></td><td>Meta package - installs the whole platform</td><td>Apache-2.0</td></tr>
+        <tr><td><a href="https://pypi.org/project/pytracer-sdk/"><code>pytracer-sdk</code></a></td><td>The client SDK you embed in your agent</td><td>Apache-2.0</td></tr>
+        <tr><td><a href="https://pypi.org/project/pytracer-cli/"><code>pytracer-cli</code></a></td><td>Command line: run, record, reproduce, keys, issues</td><td>Apache-2.0</td></tr>
+        <tr><td><a href="https://pypi.org/project/pytracer-replay/"><code>pytracer-replay</code></a></td><td>Deterministic replay + assertion engine</td><td>Apache-2.0</td></tr>
+        <tr><td><a href="https://pypi.org/project/pytracer-runner/"><code>pytracer-runner</code></a></td><td>Per-commit isolated cross-branch runner</td><td>Apache-2.0</td></tr>
+        <tr><td><a href="https://pypi.org/project/pytracer-stores/"><code>pytracer-stores</code></a></td><td>Trace and mock store clients</td><td>Apache-2.0</td></tr>
+        <tr><td><a href="https://pypi.org/project/pytracer-langgraph/"><code>pytracer-langgraph</code></a></td><td>Adapter - LangGraph / LangChain</td><td>Apache-2.0</td></tr>
+        <tr><td><a href="https://pypi.org/project/pytracer-openai-agents/"><code>pytracer-openai-agents</code></a></td><td>Adapter - OpenAI Agents SDK</td><td>Apache-2.0</td></tr>
+        <tr><td><a href="https://pypi.org/project/pytracer-crewai/"><code>pytracer-crewai</code></a></td><td>Adapter - CrewAI</td><td>Apache-2.0</td></tr>
+        <tr><td><a href="https://pypi.org/project/pytracer-autogen/"><code>pytracer-autogen</code></a></td><td>Adapter - AutoGen</td><td>Apache-2.0</td></tr>
+        <tr><td><a href="https://pypi.org/project/pytracer-gateway/"><code>pytracer-gateway</code></a></td><td>Ingestion server (self-host or hosted)</td><td>AGPL-3.0</td></tr>
+        <tr><td><a href="https://pypi.org/project/pytracer-registry/"><code>pytracer-registry</code></a></td><td>Collaboration registry engine</td><td>AGPL-3.0</td></tr>
+      </tbody>
+    </table>
+    <p>Why two licenses? The split is explained on the
+    <a href="/license">license page</a>.</p>
 
     <h2 id="quickstart">Quickstart (no services)</h2>
     <p>You can run the whole loop locally with no gateway or database, using an

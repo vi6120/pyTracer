@@ -1,0 +1,114 @@
+# pyTracer benchmark stack: the gateway (built with the Prometheus /metrics
+# endpoint) plus its trace store, a durable Redis queue, and Prometheus scraping
+# the gateway. Grafana and an in-network k6 runner are opt-in profiles.
+#
+# Run from the repository root:
+#   docker compose -f benchmarks/docker-compose.bench.yml up -d --build
+#   k6 run benchmarks/k6/ingest.js            # drive load from the host
+#   open http://localhost:9090                # Prometheus UI
+#
+# Or drive load inside the compose network (no host k6 install needed):
+#   docker compose -f benchmarks/docker-compose.bench.yml --profile load run --rm k6
+#
+# Tear down (including volumes):
+#   docker compose -f benchmarks/docker-compose.bench.yml down -v
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine
+    container_name: pytracer-bench-clickhouse
+    environment:
+      CLICKHOUSE_DB: pytracer
+      CLICKHOUSE_USER: pytracer
+      CLICKHOUSE_PASSWORD: pytracer
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: pytracer-bench-redis
+    command: ["redis-server", "--appendonly", "no"]  # throughput over durability for a bench
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: packages/gateway/Dockerfile
+      args:
+        # Also install the Prometheus /metrics endpoint.
+        GATEWAY_EXTRAS: redis,metrics
+    container_name: pytracer-bench-gateway
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PYTRACER_GATEWAY_API_KEYS: devkey:default
+      PYTRACER_CLICKHOUSE_HOST: clickhouse
+      PYTRACER_CLICKHOUSE_PASSWORD: pytracer
+      PYTRACER_GATEWAY_QUEUE_BACKEND: redis
+      PYTRACER_REDIS_URL: redis://redis:6379/0
+      # Rate limiting is left off (default) so the bench measures raw ingest capacity.
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: pytracer-bench-prometheus
+    depends_on:
+      gateway:
+        condition: service_healthy
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  # Optional: Grafana with the Prometheus datasource pre-wired.
+  #   docker compose -f benchmarks/docker-compose.bench.yml --profile grafana up -d
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: pytracer-bench-grafana
+    profiles: ["grafana"]
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
+    ports:
+      - "3000:3000"
+
+  # Optional: run k6 inside the compose network instead of installing it locally.
+  #   docker compose -f benchmarks/docker-compose.bench.yml --profile load run --rm k6
+  k6:
+    image: grafana/k6:0.53.0
+    container_name: pytracer-bench-k6
+    profiles: ["load"]
+    depends_on:
+      gateway:
+        condition: service_healthy
+    environment:
+      PYTRACER_URL: http://gateway:8080
+      PYTRACER_API_KEY: devkey
+    volumes:
+      - ./k6:/scripts:ro
+    command: ["run", "/scripts/ingest.js"]

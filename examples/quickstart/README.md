@@ -67,4 +67,5 @@ It prints each scenario's result and exits 0 when the replay passes.
 - **Browse real captured traces** with `pytracer traces list` and scaffold tests
   with `pytracer record` (needs the trace store: `pip install pytracer-cli[stores]`).
 - **Try a fix on another branch** with `pytracer reproduce --branch <ref>` (needs
-  the runner: `pip install pytracer-cli[runner]`).
+  the runner: `pip install pytracer-cli[runner]`). See the runnable
+  [cross-branch reproduction demo](../reproduce-demo) for a one-command example.

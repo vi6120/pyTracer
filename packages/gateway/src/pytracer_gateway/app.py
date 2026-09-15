@@ -4,7 +4,8 @@ Endpoints:
     POST /v1/spans   ingest a batch of spans (X-API-Key required)
     GET  /healthz    liveness
     GET  /readyz     readiness (ingest worker running)
-    GET  /v1/stats   ingest counters
+    GET  /v1/stats   ingest counters (JSON)
+    GET  /metrics    Prometheus metrics (with the [metrics] extra)
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from fastapi.responses import JSONResponse
 from .auth import API_KEY_HEADER, APIKeyAuth, AuthBackend
 from .config import GatewayConfig, load_api_keys
 from .ingest import IngestPipeline, TraceStoreWriter, Writer, validate_spans
+from .metrics import install_metrics
 from .ratelimit import TokenBucketLimiter
 
 
@@ -116,6 +118,9 @@ def create_app(
             return JSONResponse(payload, status_code=status.HTTP_429_TOO_MANY_REQUESTS)
         return JSONResponse(payload, status_code=status.HTTP_202_ACCEPTED)
 
+    # Prometheus scrape endpoint (no-op stub unless the [metrics] extra is present).
+    install_metrics(app, pipeline)
+
     return app
 
 
@@ -126,8 +131,10 @@ async def _parse_body(request: Request) -> list[Any]:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "invalid JSON body") from exc
     if isinstance(body, list):
         return body
-    if isinstance(body, dict) and isinstance(body.get("spans"), list):
-        return body["spans"]
+    if isinstance(body, dict):
+        spans = body.get("spans")
+        if isinstance(spans, list):
+            return spans
     raise HTTPException(
         status.HTTP_400_BAD_REQUEST,
         "body must be a list of spans or an object with a 'spans' list",

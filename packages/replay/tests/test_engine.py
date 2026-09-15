@@ -40,6 +40,36 @@ def test_full_replay_injects_recorded_and_skips_live_body() -> None:
     assert calls["n"] == 1
 
 
+def test_fuzzy_match_injects_recorded_output_on_drifted_input() -> None:
+    calls = {"n": 0}
+    state = {"x": 1}
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="t")
+    def t(x: int) -> str:
+        calls["n"] += 1
+        return f"out-{x}"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        return t(state["x"])
+
+    rec = _record(agent)  # records t(1) -> "out-1"
+    assert calls["n"] == 1
+    mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+
+    state["x"] = 2  # the op input drifts between capture and replay
+
+    # Exact match misses the drifted input, so the tool body runs live.
+    exact = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert calls["n"] == 2
+    assert exact.return_value == "out-2"
+
+    # Fuzzy falls back to the identifier's sole recording: no live call, recorded output.
+    fuzzy = ReplayEngine(ReplayMode.FULL, fuzzy_match=True).replay(agent, mocks)
+    assert calls["n"] == 2  # tool body was NOT executed again
+    assert fuzzy.return_value == "out-1"
+
+
 def test_partial_mode_mocks_tools_but_runs_model() -> None:
     tool_calls = {"n": 0}
     model_calls = {"n": 0}

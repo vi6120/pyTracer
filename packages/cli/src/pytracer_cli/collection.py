@@ -44,6 +44,9 @@ class ScenarioSpec(BaseModel):
     entry: dict[str, Any] = Field(default_factory=dict)
     trace: str  # path to a JSONL span recording, relative to the collection file
     mode: ReplayMode = ReplayMode.FULL
+    # Fall back to fuzzy mock matching when an exact input misses (for agents
+    # whose op inputs drift slightly between capture and replay).
+    fuzzy: bool = False
     assertions: list[AssertionSpec] = Field(default_factory=list)
 
 

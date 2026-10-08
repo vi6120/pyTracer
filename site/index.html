@@ -11,9 +11,9 @@
 <style>
   /* --- Sections --- */
   .sec-hero { padding: 0; }
-  /* Seamless blend: white (hero) -> gray (middle) -> white (install), no hard edges. */
+  /* Seamless blend: white (hero) -> soft accent tint (middle) -> white (install), no hard edges. */
   .sec-steps { background: linear-gradient(to bottom,
-                 var(--bg) 0, var(--panel-2) 120px, var(--panel-2) calc(100% - 120px), var(--bg) 100%);
+                 var(--bg) 0, var(--accent-soft) 120px, var(--accent-soft) calc(100% - 120px), var(--bg) 100%);
                padding: 112px 0; }
   .sec-install { padding: 62px 0 74px; }
   .sec h2 { font-size: 27px; letter-spacing: -0.02em; margin: 0 0 8px; text-align: center; }
@@ -273,7 +273,7 @@
     <section class="sec sec-install">
       <div class="container">
         <h2>Install</h2>
-        <p class="sub">One package pulls in the whole platform; or install just the SDK in your agent.</p>
+        <p class="sub" style="max-width: 760px;">One package pulls in the whole platform, or install just the SDK in your agent.</p>
         <div class="install">
           <div class="lbl"># the whole platform</div>
           <div class="row"><code>pip install pytracer-all</code><button class="copy" type="button" data-copy="pip install pytracer-all" aria-label="Copy install command">Copy</button></div>

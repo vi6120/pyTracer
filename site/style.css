@@ -158,3 +158,18 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
   .toc ul { columns: 1; }
   .nav { gap: 14px; }
 }
+
+/* Interaction polish */
+.btn { transition: transform .15s ease, opacity .15s ease, border-color .15s ease, box-shadow .15s ease; }
+.btn.primary:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -10px var(--accent); }
+.btn.ghost:hover { transform: translateY(-1px); }
+.card { transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: 0 14px 34px -18px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn, .card { transition: none; }
+  .btn.primary:hover, .btn.ghost:hover, .card:hover { transform: none; }
+}

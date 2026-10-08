@@ -125,7 +125,25 @@
     .step-panel.active { animation: none; }
     .step-progress { display: none; }
   }
+
+  /* --- Scroll reveal: fade + rise as sections enter view (JS + motion only) --- */
+  @media (prefers-reduced-motion: no-preference) {
+    .js .hero > *:not(.demo), .js .frameworks,
+    .js .sec-steps h2, .js .sec-steps .sub, .js .stepper,
+    .js .sec-install h2, .js .sec-install .sub, .js .install {
+      opacity: 0; transform: translateY(22px);
+      transition: opacity .7s cubic-bezier(.22,.61,.36,1), transform .7s cubic-bezier(.22,.61,.36,1);
+    }
+    .js .hero > *:nth-child(2) { transition-delay: .06s; }
+    .js .hero > *:nth-child(3) { transition-delay: .12s; }
+    .js .hero > *:nth-child(4) { transition-delay: .18s; }
+    .js .hero > *:nth-child(6) { transition-delay: .24s; }
+    .js .sec-steps .sub, .js .sec-install .sub { transition-delay: .08s; }
+    .js .stepper, .js .install { transition-delay: .16s; }
+  }
+  .js .in { opacity: 1 !important; transform: none !important; }
 </style>
+<script>document.documentElement.classList.add('js');</script>
 </head>
 <body>
   <header class="site-header">
@@ -335,6 +353,30 @@
 
       render(0);
       play();
+    })();
+
+    // Reveal elements as they scroll into view (fade + rise).
+    (function () {
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var sel = '.hero > *:not(.demo), .frameworks, .sec-steps h2, .sec-steps .sub, .stepper, .sec-install h2, .sec-install .sub, .install';
+      var els = [].slice.call(document.querySelectorAll(sel));
+      if (reduce || !('IntersectionObserver' in window)) {
+        els.forEach(function (e) { e.classList.add('in'); });
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+        });
+      }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+      els.forEach(function (e) { io.observe(e); });
+      // Safety net: if the observer somehow never fires, still reveal whatever is
+      // already on screen - off-screen elements keep waiting for the scroll observer.
+      setTimeout(function () {
+        els.forEach(function (e) {
+          if (e.getBoundingClientRect().top < window.innerHeight) { e.classList.add('in'); }
+        });
+      }, 1200);
     })();
   </script>
 </body>

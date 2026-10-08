@@ -259,7 +259,7 @@ To run the gateway and its stores together as containers, see
 Every package is covered by tests and checked with `ruff` and `mypy --strict`:
 
 ```bash
-pytest packages            # 251 tests
+pytest packages            # 258 tests
 ruff check packages
 mypy packages/*/src
 ```
@@ -282,6 +282,11 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the
 quality gates, and the pull-request process, and note that a one-time
 [CLA](CLA.md) signature is required. All participants follow the
 [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Maintainers
+
+- **Vikas Ramaswamy** - [@vi6120](https://github.com/vi6120) - [LinkedIn](https://www.linkedin.com/in/vikasramaswamy/)
+- **Nagesha Sheshadri** - [@sfdnas-adm](https://github.com/sfdnas-adm) - [LinkedIn](https://www.linkedin.com/in/nageshasheshadri/)
 
 ## License
 

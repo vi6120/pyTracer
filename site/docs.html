@@ -8,18 +8,20 @@
 <link rel="icon" type="image/png" href="/assets/favicon.png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="stylesheet" href="/style.css">
+<script src="/nav.js" defer></script>
 </head>
 <body>
   <header class="site-header">
     <div class="inner">
       <a class="brand" href="/"><span class="py">py</span>Tracer</a>
-      <nav class="nav">
+      <nav class="nav" id="site-nav">
         <a href="/docs" class="active">Docs</a>
         <a href="/license">License</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
       </nav>
       <a class="nav-cta" href="https://github.com/vi6120/pyTracer">GitHub</a>
+      <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span class="bars"></span></button>
     </div>
   </header>
 

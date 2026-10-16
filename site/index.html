@@ -9,21 +9,23 @@
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="stylesheet" href="/style.css">
 <style>
-  /* --- Sections --- */
-  .sec-hero { padding: 0; }
-  /* Seamless blend: white (hero) -> soft accent tint (middle) -> white (install), no hard edges. */
-  .sec-steps { background: linear-gradient(to bottom,
-                 var(--bg) 0, var(--accent-soft) 120px, var(--accent-soft) calc(100% - 120px), var(--bg) 100%);
-               padding: 112px 0; }
-  .sec-install { padding: 62px 0 74px; }
-  .sec h2 { font-size: 27px; letter-spacing: -0.02em; margin: 0 0 8px; text-align: center; }
-  .sec .sub { color: var(--muted); margin: 0 auto 30px; text-align: center; max-width: 560px; }
+  /* ---------- shared section primitives (sequa-style structure) ---------- */
+  .eyebrow { display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: 0.09em;
+             text-transform: uppercase; color: var(--accent); margin: 0 0 14px; }
+  .band { padding: 92px 0; }
+  .band--tint { background: var(--accent-soft); }
+  .band-head { text-align: center; max-width: 720px; margin: 0 auto 50px; }
+  .band-head h2 { font-size: clamp(27px, 4.2vw, 40px); line-height: 1.12; letter-spacing: -0.025em; margin: 0 0 16px; }
+  .band-head p { color: var(--muted); font-size: 18px; line-height: 1.6; margin: 0 auto; max-width: 620px; }
 
-  /* --- Section 1: hero --- */
-  .hero { position: relative; padding: 76px 0 34px; text-align: center;
+  /* ---------- 1. hero ---------- */
+  .hero { position: relative; padding: 78px 0 34px; text-align: center;
           background: radial-gradient(72% 90% at 50% -8%, var(--accent-soft), transparent 62%); }
-  .hero h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.05; letter-spacing: -0.03em; margin: 0 0 18px; }
-  .hero p.lede { font-size: clamp(17px, 2.6vw, 21px); color: var(--muted); max-width: 640px; margin: 0 auto 30px; line-height: 1.55; text-align: justify; text-align-last: center; }
+  .hero h1 { font-size: clamp(34px, 6vw, 60px); line-height: 1.04; letter-spacing: -0.035em;
+             margin: 0 0 20px; max-width: 880px; margin-inline: auto; }
+  .hero h1 .accent { color: var(--accent); }
+  .hero p.lede { font-size: clamp(17px, 2.6vw, 21px); color: var(--muted); max-width: 660px;
+                 margin: 0 auto 30px; line-height: 1.55; }
 
   .pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
           color: var(--accent); background: var(--accent-soft); border: 1px solid var(--border);
@@ -36,15 +38,11 @@
 
   .cta { display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 
-  .stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 30px;
-           color: var(--muted); font-size: 14px; padding: 26px 0 8px; }
-  .stats b { color: var(--text); font-weight: 700; }
-
-  /* Animated reproduce terminal - the headline feature, shown. */
-  .demo { max-width: 640px; margin: 10px auto 0; }
+  /* animated reproduce terminal - the hero's product mockup */
+  .demo { max-width: 650px; margin: 44px auto 0; }
   .demo-term { background: var(--code-bg); color: var(--code-text); border-radius: 14px;
                border: 1px solid var(--border); overflow: hidden; text-align: left;
-               box-shadow: 0 24px 60px -30px color-mix(in srgb, var(--accent) 40%, transparent);
+               box-shadow: 0 30px 70px -34px color-mix(in srgb, var(--accent) 48%, transparent);
                animation: rise .6s ease both; }
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
   .term-bar { display: flex; align-items: center; gap: 7px; padding: 11px 14px;
@@ -64,49 +62,88 @@
   .vo .v-fail { position: absolute; right: 0; top: 0; color: #ff6b6b; animation: vout .5s ease 2s forwards; }
   @keyframes vout { to { opacity: 0; transform: translateY(-5px); } }
   @keyframes vin { to { opacity: 1; transform: translateY(0); } }
-  .demo-cap { color: var(--muted); font-size: 14px; max-width: 560px; margin: 16px auto 0; text-align: center; line-height: 1.55; }
 
-  .frameworks { display: flex; flex-direction: column; align-items: center; gap: 12px;
-                color: var(--muted); font-size: 14px; padding: 40px 0 52px; }
-  .fw-label { font-weight: 600; letter-spacing: 0.02em; }
-  .fw-note { font-size: 13px; }
-  .marquee { position: relative; width: 100%; max-width: 760px; overflow: hidden;
-             -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
-             mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); }
-  .marquee-track { display: flex; width: max-content; animation: slide 20s linear infinite; }
+  /* ---------- 2. logo strip (frameworks) ---------- */
+  .strip { padding: 54px 0; text-align: center; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .strip-label { color: var(--muted); font-size: 14px; font-weight: 600; letter-spacing: 0.02em; margin-bottom: 20px; }
+  .marquee { position: relative; width: 100%; max-width: 820px; margin: 0 auto; overflow: hidden;
+             -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+             mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+  .marquee-track { display: flex; width: max-content; animation: slide 22s linear infinite; }
   .marquee:hover .marquee-track { animation-play-state: paused; }
   @keyframes slide { to { transform: translateX(-50%); } }
-  .fw { margin: 0 7px; padding: 8px 18px; border-radius: 999px; border: 1px solid var(--border);
-        background: var(--bg); color: var(--text); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .fw { margin: 0 7px; padding: 9px 20px; border-radius: 999px; border: 1px solid var(--border);
+        background: var(--bg); color: var(--text); font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .strip-note { color: var(--muted); font-size: 13px; margin-top: 18px; }
 
-  /* --- Section 2: stepper --- */
-  .stepper { max-width: 640px; margin: 0 auto; }
-  .step-tabs { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-  .step-tab { display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 14px;
-              font-weight: 600; color: var(--muted); background: var(--bg); border: 1px solid var(--border);
-              border-radius: 999px; padding: 8px 15px; cursor: pointer;
-              transition: color .18s ease, border-color .18s ease, background .18s ease; }
-  .step-tab .n { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
-                 border-radius: 50%; font-size: 12px; background: var(--panel-2); color: var(--muted); transition: inherit; }
-  .step-tab:hover { color: var(--text); border-color: var(--accent); }
-  .step-tab.active { color: #fff; background: var(--accent); border-color: var(--accent); }
-  .step-tab.active .n { background: rgba(255,255,255,.26); color: #fff; }
-  .step-progress { height: 3px; background: var(--border); border-radius: 3px; max-width: 460px; margin: 18px auto 0; overflow: hidden; }
-  .step-progress .bar { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; }
-  @keyframes fill { from { width: 0; } to { width: 100%; } }
-  .step-panels { margin-top: 24px; }
-  .step-panel { display: none; }
-  .step-panel.active { display: block; animation: panelIn .45s ease; }
-  @keyframes panelIn { from { opacity: 0; transform: translateY(10px); } }
-  .step-card { background: var(--bg); border: 1px solid var(--border); border-radius: 16px; padding: 28px 30px;
-               max-width: 560px; margin: 0 auto; text-align: left;
-               box-shadow: 0 16px 40px -26px color-mix(in srgb, var(--accent) 38%, transparent); }
-  .step-card h3 { margin: 6px 0 10px; font-size: 20px; }
-  .step-card p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.6; }
+  /* ---------- 3. problem: numbered flow ---------- */
+  .flow { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; max-width: 980px; margin: 0 auto; }
+  .flow-node { flex: 1 1 200px; min-width: 200px; background: var(--bg); border: 1px solid var(--border);
+               border-radius: 16px; padding: 22px 20px; text-align: left; }
+  .flow-node .num { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+                    border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700;
+                    font-size: 15px; margin-bottom: 12px; border: 1px solid var(--border); }
+  .flow-node p { margin: 0; font-size: 15.5px; line-height: 1.5; color: var(--text); }
+  .flow-node.bad .num { background: color-mix(in srgb, #ff6b6b 16%, transparent); color: #d94444; }
 
-  /* --- Section 3: install --- */
+  /* ---------- 4. meet: feature cards ---------- */
+  .feat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 1000px; margin: 0 auto; }
+  .feat .card h3 { font-size: 18px; margin: 0 0 8px; }
+  .feat .card .ic { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--accent);
+                    background: var(--accent-soft); border-radius: 8px; padding: 4px 9px; display: inline-block; margin-bottom: 14px; }
+
+  /* ---------- 5. playbooks + 6. mechanism: two-column ---------- */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; max-width: 1040px; margin: 0 auto; }
+  .split .col-head .eyebrow { margin-bottom: 12px; }
+  .split .col-head h2 { font-size: clamp(26px, 3.6vw, 36px); line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 16px; }
+  .split .col-head p { color: var(--muted); font-size: 17px; line-height: 1.6; margin: 0 0 22px; }
+
+  /* accordion (details/summary; + rotates to x) */
+  .acc { margin: 0; }
+  details.item { border-top: 1px solid var(--border); }
+  details.item:last-of-type { border-bottom: 1px solid var(--border); }
+  details.item > summary { list-style: none; cursor: pointer; display: flex; align-items: center;
+                           justify-content: space-between; gap: 16px; padding: 18px 2px; font-size: 17px; font-weight: 600; }
+  details.item > summary::-webkit-details-marker { display: none; }
+  details.item > summary::after { content: "+"; font-size: 24px; font-weight: 300; color: var(--muted);
+                                  line-height: 1; transition: transform .22s ease; }
+  details.item[open] > summary::after { transform: rotate(45deg); color: var(--accent); }
+  details.item .body { padding: 0 2px 20px; color: var(--muted); font-size: 15.5px; line-height: 1.6; max-width: 480px; }
+
+  /* mechanism pipeline (right column) */
+  .pipe { display: flex; flex-direction: column; gap: 12px; }
+  .pipe-step { display: flex; align-items: flex-start; gap: 14px; background: var(--panel); border: 1px solid var(--border);
+               border-radius: 14px; padding: 16px 18px; }
+  .pipe-step .k { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent);
+                  background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 4px 8px; flex: none; margin-top: 1px; }
+  .pipe-step .tx { font-size: 15px; line-height: 1.5; }
+  .pipe-step .tx b { display: block; color: var(--text); margin-bottom: 2px; }
+  .pipe-step .tx span { color: var(--muted); }
+  .pipe-arrow { text-align: center; color: var(--muted); font-size: 14px; line-height: 0; }
+
+  /* mini terminal (playbooks visual) */
+  .mini-term { background: var(--code-bg); color: var(--code-text); border-radius: 14px; border: 1px solid var(--border);
+               overflow: hidden; box-shadow: 0 24px 60px -34px color-mix(in srgb, var(--accent) 42%, transparent); }
+  .mini-term .term-body { font-size: 13.5px; line-height: 1.85; }
+
+  /* ---------- 7. stat band (honest "benchmark" swap) ---------- */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; max-width: 980px; margin: 0 auto; }
+  .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 16px; padding: 26px 20px; text-align: center; }
+  .stat .big { font-size: clamp(32px, 5vw, 46px); font-weight: 800; letter-spacing: -0.03em; color: var(--text); line-height: 1; }
+  .stat .lbl { color: var(--muted); font-size: 14px; margin-top: 10px; }
+  .stat-note { text-align: center; color: var(--muted); font-size: 14px; margin: 30px auto 0; max-width: 620px; }
+
+  /* ---------- 8. positioning statement (honest testimonial swap) ---------- */
+  .quote { max-width: 860px; margin: 0 auto; background: var(--panel); border: 1px solid var(--border);
+           border-radius: 22px; padding: 52px 48px; }
+  .quote blockquote { margin: 0; font-size: clamp(22px, 3.4vw, 32px); line-height: 1.28; letter-spacing: -0.02em; font-weight: 600; }
+  .quote blockquote .accent { color: var(--accent); }
+  .quote .by { margin-top: 24px; color: var(--muted); font-size: 15px; }
+  .quote .by b { color: var(--text); }
+
+  /* ---------- 10. final CTA / install ---------- */
   .install { background: var(--code-bg); color: var(--code-text); border-radius: 14px; max-width: 620px; margin: 0 auto;
-             font-family: var(--mono); font-size: 15px; padding: 10px 8px; overflow: hidden; border: 1px solid var(--border); }
+             font-family: var(--mono); font-size: 15px; padding: 10px 8px; overflow: hidden; border: 1px solid var(--border); text-align: left; }
   .install .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; }
   .install .row + .row { border-top: 1px solid color-mix(in srgb, var(--code-text) 9%, transparent); }
   .install .lbl { color: #7c8698; font-size: 13px; padding: 12px 14px 2px; }
@@ -117,6 +154,18 @@
   .copy:hover { color: var(--code-text); background: color-mix(in srgb, var(--code-text) 16%, transparent); }
   .copy.ok { color: #3ecf8e; }
 
+  /* (shared shell: .nav-cta pill, dark .footer-xl, and their responsive rules live in style.css) */
+  @media (max-width: 860px) {
+    .split { grid-template-columns: 1fr; gap: 32px; }
+    .feat { grid-template-columns: 1fr; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .band { padding: 68px 0; }
+    .quote { padding: 38px 26px; }
+  }
+  @media (max-width: 480px) {
+    .stat-grid { grid-template-columns: 1fr 1fr; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .demo-term { animation: none; }
     .pill .dot { animation: none; }
@@ -125,26 +174,17 @@
     .marquee-track { animation: none; width: auto; flex-wrap: wrap; justify-content: center; }
     .marquee-track .dup { display: none; }
     .marquee { -webkit-mask-image: none; mask-image: none; }
-    .step-panel.active { animation: none; }
-    .step-progress { display: none; }
   }
 
-  /* --- Scroll reveal: fade + rise as sections enter view (JS + motion only) --- */
+  /* scroll reveal: fade + rise as sections enter view (JS + motion only) */
   @media (prefers-reduced-motion: no-preference) {
-    .js .hero > *:not(.demo), .js .frameworks,
-    .js .sec-steps h2, .js .sec-steps .sub, .js .stepper,
-    .js .sec-install h2, .js .sec-install .sub, .js .install {
-      opacity: 0; transform: translateY(22px);
-      transition: opacity .7s cubic-bezier(.22,.61,.36,1), transform .7s cubic-bezier(.22,.61,.36,1);
-    }
-    .js .hero > *:nth-child(2) { transition-delay: .06s; }
-    .js .hero > *:nth-child(3) { transition-delay: .12s; }
-    .js .hero > *:nth-child(4) { transition-delay: .18s; }
-    .js .hero > *:nth-child(6) { transition-delay: .24s; }
-    .js .sec-steps .sub, .js .sec-install .sub { transition-delay: .08s; }
-    .js .stepper, .js .install { transition-delay: .16s; }
+    .js .reveal { opacity: 0; transform: translateY(24px);
+                  transition: opacity .7s cubic-bezier(.22,.61,.36,1), transform .7s cubic-bezier(.22,.61,.36,1); }
+    .js .reveal.d1 { transition-delay: .07s; }
+    .js .reveal.d2 { transition-delay: .14s; }
+    .js .reveal.d3 { transition-delay: .21s; }
   }
-  .js .in { opacity: 1 !important; transform: none !important; }
+  .js .reveal.in { opacity: 1 !important; transform: none !important; }
 </style>
 <script>document.documentElement.classList.add('js');</script>
 </head>
@@ -153,157 +193,307 @@
     <div class="inner">
       <a class="brand" href="/"><span class="py">py</span>Tracer</a>
       <nav class="nav">
+        <a href="#problem">Problem</a>
+        <a href="#how">How it works</a>
+        <a href="#proof">Why</a>
+        <a href="#faq">FAQ</a>
         <a href="/docs">Docs</a>
-        <a href="/license">License</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/terms">Terms</a>
-        <a href="https://github.com/vi6120/pyTracer">GitHub</a>
       </nav>
+      <a class="nav-cta" href="https://github.com/vi6120/pyTracer">GitHub</a>
     </div>
   </header>
 
   <main>
-    <!-- Section 1: the pitch -->
-    <section class="sec sec-hero">
+    <!-- 1. hero -->
+    <section class="hero">
       <div class="container">
-        <div class="hero">
-          <a class="pill" href="https://pypi.org/project/pytracer-all/"><span class="dot"></span>Live on PyPI &middot; v0.1.0</a>
-          <h1 class="hero-heading"><picture>
-              <source srcset="/assets/logo-dark.png" media="(prefers-color-scheme: dark)">
-              <img class="hero-logo" src="/assets/logo.png" alt="pyTracer - Test and replay your AI agents">
-            </picture></h1>
-          <p class="lede">
-            pyTracer captures what an agent does, replays a past run deterministically
-            by injecting the recorded responses, and regression-tests it in CI. Its
-            headline feature is <strong>cross-branch reproduction</strong>: take a
-            captured failure and re-run it on another branch with the model and tool
-            responses held frozen, so you learn whether a branch actually fixed the bug.
+        <a class="pill reveal" href="https://pypi.org/project/pytracer-all/"><span class="dot"></span>Live on PyPI &middot; v0.1.0</a>
+        <h1 class="reveal d1">Know if your change <span class="accent">actually fixed</span> the agent.</h1>
+        <p class="lede reveal d2">
+          pyTracer captures what an agent does and replays a past run deterministically,
+          with the model and tool responses held frozen. Re-run a captured failure on any
+          branch and get a clear <strong>fixed / still-failing / diverged</strong> verdict.
+        </p>
+        <div class="cta reveal d3">
+          <a class="btn primary" href="/docs">Read the docs</a>
+          <a class="btn ghost" href="https://github.com/vi6120/pyTracer">View on GitHub</a>
+        </div>
+
+        <div class="demo">
+          <div class="demo-term">
+            <div class="term-bar">
+              <span class="d r"></span><span class="d y"></span><span class="d g"></span>
+              <span class="t">pytracer reproduce</span>
+            </div>
+            <div class="term-body">
+              <div><span class="pr">$</span> pytracer reproduce --branch <span class="hl">fix</span> --baseline <span class="hl">main</span></div>
+              <div class="dim">reproducing the captured failure, mocks frozen&hellip;</div>
+              <div class="verdict-row">
+                <span class="vs">cites-every-source</span>
+                <span class="vo">
+                  <span class="v-fixed">&check; fixed</span>
+                  <span class="v-fail">&times; still failing</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. logo strip: frameworks -->
+    <section class="strip">
+      <div class="container">
+        <div class="strip-label reveal">Works with the agent frameworks you already use</div>
+        <div class="marquee reveal d1" aria-label="Supported frameworks">
+          <div class="marquee-track">
+            <span class="fw">LangGraph</span><span class="fw">CrewAI</span><span class="fw">AutoGen</span><span class="fw">OpenAI Agents SDK</span>
+            <span class="fw dup" aria-hidden="true">LangGraph</span><span class="fw dup" aria-hidden="true">CrewAI</span><span class="fw dup" aria-hidden="true">AutoGen</span><span class="fw dup" aria-hidden="true">OpenAI Agents SDK</span>
+          </div>
+        </div>
+        <div class="strip-note reveal d2">or any Python agent you instrument by hand</div>
+      </div>
+    </section>
+
+    <!-- 3. problem -->
+    <section class="band" id="problem">
+      <div class="container">
+        <div class="band-head">
+          <div class="eyebrow reveal">The real problem</div>
+          <h2 class="reveal d1">A green test does not mean your fix worked.</h2>
+          <p class="reveal d2">
+            Agents are nondeterministic. Re-run a failed one and the model and tool
+            responses come back different every time, so when a test turns green you
+            cannot tell whether your code change fixed it or the model just drifted.
           </p>
-          <div class="cta">
-            <a class="btn primary" href="/docs">Read the docs</a>
-            <a class="btn ghost" href="https://github.com/vi6120/pyTracer">View on GitHub</a>
-          </div>
-
-          <div class="demo">
-            <div class="demo-term">
-              <div class="term-bar">
-                <span class="d r"></span><span class="d y"></span><span class="d g"></span>
-                <span class="t">pytracer reproduce</span>
-              </div>
-              <div class="term-body">
-                <div><span class="pr">$</span> pytracer reproduce --branch <span class="hl">fix</span> --baseline <span class="hl">main</span></div>
-                <div class="dim">reproducing the captured failure, mocks frozen&hellip;</div>
-                <div class="verdict-row">
-                  <span class="vs">cites-every-source</span>
-                  <span class="vo">
-                    <span class="v-fixed">&check; fixed</span>
-                    <span class="v-fail">&times; still failing</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-            <p class="demo-cap">The same captured failure, re-run on your fix branch - the model and
-            tool responses stay frozen, so you know the code change is what fixed it.</p>
-          </div>
-
-          <div class="stats">
-            <div><b>12</b> PyPI packages</div>
-            <div><b>4</b> framework adapters</div>
-            <div><b>3</b> replay modes</div>
-            <div>Apache + AGPL</div>
-          </div>
         </div>
-
-        <div class="frameworks">
-          <span class="fw-label">Works with</span>
-          <div class="marquee" aria-label="Supported frameworks">
-            <div class="marquee-track">
-              <span class="fw">LangGraph</span><span class="fw">CrewAI</span><span class="fw">AutoGen</span><span class="fw">OpenAI Agents SDK</span>
-              <span class="fw dup" aria-hidden="true">LangGraph</span><span class="fw dup" aria-hidden="true">CrewAI</span><span class="fw dup" aria-hidden="true">AutoGen</span><span class="fw dup" aria-hidden="true">OpenAI Agents SDK</span>
-            </div>
-          </div>
-          <span class="fw-note">or any Python agent you instrument by hand</span>
+        <div class="flow">
+          <div class="flow-node reveal"><span class="num">1</span><p>Your agent fails in production.</p></div>
+          <div class="flow-node reveal d1"><span class="num">2</span><p>You change the code to fix it.</p></div>
+          <div class="flow-node reveal d2"><span class="num">3</span><p>You re-run, but the model and tools drift.</p></div>
+          <div class="flow-node bad reveal d3"><span class="num">4</span><p>You cannot tell what actually fixed it.</p></div>
         </div>
       </div>
     </section>
 
-    <!-- Section 2: how a team uses it (stepper) -->
-    <section class="sec sec-steps">
+    <!-- 4. meet pyTracer -->
+    <section class="band band--tint">
       <div class="container">
-        <h2>How a team uses it</h2>
-        <p class="sub">Instrument once, turn failures into tests, then gate your branches on them.</p>
-        <div class="stepper">
-          <div class="step-tabs" role="tablist" aria-label="Workflow steps">
-            <button class="step-tab active" type="button"><span class="n">1</span> Instrument</button>
-            <button class="step-tab" type="button"><span class="n">2</span> Turn into a test</button>
-            <button class="step-tab" type="button"><span class="n">3</span> Gate in CI</button>
+        <div class="band-head">
+          <div class="eyebrow reveal">Meet pyTracer</div>
+          <h2 class="reveal d1">The regression-testing layer for AI agents.</h2>
+          <p class="reveal d2">
+            Capture a real run once, freeze its model and tool responses, and replay it
+            anywhere, deterministically. The same failure reproduces byte for byte.
+          </p>
+        </div>
+        <div class="feat">
+          <div class="card reveal">
+            <span class="ic">capture</span>
+            <h3>Captured from real runs</h3>
+            <p>Record exactly what your agent did, down to each model call and tool result, with the branch and commit stamped on it.</p>
           </div>
-          <div class="step-progress"><span class="bar"></span></div>
-          <div class="step-panels">
-            <div class="step-panel active">
-              <div class="step-card">
-                <div class="step-n">STEP 1</div>
-                <h3>Instrument your agent</h3>
-                <p>Add the <code>@op</code> decorator to the functions that call models and
-                tools. One or two lines each, and it does not change their behavior.</p>
-              </div>
-            </div>
-            <div class="step-panel">
-              <div class="step-card">
-                <div class="step-n">STEP 2</div>
-                <h3>Turn a failure into a test</h3>
-                <p>Browse captured runs and scaffold a runnable test collection from a
-                failing one. Replays are deterministic and touch no live services.</p>
-              </div>
-            </div>
-            <div class="step-panel">
-              <div class="step-card">
-                <div class="step-n">STEP 3</div>
-                <h3>Gate branches in CI</h3>
-                <p>Run the collection on every pull request, comment the results, and
-                reproduce a failure on any branch to confirm a fix.</p>
-              </div>
-            </div>
+          <div class="card reveal d1">
+            <span class="ic">freeze</span>
+            <h3>Frozen and deterministic</h3>
+            <p>Replay injects the recorded responses, so a run reproduces identically with no live model calls and no flakiness.</p>
+          </div>
+          <div class="card reveal d2">
+            <span class="ic">reproduce</span>
+            <h3>Reproduced on any branch</h3>
+            <p>Re-run a captured failure on a fix branch and get a fixed / still-failing / diverged verdict per scenario.</p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Section 3: install -->
-    <section class="sec sec-install">
+    <!-- 5. playbooks -->
+    <section class="band">
       <div class="container">
-        <h2>Install</h2>
-        <p class="sub" style="max-width: 760px;">One package pulls in the whole platform, or install just the SDK in your agent.</p>
-        <div class="install">
+        <div class="split">
+          <div class="col-head">
+            <div class="eyebrow reveal">Playbooks</div>
+            <h2 class="reveal d1">How teams actually use it.</h2>
+            <p class="reveal d2">From a one-off flaky failure to a CI gate the whole team trusts.</p>
+            <a class="btn primary reveal d2" href="/docs">Read the docs</a>
+          </div>
+          <div class="acc reveal d1">
+            <details class="item" open>
+              <summary>Turn a production failure into a test</summary>
+              <div class="body">Browse captured runs, pick a failing one, and scaffold a runnable test collection from it in a single command.</div>
+            </details>
+            <details class="item">
+              <summary>Gate every pull request in CI</summary>
+              <div class="body">Run the collection on each PR; results are commented back and failing scenarios are auto-documented as deduplicated issues.</div>
+            </details>
+            <details class="item">
+              <summary>Prove a fix across branches</summary>
+              <div class="body">Comment <code>/pytracer try</code> on a PR and the captured failure is reproduced on that branch, the verdict posted in place on each push.</div>
+            </details>
+            <details class="item">
+              <summary>Share and version test collections</summary>
+              <div class="body">Fork, version, and review agent test collections through the registry, with pull requests, three-way merge, and RBAC.</div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. mechanism -->
+    <section class="band band--tint" id="how">
+      <div class="container">
+        <div class="split">
+          <div class="col-head">
+            <div class="eyebrow reveal">The replay engine</div>
+            <h2 class="reveal d1">One captured run, replayed three ways.</h2>
+            <p class="reveal d2">
+              Choose how much to hold frozen: <strong>full</strong> (recorded model and
+              tools), <strong>partial</strong> (recorded tools, live model), or
+              <strong>live</strong> (re-run everything). Every mode adds assertions, run
+              diffing, a failure fingerprint, and a three-way outcome classifier.
+            </p>
+          </div>
+          <div class="pipe reveal d1">
+            <div class="pipe-step"><span class="k">1</span><span class="tx"><b>Capture</b><span>Record the run with branch + commit stamped.</span></span></div>
+            <div class="pipe-arrow">&darr;</div>
+            <div class="pipe-step"><span class="k">2</span><span class="tx"><b>Freeze</b><span>Pin the model and tool responses as mocks.</span></span></div>
+            <div class="pipe-arrow">&darr;</div>
+            <div class="pipe-step"><span class="k">3</span><span class="tx"><b>Replay</b><span>full / partial / live, on any branch.</span></span></div>
+            <div class="pipe-arrow">&darr;</div>
+            <div class="pipe-step"><span class="k">4</span><span class="tx"><b>Classify</b><span>fixed / still-failing / diverged.</span></span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. by the numbers (honest proof) -->
+    <section class="band" id="proof">
+      <div class="container">
+        <div class="band-head">
+          <div class="eyebrow reveal">What ships today</div>
+          <h2 class="reveal d1">Open source, and already complete.</h2>
+          <p class="reveal d2">pyTracer 0.1.0 is released on PyPI and the repository is public. No waitlist, no beta flag.</p>
+        </div>
+        <div class="stat-grid">
+          <div class="stat reveal"><div class="big">12</div><div class="lbl">PyPI packages</div></div>
+          <div class="stat reveal d1"><div class="big">4</div><div class="lbl">framework adapters</div></div>
+          <div class="stat reveal d2"><div class="big">3</div><div class="lbl">replay modes</div></div>
+          <div class="stat reveal d3"><div class="big">258</div><div class="lbl">tests, ruff + mypy clean</div></div>
+        </div>
+        <p class="stat-note reveal d2">
+          Apache-2.0 for the client toolchain, AGPL-3.0 for the hosted server components.
+          See the <a href="/docs#packages">full package list</a>.
+        </p>
+      </div>
+    </section>
+
+    <!-- 8. positioning statement (honest, attributed to the project) -->
+    <section class="band band--tint">
+      <div class="container">
+        <div class="quote reveal">
+          <blockquote>Most tools tell you an agent <span class="accent">failed</span>. pyTracer tells you whether your change is what <span class="accent">fixed</span> it.</blockquote>
+          <div class="by"><b>The pyTracer approach</b> &middot; deterministic replay + cross-branch reproduction, built on an open core.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. FAQ -->
+    <section class="band" id="faq">
+      <div class="container">
+        <div class="band-head">
+          <div class="eyebrow reveal">FAQ</div>
+          <h2 class="reveal d1">Questions, answered.</h2>
+          <p class="reveal d2">Still curious? The <a href="/docs">docs</a> go deeper, or open an issue on <a href="https://github.com/vi6120/pyTracer">GitHub</a>.</p>
+        </div>
+        <div class="acc reveal d1" style="max-width: 760px;">
+          <details class="item" open>
+            <summary>How is pyTracer different from tracing or eval tools?</summary>
+            <div class="body" style="max-width: 720px;">Tracing shows you that a run happened; eval scores an output. pyTracer freezes a captured run and re-runs it deterministically on another branch, so you learn whether your code change is what fixed the failure, not just that today's run passed.</div>
+          </details>
+          <details class="item">
+            <summary>What does deterministic replay actually mean?</summary>
+            <div class="body" style="max-width: 720px;">The recorded model and tool responses are injected back in during replay, so the agent follows the exact same path with no live API calls. The same failure reproduces identically every time.</div>
+          </details>
+          <details class="item">
+            <summary>Do I have to change my agent code?</summary>
+            <div class="body" style="max-width: 720px;">Add the <code>@op</code> decorator to the functions that call models and tools. One or two lines each, and it does not change their behavior.</div>
+          </details>
+          <details class="item">
+            <summary>Which frameworks are supported?</summary>
+            <div class="body" style="max-width: 720px;">LangGraph, CrewAI, AutoGen, and the OpenAI Agents SDK have dedicated adapters, and any Python agent works once you instrument it by hand.</div>
+          </details>
+          <details class="item">
+            <summary>Is it open source? What license?</summary>
+            <div class="body" style="max-width: 720px;">Yes. The client toolchain is Apache-2.0 and the hosted server components are AGPL-3.0. All 12 packages are on PyPI and the repository is public.</div>
+          </details>
+          <details class="item">
+            <summary>Can I self-host, or is there a hosted option?</summary>
+            <div class="body" style="max-width: 720px;">Both. Self-host the gateway and stores as a Docker stack behind a TLS reverse proxy, or point the SDK at the live gateway at <code>gateway.pytracer.com</code>.</div>
+          </details>
+          <details class="item">
+            <summary>Does my prompt data leave my machine?</summary>
+            <div class="body" style="max-width: 720px;">Only the spans you capture are sent to the gateway you configure, which can be your own. You control what is instrumented and where it goes.</div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10. final CTA / install -->
+    <section class="band band--tint">
+      <div class="container">
+        <div class="band-head">
+          <div class="eyebrow reveal">Get started</div>
+          <h2 class="reveal d1">Test your agents today.</h2>
+          <p class="reveal d2">One package pulls in the whole platform, or install just the SDK in your agent.</p>
+        </div>
+        <div class="install reveal d1">
           <div class="lbl"># the whole platform</div>
           <div class="row"><code>pip install pytracer-all</code><button class="copy" type="button" data-copy="pip install pytracer-all" aria-label="Copy install command">Copy</button></div>
           <div class="lbl"># or just the SDK</div>
           <div class="row"><code>pip install pytracer-sdk</code><button class="copy" type="button" data-copy="pip install pytracer-sdk" aria-label="Copy install command">Copy</button></div>
         </div>
-        <p class="sub" style="margin-top: 18px;">
-          All 12 packages are on PyPI - see the
-          <a href="/docs#packages">full package list</a> or open
-          <a href="https://pypi.org/project/pytracer-all/">pytracer-all</a> and
-          <a href="https://pypi.org/project/pytracer-sdk/">pytracer-sdk</a> directly.
-          New here? Start with the <a href="/docs">step-by-step user guide</a>.
-        </p>
+        <div class="cta reveal d2" style="margin-top: 26px;">
+          <a class="btn primary" href="/docs">Read the docs</a>
+          <a class="btn ghost" href="https://github.com/vi6120/pyTracer">View on GitHub</a>
+        </div>
       </div>
     </section>
   </main>
 
-  <footer class="site-footer">
+  <!-- 11. dark footer -->
+  <footer class="footer-xl">
     <div class="inner">
-      <div>pyTracer &middot; Apache-2.0 (client) &amp; AGPL-3.0 (server) &middot; built by
-        <a href="https://www.linkedin.com/in/vikasramaswamy/">Vikas Ramaswamy</a> and
-        <a href="https://www.linkedin.com/in/nageshasheshadri/">Nagesha Sheshadri</a></div>
-      <div class="links">
-        <a href="/docs">Docs</a>
-        <a href="/license">License</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/terms">Terms</a>
-        <a href="https://github.com/vi6120/pyTracer">GitHub</a>
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="fb-logo"><span class="py">py</span>Tracer</div>
+          <p>The test-and-replay layer for AI agents. Deterministic replay and cross-branch reproduction, built on an open core.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Product</h4>
+          <a href="/docs">Docs</a>
+          <a href="https://pypi.org/project/pytracer-all/">PyPI</a>
+          <a href="https://github.com/vi6120/pyTracer">GitHub</a>
+          <a href="/docs#packages">Packages</a>
+        </div>
+        <div class="footer-col">
+          <h4>Resources</h4>
+          <a href="/docs">User guide</a>
+          <a href="https://github.com/vi6120/pyTracer/tree/main/examples/reproduce-demo">Reproduce demo</a>
+          <a href="https://github.com/vi6120/pyTracer/issues">Issues</a>
+        </div>
+        <div class="footer-col">
+          <h4>Legal</h4>
+          <a href="/license">License</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="made">Built by <b><a href="https://www.linkedin.com/in/vikasramaswamy/">Vikas Ramaswamy</a></b> and <b><a href="https://www.linkedin.com/in/nageshasheshadri/">Nagesha Sheshadri</a></b></div>
+        <div>Apache-2.0 (client) &amp; AGPL-3.0 (server)</div>
       </div>
     </div>
+    <div class="footer-mark" aria-hidden="true">pyTracer</div>
   </footer>
 
   <script>
@@ -319,50 +509,10 @@
       });
     });
 
-    // "How a team uses it" - auto-advancing stepper (Step 1 -> 2 -> 3).
-    (function () {
-      var stepper = document.querySelector('.stepper');
-      if (!stepper) return;
-      var tabs = [].slice.call(stepper.querySelectorAll('.step-tab'));
-      var panels = [].slice.call(stepper.querySelectorAll('.step-panel'));
-      var bar = stepper.querySelector('.bar');
-      var MS = 4200;
-      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      var i = 0, timer = null;
-
-      function render(n) {
-        i = n;
-        tabs.forEach(function (t, k) { t.classList.toggle('active', k === n); });
-        panels.forEach(function (p, k) { p.classList.toggle('active', k === n); });
-      }
-      function restartBar() {
-        if (!bar || reduce) return;
-        bar.style.animation = 'none';
-        void bar.offsetWidth;
-        bar.style.animation = 'fill ' + MS + 'ms linear forwards';
-        bar.style.animationPlayState = 'running';
-      }
-      function stop() { if (timer) { clearInterval(timer); timer = null; } }
-      function play() {
-        if (reduce) return;
-        stop();
-        restartBar();
-        timer = setInterval(function () { render((i + 1) % panels.length); restartBar(); }, MS);
-      }
-
-      tabs.forEach(function (t, k) { t.addEventListener('click', function () { render(k); play(); }); });
-      stepper.addEventListener('mouseenter', function () { stop(); if (bar) bar.style.animationPlayState = 'paused'; });
-      stepper.addEventListener('mouseleave', function () { play(); });
-
-      render(0);
-      play();
-    })();
-
     // Reveal elements as they scroll into view (fade + rise).
     (function () {
       var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      var sel = '.hero > *:not(.demo), .frameworks, .sec-steps h2, .sec-steps .sub, .stepper, .sec-install h2, .sec-install .sub, .install';
-      var els = [].slice.call(document.querySelectorAll(sel));
+      var els = [].slice.call(document.querySelectorAll('.reveal'));
       if (reduce || !('IntersectionObserver' in window)) {
         els.forEach(function (e) { e.classList.add('in'); });
         return;
@@ -373,8 +523,7 @@
         });
       }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
       els.forEach(function (e) { io.observe(e); });
-      // Safety net: if the observer somehow never fires, still reveal whatever is
-      // already on screen - off-screen elements keep waiting for the scroll observer.
+      // Safety net: reveal anything already on screen if the observer never fires.
       setTimeout(function () {
         els.forEach(function (e) {
           if (e.getBoundingClientRect().top < window.innerHeight) { e.classList.add('in'); }

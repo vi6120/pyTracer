@@ -88,6 +88,9 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
 .nav a { color: var(--muted); font-size: 15px; }
 .nav a:hover { color: var(--text); text-decoration: none; }
 .nav a.active { color: var(--text); font-weight: 600; }
+.nav-cta { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600;
+           color: #fff; background: var(--text); border-radius: 999px; padding: 8px 16px; }
+.nav-cta:hover { text-decoration: none; opacity: 0.9; }
 
 /* Layout */
 .container { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
@@ -133,14 +136,23 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
 .toc ul { list-style: none; padding: 0; margin: 0; columns: 2; }
 .toc li { margin: 4px 0; }
 
-/* Footer */
-.site-footer { border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
-.site-footer .inner {
-  max-width: var(--maxw); margin: 0 auto; padding: 28px 24px 44px;
-  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;
-}
-.site-footer a { color: var(--muted); }
-.site-footer .links { display: flex; gap: 18px; flex-wrap: wrap; }
+/* Footer (dark, shared across all pages) */
+.footer-xl { position: relative; background: #0b0d12; color: #9aa1ad; overflow: hidden; border-top: 1px solid #1b1f28; }
+.footer-xl a { color: #c3c9d4; }
+.footer-xl a:hover { color: #fff; text-decoration: none; }
+.footer-xl .inner { position: relative; z-index: 1; max-width: var(--maxw); margin: 0 auto; padding: 64px 24px 40px; }
+.footer-top { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 32px; }
+.footer-brand .fb-logo { font-weight: 700; font-size: 22px; letter-spacing: -0.02em; color: #fff; }
+.footer-brand .fb-logo .py { color: #5cb0ef; }
+.footer-brand p { margin: 12px 0 0; font-size: 15px; max-width: 280px; line-height: 1.55; }
+.footer-col h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: #e6e8ee; margin: 0 0 14px; }
+.footer-col a { display: block; font-size: 15px; margin: 9px 0; }
+.footer-bottom { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center;
+                 flex-wrap: wrap; gap: 12px; margin-top: 48px; padding-top: 22px; border-top: 1px solid #1b1f28; font-size: 13.5px; }
+.footer-bottom .made b { color: #c3c9d4; }
+.footer-mark { position: absolute; left: 0; right: 0; bottom: -2.4vw; text-align: center; z-index: 0;
+               font-size: 22vw; font-weight: 800; letter-spacing: -0.04em; line-height: 1;
+               color: #11141b; user-select: none; pointer-events: none; white-space: nowrap; }
 
 /* Logo in the hero. The PNG has a transparent background, so it sits cleanly on
    both light and dark themes. */
@@ -157,6 +169,17 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
   .grid { grid-template-columns: 1fr; }
   .toc ul { columns: 1; }
   .nav { gap: 14px; }
+}
+
+/* Shared shell at small widths: collapse the header nav to brand + pill, stack the footer */
+@media (max-width: 760px) {
+  .site-header .nav { display: none; }
+  .nav-cta { margin-left: auto; }
+  .footer-top { grid-template-columns: 1fr 1fr; }
+  .footer-brand { grid-column: 1 / -1; }
+}
+@media (max-width: 480px) {
+  .footer-top { grid-template-columns: 1fr; }
 }
 
 /* Interaction polish */

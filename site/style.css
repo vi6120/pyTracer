@@ -92,6 +92,24 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
            color: #fff; background: var(--text); border-radius: 999px; padding: 8px 16px; }
 .nav-cta:hover { text-decoration: none; opacity: 0.9; }
 
+/* Mobile menu toggle (hamburger that morphs to an x); hidden on desktop */
+.nav-toggle { display: none; align-items: center; justify-content: center; width: 40px; height: 40px;
+              padding: 0; background: none; border: 1px solid var(--border); border-radius: 10px;
+              color: var(--text); cursor: pointer; flex: none; }
+.nav-toggle:hover { border-color: var(--accent); }
+.nav-toggle .bars, .nav-toggle .bars::before, .nav-toggle .bars::after {
+  content: ""; display: block; width: 18px; height: 2px; background: currentColor; border-radius: 2px;
+  transition: transform .2s ease, background-color .2s ease; }
+.nav-toggle .bars { position: relative; }
+.nav-toggle .bars::before { position: absolute; left: 0; top: -6px; }
+.nav-toggle .bars::after { position: absolute; left: 0; top: 6px; }
+.nav-toggle[aria-expanded="true"] .bars { background: transparent; }
+.nav-toggle[aria-expanded="true"] .bars::before { transform: translateY(6px) rotate(45deg); }
+.nav-toggle[aria-expanded="true"] .bars::after { transform: translateY(-6px) rotate(-45deg); }
+@media (prefers-reduced-motion: reduce) {
+  .nav-toggle .bars, .nav-toggle .bars::before, .nav-toggle .bars::after { transition: none; }
+}
+
 /* Layout */
 .container { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
 .prose { max-width: var(--prose); margin: 0 auto; padding: 40px 24px 72px; }
@@ -171,10 +189,19 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
   .nav { gap: 14px; }
 }
 
-/* Shared shell at small widths: collapse the header nav to brand + pill, stack the footer */
+/* Shared shell at small widths: collapse the header nav into a toggled dropdown, stack the footer */
 @media (max-width: 760px) {
-  .site-header .nav { display: none; }
+  .nav-toggle { display: inline-flex; margin-left: 10px; }
   .nav-cta { margin-left: auto; }
+  .site-header .nav {
+    display: none; position: absolute; top: 100%; left: 0; right: 0;
+    flex-direction: column; align-items: stretch; gap: 0;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+    padding: 6px 24px 14px; box-shadow: 0 18px 34px -20px rgba(0, 0, 0, 0.35);
+  }
+  .site-header .nav.open { display: flex; }
+  .site-header .nav a { padding: 12px 2px; font-size: 16px; border-top: 1px solid var(--border); }
+  .site-header .nav a:first-child { border-top: none; }
   .footer-top { grid-template-columns: 1fr 1fr; }
   .footer-brand { grid-column: 1 / -1; }
 }

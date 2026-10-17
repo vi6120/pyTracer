@@ -89,7 +89,7 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
 .nav a:hover { color: var(--text); text-decoration: none; }
 .nav a.active { color: var(--text); font-weight: 600; }
 .nav-cta { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600;
-           color: #fff; background: var(--text); border-radius: 999px; padding: 8px 16px; }
+           color: var(--bg); background: var(--text); border-radius: 999px; padding: 8px 16px; }
 .nav-cta:hover { text-decoration: none; opacity: 0.9; }
 
 /* Mobile menu toggle (hamburger that morphs to an x); hidden on desktop */

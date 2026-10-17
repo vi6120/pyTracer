@@ -73,8 +73,11 @@
   .marquee-track { display: flex; width: max-content; animation: slide 22s linear infinite; }
   .marquee:hover .marquee-track { animation-play-state: paused; }
   @keyframes slide { to { transform: translateX(-50%); } }
-  .fw { margin: 0 7px; padding: 9px 20px; border-radius: 999px; border: 1px solid var(--border);
-        background: var(--bg); color: var(--text); font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .fw-logo { display: inline-flex; align-items: center; gap: 9px; margin: 0 26px;
+             color: var(--muted); font-size: 16px; font-weight: 600; white-space: nowrap;
+             opacity: 0.72; transition: opacity .2s ease, color .2s ease; }
+  .fw-logo:hover { opacity: 1; color: var(--text); text-decoration: none; }
+  .fw-ic { width: 22px; height: 22px; fill: currentColor; flex: none; }
   .strip-note { color: var(--muted); font-size: 13px; margin-top: 18px; }
 
   /* ---------- 3. problem: numbered flow ---------- */
@@ -249,8 +252,14 @@
         <div class="strip-label reveal">Works with the agent frameworks you already use</div>
         <div class="marquee reveal d1" aria-label="Supported frameworks">
           <div class="marquee-track">
-            <span class="fw">LangGraph</span><span class="fw">CrewAI</span><span class="fw">AutoGen</span><span class="fw">OpenAI Agents SDK</span>
-            <span class="fw dup" aria-hidden="true">LangGraph</span><span class="fw dup" aria-hidden="true">CrewAI</span><span class="fw dup" aria-hidden="true">AutoGen</span><span class="fw dup" aria-hidden="true">OpenAI Agents SDK</span>
+            <span class="fw-logo"><svg class="fw-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.796 0a6.93 6.93 0 0 0-4.91 2.019L5.451 5.455l3.273 3.27 3.432-3.432a2.284 2.284 0 0 1 3.277 0 2.28 2.28 0 0 1 0 3.275L12 12.001l3.273 3.273 3.433-3.435c2.692-2.692 2.692-7.127 0-9.82A6.92 6.92 0 0 0 13.796 0m-5.07 8.728-3.433 3.434c-2.692 2.693-2.692 7.126 0 9.819A6.92 6.92 0 0 0 10.203 24a6.93 6.93 0 0 0 4.911-2.02l3.432-3.432-3.271-3.272-3.433 3.433a2.284 2.284 0 0 1-3.277 0 2.28 2.28 0 0 1 0-3.276L12 12z"/></svg>LangGraph</span>
+            <span class="fw-logo"><svg class="fw-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.482.18C7.161 1.319 1.478 9.069 1.426 15.372c-.051 5.527 3.1 8.68 8.68 8.627 6.716-.05 14.259-6.87 12.09-10.9-.672-1.292-1.396-1.344-2.687-.207-1.602 1.395-1.654.31-.207-2.893 1.757-3.98 1.705-5.322-.31-7.544C17.03.388 14.962-.388 12.482.181Zm5.322 2.068c2.273 2.015 2.376 4.236.465 8.42-1.395 3.1-2.17 3.515-3.824 1.86-1.24-1.24-1.343-3.46-.258-6.044 1.137-2.635.982-3.1-.568-1.653-3.72 3.358-6.458 9.765-5.424 12.503.464 1.189.825 1.395 2.737 1.395 2.79 0 6.303-1.705 7.957-3.926 1.756-2.274 2.79-2.274 2.79-.052 0 3.875-6.459 8.627-11.625 8.627-6.251 0-9.351-4.752-7.491-11.47.878-2.995 4.443-7.904 7.077-9.66 3.255-2.17 5.684-2.17 8.164 0z"/></svg>CrewAI</span>
+            <span class="fw-logo">OpenAI Agents SDK</span>
+            <span class="fw-logo">AutoGen</span>
+            <span class="fw-logo dup" aria-hidden="true"><svg class="fw-ic" viewBox="0 0 24 24"><path d="M13.796 0a6.93 6.93 0 0 0-4.91 2.019L5.451 5.455l3.273 3.27 3.432-3.432a2.284 2.284 0 0 1 3.277 0 2.28 2.28 0 0 1 0 3.275L12 12.001l3.273 3.273 3.433-3.435c2.692-2.692 2.692-7.127 0-9.82A6.92 6.92 0 0 0 13.796 0m-5.07 8.728-3.433 3.434c-2.692 2.693-2.692 7.126 0 9.819A6.92 6.92 0 0 0 10.203 24a6.93 6.93 0 0 0 4.911-2.02l3.432-3.432-3.271-3.272-3.433 3.433a2.284 2.284 0 0 1-3.277 0 2.28 2.28 0 0 1 0-3.276L12 12z"/></svg>LangGraph</span>
+            <span class="fw-logo dup" aria-hidden="true"><svg class="fw-ic" viewBox="0 0 24 24"><path d="M12.482.18C7.161 1.319 1.478 9.069 1.426 15.372c-.051 5.527 3.1 8.68 8.68 8.627 6.716-.05 14.259-6.87 12.09-10.9-.672-1.292-1.396-1.344-2.687-.207-1.602 1.395-1.654.31-.207-2.893 1.757-3.98 1.705-5.322-.31-7.544C17.03.388 14.962-.388 12.482.181Zm5.322 2.068c2.273 2.015 2.376 4.236.465 8.42-1.395 3.1-2.17 3.515-3.824 1.86-1.24-1.24-1.343-3.46-.258-6.044 1.137-2.635.982-3.1-.568-1.653-3.72 3.358-6.458 9.765-5.424 12.503.464 1.189.825 1.395 2.737 1.395 2.79 0 6.303-1.705 7.957-3.926 1.756-2.274 2.79-2.274 2.79-.052 0 3.875-6.459 8.627-11.625 8.627-6.251 0-9.351-4.752-7.491-11.47.878-2.995 4.443-7.904 7.077-9.66 3.255-2.17 5.684-2.17 8.164 0z"/></svg>CrewAI</span>
+            <span class="fw-logo dup" aria-hidden="true">OpenAI Agents SDK</span>
+            <span class="fw-logo dup" aria-hidden="true">AutoGen</span>
           </div>
         </div>
         <div class="strip-note reveal d2">or any Python agent you instrument by hand</div>

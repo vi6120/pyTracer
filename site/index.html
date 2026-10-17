@@ -139,6 +139,9 @@
                                   line-height: 1; transition: transform .22s ease; }
   details.item[open] > summary::after { transform: rotate(45deg); color: var(--accent); }
   details.item .body { padding: 0 2px 20px; color: var(--muted); font-size: 15.5px; line-height: 1.6; max-width: 480px; }
+  /* FAQ reads a touch larger than the playbooks accordion */
+  #faq details.item > summary { font-size: 19px; }
+  #faq details.item .body { font-size: 16px; }
 
   /* mechanism pipeline (right column) */
   .pipe { display: flex; flex-direction: column; gap: 12px; }
@@ -473,7 +476,7 @@
           <h2 class="reveal d1">Questions, answered.</h2>
           <p class="reveal d2">Still curious? The <a href="/docs">docs</a> go deeper, open an issue on <a href="https://github.com/vi6120/pyTracer">GitHub</a>, or email <a href="mailto:services@pytracer.com">services@pytracer.com</a>.</p>
         </div>
-        <div class="acc reveal d1" style="max-width: 760px;">
+        <div class="acc reveal d1" style="max-width: 760px; margin: 0 auto;">
           <details class="item" open>
             <summary>How is pyTracer different from tracing or eval tools?</summary>
             <div class="body" style="max-width: 720px;">Tracing shows you that a run happened; eval scores an output. pyTracer freezes a captured run and re-runs it deterministically on another branch, so you learn whether your code change is what fixed the failure, not just that today's run passed.</div>

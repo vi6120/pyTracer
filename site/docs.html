@@ -42,6 +42,7 @@
         <li><a href="#capture">3. Turn a failure into a test</a></li>
         <li><a href="#run">4. Run a collection</a></li>
         <li><a href="#ci">5. Gate branches in CI</a></li>
+        <li><a href="#pytest">Run collections in pytest</a></li>
         <li><a href="#reproduce">6. Reproduce on any branch</a></li>
         <li><a href="#frameworks">Framework adapters</a></li>
         <li><a href="#selfhost">Self-hosting the gateway</a></li>
@@ -198,6 +199,22 @@ scenarios:
     included too.</p>
     <pre><code>pytracer run tests/collection.yaml --json results.json
 pytracer issues sync results.json --repo owner/name   # needs a GitHub token</code></pre>
+
+    <h2 id="pytest">Run collections in pytest</h2>
+    <p>Installing <code>pytracer-cli</code> registers a pytest plugin, so agent
+    regression tests run inside your existing <code>pytest</code> suite. Name a
+    collection file to match <code>*.pytracer.yaml</code> and run <code>pytest</code>:
+    each scenario becomes its own test, with <code>-k</code> filtering, reporting,
+    and CI exit codes all working as usual.</p>
+    <pre><code>pip install pytracer-cli[pytest]
+
+# agents.pytracer.yaml is discovered automatically
+pytest -v
+# agents.pytracer.yaml::researcher-happy-path PASSED
+# agents.pytracer.yaml::refund-policy        FAILED</code></pre>
+    <p>Override the file pattern with the <code>pytracer_glob</code> ini option. A
+    <strong>vitest</strong> integration for JS/TS agents is planned alongside the
+    TypeScript SDK (not yet released - pyTracer is Python-only today).</p>
 
     <h2 id="reproduce">6. Reproduce on any branch</h2>
     <p>When a teammate opens a fix, re-run the failing collection against their

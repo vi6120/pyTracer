@@ -182,6 +182,11 @@ scenarios:
     <pre><code>pytracer run tests/collection.yaml</code></pre>
     <p>Replay modes: <code>full</code> (recorded model and tools), <code>partial</code>
     (recorded tools, live model), and <code>live</code>.</p>
+    <p>For higher fidelity, the engine can freeze the clock and seed the RNG around a
+    run (so a live or partial replay stays reproducible beyond the mocks), and it
+    records the external tool calls a replay makes, so you can flag non-idempotent
+    or conflicting writes. Helper APIs for streaming and concurrent tool calls ship
+    in <code>pytracer_replay</code> too.</p>
 
     <h2 id="ci">5. Gate branches in CI</h2>
     <p>Add the GitHub Action (see

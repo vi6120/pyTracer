@@ -7,11 +7,16 @@ import threading
 import time
 
 import pytest
+import pytracer_sdk as pytracer
+from pytracer_sdk import SpanKind
 from pytracer_replay import (
     Chunk,
     ConcurrencyLedger,
+    MockSet,
     NondeterminismControls,
     RecordedStream,
+    ReplayEngine,
+    ReplayMode,
     RetryDeduper,
     SideEffectKind,
     SideEffectLog,
@@ -128,3 +133,60 @@ def test_side_effect_log_flags_conflicting_targets() -> None:
     log.record("file:/a", SideEffectKind.WRITE, {"v": 2})
     log.record("file:/b", SideEffectKind.WRITE, {"v": 1})
     assert log.conflicting_targets() == ["file:/a"]
+
+
+# --- engine integration ----------------------------------------------------
+
+def test_engine_applies_nondeterminism_controls() -> None:
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="clock")
+    def agent() -> float:
+        return time.time()
+
+    engine = ReplayEngine(ReplayMode.LIVE, controls=NondeterminismControls(freeze_time=123.0))
+    result = engine.replay(agent, MockSet())
+    assert result.return_value == 123.0
+    assert time.time() != 123.0  # clock restored after the replay
+
+
+def test_engine_seeds_random_for_reproducible_live_runs() -> None:
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="rng")
+    def agent() -> float:
+        return random.random()
+
+    engine = ReplayEngine(ReplayMode.LIVE, controls=NondeterminismControls(seed=7))
+    first = engine.replay(agent, MockSet()).return_value
+    second = engine.replay(agent, MockSet()).return_value
+    assert first == second
+
+
+def test_engine_records_live_tool_calls_as_side_effects() -> None:
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="writer")
+    def writer(x: int) -> str:
+        return f"wrote-{x}"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        writer(1)
+        writer(1)
+        writer(2)
+        return "done"
+
+    result = ReplayEngine(ReplayMode.LIVE).replay(agent, MockSet())
+    targets = [e.target for e in result.side_effects.effects]
+    assert targets.count("writer") == 3
+    assert len(result.side_effects.non_idempotent()) == 1  # writer(1) ran twice
+
+
+def test_engine_records_no_side_effects_when_fully_mocked() -> None:
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="t")
+    def tool(x: int) -> int:
+        return x * 2
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> int:
+        return tool(3)
+
+    recording = ReplayEngine(ReplayMode.LIVE).replay(agent, MockSet())
+    mocks = MockSet.from_trace(recording.spans)
+    result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert result.side_effects.effects == []

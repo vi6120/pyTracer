@@ -421,7 +421,9 @@
               Choose how much to hold frozen: <strong>full</strong> (recorded model and
               tools), <strong>partial</strong> (recorded tools, live model), or
               <strong>live</strong> (re-run everything). Every mode adds assertions, run
-              diffing, a failure fingerprint, and a three-way outcome classifier.
+              diffing, a failure fingerprint, and a three-way outcome classifier, plus
+              <strong>nondeterminism controls</strong> (freeze the clock, seed the RNG) and
+              <strong>side-effect detection</strong> for the external writes a live replay makes.
             </p>
           </div>
           <div class="pipe">

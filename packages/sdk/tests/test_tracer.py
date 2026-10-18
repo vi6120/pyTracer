@@ -6,13 +6,16 @@ import asyncio
 
 import pytest
 
-from pytracer_sdk import Resource, SpanKind, SpanStatus, Tracer
+from pytracer_sdk import Intercept, Resource, SpanKind, SpanStatus, Tracer
+from pytracer_sdk.tracer import Interceptor
 from pytracer_sdk.transport import InMemoryTransport
 
 
-def _tracer() -> tuple[Tracer, InMemoryTransport]:
+def _tracer(interceptor: Interceptor | None = None) -> tuple[Tracer, InMemoryTransport]:
     sink = InMemoryTransport()
-    tracer = Tracer(sink, resource=Resource(service_name="test-agent", branch="main"))
+    tracer = Tracer(
+        sink, resource=Resource(service_name="test-agent", branch="main"), interceptor=interceptor
+    )
     return tracer, sink
 
 
@@ -98,3 +101,32 @@ def test_async_functions_are_supported() -> None:
     (span,) = sink.spans
     assert span.output == 42
     assert span.name == "acall"
+
+
+def test_intercept_stream_delivers_a_sync_iterator() -> None:
+    def interceptor(kind: SpanKind, name: str, tool_name: str | None, inp: object) -> Intercept:
+        return Intercept(["a", "b", "c"], stream=True)
+
+    tracer, _ = _tracer(interceptor)
+
+    @tracer.op(kind=SpanKind.LLM)
+    def model(prompt: str) -> object:
+        raise AssertionError("live body must not run when intercepted")
+
+    assert list(model("hi")) == ["a", "b", "c"]
+
+
+def test_intercept_stream_delivers_an_async_iterator() -> None:
+    def interceptor(kind: SpanKind, name: str, tool_name: str | None, inp: object) -> Intercept:
+        return Intercept(["x", "y"], stream=True)
+
+    tracer, _ = _tracer(interceptor)
+
+    @tracer.op(kind=SpanKind.LLM)
+    async def model(prompt: str) -> object:
+        raise AssertionError("live body must not run when intercepted")
+
+    async def consume() -> list[str]:
+        return [chunk async for chunk in await model("hi")]
+
+    assert asyncio.run(consume()) == ["x", "y"]

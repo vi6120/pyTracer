@@ -8,13 +8,16 @@ run is deterministic. Three modes control what is mocked.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable, Iterable
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
 from enum import Enum
 
 import pytracer_sdk as pytracer
 from pytracer_sdk import InMemoryTransport, Intercept, Resource, Span, SpanKind, SpanStatus, Tracer
 
+from .fidelity import NondeterminismControls, SideEffectKind, SideEffectLog, controlled
 from .mocks import MockSet, _identifier
 from .sandbox import NetworkSandbox
 
@@ -48,6 +51,8 @@ class ReplayResult:
     spans: list[Span] = field(default_factory=list)
     error_type: str | None = None
     error_message: str | None = None
+    # External (unmocked) tool calls that ran live during this replay.
+    side_effects: SideEffectLog = field(default_factory=SideEffectLog)
 
     @property
     def failed(self) -> bool:
@@ -65,6 +70,7 @@ class ReplayEngine:
         sandbox: bool = False,
         network_allow: Iterable[str] = (),
         fuzzy_match: bool = False,
+        controls: NondeterminismControls | None = None,
     ) -> None:
         self.mode = mode
         self.strict = strict
@@ -75,6 +81,9 @@ class ReplayEngine:
         # When on, an exact mock miss falls back to the identifier's recordings
         # (nearest by input similarity), so small input drift still replays.
         self.fuzzy_match = fuzzy_match
+        # When set, the clock is frozen and the RNG seeded around agent execution,
+        # so a live (or partially live) replay is reproducible beyond the mocks.
+        self.controls = controls
 
     def replay(
         self,
@@ -86,19 +95,24 @@ class ReplayEngine:
         """Run ``agent`` with recorded responses injected per the mode."""
         mocked = _MOCKED_KINDS[self.mode]
         sink = InMemoryTransport()
+        side_effects = SideEffectLog()
+        se_lock = threading.Lock()
 
         def interceptor(
             kind: SpanKind, name: str, tool_name: str | None, inp: object
         ) -> Intercept | None:
-            if kind not in mocked:
-                return None
-            hit, output = mocks.lookup(
-                _identifier(kind, name, tool_name), inp, fuzzy=self.fuzzy_match
-            )
-            if hit:
-                return Intercept(output)
-            if self.strict:
-                raise MissingMockError(f"no recorded mock for {kind.value} {tool_name or name!r}")
+            identifier = _identifier(kind, name, tool_name)
+            if kind in mocked:
+                hit, output = mocks.lookup(identifier, inp, fuzzy=self.fuzzy_match)
+                if hit:
+                    return Intercept(output)
+                if self.strict:
+                    raise MissingMockError(f"no recorded mock for {kind.value} {tool_name or name!r}")
+            # Not mocked (or a non-strict mock miss): the op runs live. A live tool
+            # call is a real external side effect; record it for the safety checks.
+            if kind is SpanKind.TOOL:
+                with se_lock:
+                    side_effects.record(identifier, SideEffectKind.EXTERNAL_CALL, inp)
             return None  # fall back to a live call
 
         tracer = Tracer(
@@ -112,12 +126,16 @@ class ReplayEngine:
         error_type: str | None = None
         error_message: str | None = None
         return_value: object = None
+        run_ctx: AbstractContextManager[None] = (
+            controlled(self.controls) if self.controls is not None else nullcontext()
+        )
         try:
             if self.sandbox:
-                with NetworkSandbox(self.network_allow):
+                with NetworkSandbox(self.network_allow), run_ctx:
                     return_value = agent()
             else:
-                return_value = agent()
+                with run_ctx:
+                    return_value = agent()
         except Exception as exc:  # noqa: BLE001 - capture agent failure as a result, not a raise
             status = SpanStatus.ERROR
             error_type = type(exc).__name__
@@ -141,4 +159,5 @@ class ReplayEngine:
             spans=spans,
             error_type=error_type,
             error_message=error_message,
+            side_effects=side_effects,
         )

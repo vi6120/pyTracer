@@ -17,7 +17,14 @@ from enum import Enum
 import pytracer_sdk as pytracer
 from pytracer_sdk import InMemoryTransport, Intercept, Resource, Span, SpanKind, SpanStatus, Tracer
 
-from .fidelity import NondeterminismControls, SideEffectKind, SideEffectLog, controlled
+from .fidelity import (
+    ConcurrencyLedger,
+    NondeterminismControls,
+    RecordedStream,
+    SideEffectKind,
+    SideEffectLog,
+    controlled,
+)
 from .mocks import MockSet, _identifier
 from .sandbox import NetworkSandbox
 
@@ -97,14 +104,22 @@ class ReplayEngine:
         sink = InMemoryTransport()
         side_effects = SideEffectLog()
         se_lock = threading.Lock()
+        # Numbers each (identifier, input) call so concurrent/repeat calls resolve
+        # to their recording in order; thread-safe for concurrent tool execution.
+        ledger = ConcurrencyLedger()
 
         def interceptor(
             kind: SpanKind, name: str, tool_name: str | None, inp: object
         ) -> Intercept | None:
             identifier = _identifier(kind, name, tool_name)
             if kind in mocked:
-                hit, output = mocks.lookup(identifier, inp, fuzzy=self.fuzzy_match)
+                occurrence = ledger.key_for(identifier, inp).occurrence
+                hit, output = mocks.lookup(
+                    identifier, inp, occurrence=occurrence, fuzzy=self.fuzzy_match
+                )
                 if hit:
+                    if isinstance(output, RecordedStream):
+                        return Intercept(list(output.replay()), stream=True)
                     return Intercept(output)
                 if self.strict:
                     raise MissingMockError(f"no recorded mock for {kind.value} {tool_name or name!r}")

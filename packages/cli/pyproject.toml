@@ -23,6 +23,8 @@ dependencies = [
 stores = ["pytracer-stores==0.1.0"]
 # The reproduce command needs the cross-branch runner.
 runner = ["pytracer-runner==0.1.0"]
+# The pytest plugin (run collections as native pytest tests) needs pytest.
+pytest = ["pytest>=8.0"]
 dev = [
     "pytest>=8.0",
     "pytracer-stores==0.1.0",
@@ -34,6 +36,11 @@ dev = [
 
 [project.scripts]
 pytracer = "pytracer_cli.main:app"
+
+# Auto-register the pytest plugin: with pytracer-cli installed, pytest discovers
+# and runs *.pytracer.yaml collection files as tests. No conftest wiring needed.
+[project.entry-points.pytest11]
+pytracer = "pytracer_cli.pytest_plugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pytracer_cli"]

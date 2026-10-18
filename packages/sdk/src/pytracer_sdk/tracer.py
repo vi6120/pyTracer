@@ -12,7 +12,7 @@ import contextvars
 import functools
 import inspect
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, TypeVar
@@ -41,14 +41,25 @@ class Intercept:
     Returning this from a :data:`Interceptor` makes the ``@op`` skip the real
     function body and use ``output`` instead. This is how the replay engine
     injects recorded tool/model responses without the agent code knowing.
+
+    When ``stream`` is set, ``output`` is a recorded sequence delivered as an
+    iterator (async ops get an async iterator), so a streaming response replays
+    chunk by chunk the way the agent consumed it live.
     """
 
     output: Any
+    stream: bool = False
 
 
 # Called with (kind, name, tool_name, redacted_input); returns Intercept to
 # inject a recorded output, or None to run the op live.
 Interceptor = Callable[["SpanKind", str, "str | None", Any], "Intercept | None"]
+
+
+async def _as_async_iter(items: Any) -> AsyncIterator[Any]:
+    """Re-emit a recorded sequence as an async stream for an intercepted async op."""
+    for item in items:
+        yield item
 
 
 @dataclass(frozen=True)
@@ -231,7 +242,7 @@ class Tracer:
         ) as active:
             injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
             if injected is not None:
-                return injected.output
+                return iter(injected.output) if injected.stream else injected.output
             result = fn(*args, **kwargs)
             if meta.capture_io:
                 active.set_output(result)
@@ -250,7 +261,7 @@ class Tracer:
         ) as active:
             injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
             if injected is not None:
-                return injected.output
+                return _as_async_iter(injected.output) if injected.stream else injected.output
             result = await fn(*args, **kwargs)
             if meta.capture_io:
                 active.set_output(result)

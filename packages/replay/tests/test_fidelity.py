@@ -190,3 +190,47 @@ def test_engine_records_no_side_effects_when_fully_mocked() -> None:
     mocks = MockSet.from_trace(recording.spans)
     result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
     assert result.side_effects.effects == []
+
+
+def test_engine_replays_repeated_same_input_calls_in_sequence() -> None:
+    produced = iter([10, 20, 30])
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="counter")
+    def counter(k: int) -> int:
+        return next(produced)
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> list[int]:
+        return [counter(1), counter(1), counter(1)]  # same input, different outputs
+
+    recording = ReplayEngine(ReplayMode.LIVE).replay(agent, MockSet())
+    assert recording.return_value == [10, 20, 30]
+    mocks = MockSet.from_trace(recording.spans)
+    result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert result.return_value == [10, 20, 30]  # recordings replayed in order
+
+
+def test_engine_replays_a_recorded_stream_as_chunks() -> None:
+    seen: list[str] = []
+
+    @pytracer.op(kind=SpanKind.LLM)
+    def model(prompt: str) -> str:
+        return "hello"  # live "stream": a string iterated character by character
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        out = ""
+        for chunk in model("hi"):
+            seen.append(chunk)
+            out += chunk
+        return out
+
+    recording = ReplayEngine(ReplayMode.LIVE).replay(agent, MockSet())
+    model_span = next(s for s in recording.spans if s.kind is SpanKind.LLM)
+    mocks = MockSet()
+    mocks.add("model", model_span.input, stream_from_text("hello", chunk_size=1))
+
+    seen.clear()
+    result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert result.return_value == "hello"
+    assert seen == ["h", "e", "l", "l", "o"]  # delivered chunk by chunk, in order

@@ -421,9 +421,10 @@
               Choose how much to hold frozen: <strong>full</strong> (recorded model and
               tools), <strong>partial</strong> (recorded tools, live model), or
               <strong>live</strong> (re-run everything). Every mode adds assertions, run
-              diffing, a failure fingerprint, and a three-way outcome classifier, plus
-              <strong>nondeterminism controls</strong> (freeze the clock, seed the RNG) and
-              <strong>side-effect detection</strong> for the external writes a live replay makes.
+              diffing, a failure fingerprint, and a three-way outcome classifier. Replay
+              stays faithful on real agents: <strong>streaming</strong> responses and
+              <strong>concurrent or repeated tool calls</strong> replay in order, the clock
+              is frozen and the RNG seeded, and <strong>side-effects</strong> are detected.
             </p>
           </div>
           <div class="pipe">
@@ -451,7 +452,7 @@
           <div class="stat reveal"><div class="big">12</div><div class="lbl">PyPI packages</div></div>
           <div class="stat reveal d1"><div class="big">4</div><div class="lbl">framework adapters</div></div>
           <div class="stat reveal d2"><div class="big">3</div><div class="lbl">replay modes</div></div>
-          <div class="stat reveal d3"><div class="big">258</div><div class="lbl">tests, ruff + mypy clean</div></div>
+          <div class="stat reveal d3"><div class="big">276</div><div class="lbl">tests, ruff + mypy clean</div></div>
         </div>
         <p class="stat-note reveal d2">
           Apache-2.0 for the client toolchain, AGPL-3.0 for the hosted server components.

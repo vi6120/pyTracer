@@ -54,3 +54,21 @@ def test_fuzzy_unknown_identifier_misses() -> None:
     mocks = MockSet()
     mocks.add("search", {"q": "x"}, 1)
     assert mocks.lookup("other", {"q": "x"}, fuzzy=True) == (False, None)
+
+
+def test_sequence_returns_recordings_in_order() -> None:
+    mocks = MockSet()
+    mocks.add("counter", {"k": 1}, "a")
+    mocks.add("counter", {"k": 1}, "b")
+    mocks.add("counter", {"k": 1}, "c")
+    assert mocks.lookup("counter", {"k": 1}, occurrence=0) == (True, "a")
+    assert mocks.lookup("counter", {"k": 1}, occurrence=1) == (True, "b")
+    assert mocks.lookup("counter", {"k": 1}, occurrence=2) == (True, "c")
+
+
+def test_sequence_clamps_to_last_recording() -> None:
+    mocks = MockSet()
+    mocks.add("t", {"k": 1}, "a")
+    mocks.add("t", {"k": 1}, "b")
+    # Extra repeat calls beyond the recorded sequence reuse the last recording.
+    assert mocks.lookup("t", {"k": 1}, occurrence=5) == (True, "b")

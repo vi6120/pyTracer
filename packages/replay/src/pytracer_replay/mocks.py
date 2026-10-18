@@ -39,9 +39,15 @@ def _identifier(kind: SpanKind, name: str, tool_name: str | None) -> str:
 
 @dataclass
 class MockSet:
-    """Maps (identifier, input_hash) -> recorded output, with a fuzzy fallback."""
+    """Maps (identifier, input_hash) -> recorded outputs in capture order.
 
-    _outputs: dict[tuple[str, str], Any] = field(default_factory=dict)
+    Repeated calls with the same input return the recordings in sequence (the Nth
+    call gets the Nth recording), so a tool called several times with the same
+    input replays its distinct responses in order. Once the sequence is exhausted
+    the last recording repeats. A fuzzy fallback handles drifted inputs.
+    """
+
+    _sequences: dict[tuple[str, str], list[Any]] = field(default_factory=dict)
     # identifier -> recordings in capture order, for the identifier/fuzzy fallback.
     _by_identifier: dict[str, list[tuple[Any, Any]]] = field(default_factory=dict)
 
@@ -57,7 +63,7 @@ class MockSet:
         return mocks
 
     def add(self, identifier: str, input: Any, output: Any) -> None:
-        self._outputs[(identifier, input_hash(input))] = output
+        self._sequences.setdefault((identifier, input_hash(input)), []).append(output)
         self._by_identifier.setdefault(identifier, []).append((input, output))
 
     def lookup(
@@ -65,19 +71,23 @@ class MockSet:
         identifier: str,
         input: Any,
         *,
+        occurrence: int = 0,
         fuzzy: bool = False,
         threshold: float = DEFAULT_FUZZY_THRESHOLD,
     ) -> tuple[bool, Any]:
         """Return (hit, output).
 
-        Exact match first. With ``fuzzy`` on, fall back to the recordings for this
-        identifier when the exact key misses: the sole recording if there is only
-        one, otherwise the nearest by input similarity if it clears ``threshold``.
-        ``hit`` is False when nothing suitable was recorded.
+        Exact match first: the recording at ``occurrence`` for this
+        (identifier, input), clamped to the last recording when the sequence is
+        shorter (so extra repeat calls reuse the final one). With ``fuzzy`` on,
+        fall back to the recordings for this identifier when the exact key misses:
+        the sole recording if there is only one, otherwise the nearest by input
+        similarity if it clears ``threshold``. ``hit`` is False when nothing
+        suitable was recorded.
         """
-        key = (identifier, input_hash(input))
-        if key in self._outputs:
-            return True, self._outputs[key]
+        seq = self._sequences.get((identifier, input_hash(input)))
+        if seq:
+            return True, seq[min(occurrence, len(seq) - 1)]
         if fuzzy:
             candidates = self._by_identifier.get(identifier)
             if candidates:
@@ -107,4 +117,4 @@ class MockSet:
         return False, None
 
     def __len__(self) -> int:
-        return len(self._outputs)
+        return len(self._sequences)

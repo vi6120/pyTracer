@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why pyTracer - vs tracing and eval tools</title>
+<meta name="description" content="How pyTracer compares to LangSmith, Langfuse, and Braintrust: executable deterministic replay with frozen tool responses and cross-branch reproduction, and the real agent-debugging pain points it addresses.">
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="stylesheet" href="/style.css">
+<script src="/nav.js" defer></script>
+<style>
+  .eyebrow { display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: 0.09em;
+             text-transform: uppercase; color: var(--accent); margin: 0 0 10px; }
+  .prose h1 { margin-bottom: 14px; }
+  .lead-xl { font-size: 20px; line-height: 1.5; color: var(--muted); margin: 0 0 8px; }
+  .pain { list-style: none; padding: 0; margin: 18px 0; }
+  .pain li { border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin: 12px 0; background: var(--panel); }
+  .pain b { color: var(--text); }
+  .cmp { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 15px; }
+  .cmp th, .cmp td { border: 1px solid var(--border); padding: 10px 12px; text-align: left; vertical-align: top; }
+  .cmp thead th { background: var(--panel); font-weight: 700; }
+  .cmp th.us, .cmp td.us { background: var(--accent-soft); }
+  .cmp .yes { color: var(--accent); font-weight: 700; }
+  .cmp .no { color: var(--muted); }
+  .disclaimer { color: var(--muted); font-size: 13.5px; }
+  .cta-band { background: var(--accent-soft); border: 1px solid var(--border); border-radius: 16px;
+              padding: 28px 26px; margin: 34px 0 8px; text-align: center; }
+  .cta-band h2 { margin: 0 0 8px; padding: 0; border: none; }
+  .cta-band p { color: var(--muted); margin: 0 auto 18px; max-width: 520px; }
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  @media (max-width: 640px) { .cmp { font-size: 13.5px; } .cmp th, .cmp td { padding: 8px 9px; } }
+</style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="inner">
+      <a class="brand" href="/"><span class="py">py</span>Tracer</a>
+      <nav class="nav" id="site-nav">
+        <a href="/#problem">Problem</a>
+        <a href="/#how">How it works</a>
+        <a href="/compare" class="active">Why</a>
+        <a href="/docs">Docs</a>
+      </nav>
+      <a class="nav-cta" href="https://github.com/vi6120/pyTracer">GitHub</a>
+      <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span class="bars"></span></button>
+    </div>
+  </header>
+
+  <main class="prose">
+    <div class="eyebrow">Why pyTracer</div>
+    <h1>Tracing shows you the failure. pyTracer proves your fix.</h1>
+    <p class="lead-xl">pyTracer is the test-and-replay layer for AI agents. Tracing and eval
+    tools show you what happened and score an output; pyTracer freezes a captured run and
+    re-runs it deterministically on another branch, so you learn whether your change is what
+    fixed the failure - not just that today's run happened to pass.</p>
+
+    <h2>The real problems we address</h2>
+    <p>These are the pains teams building agents actually hit (several confirmed directly in
+    customer interviews):</p>
+    <ul class="pain">
+      <li><b>Multi-agent failures are hard to reproduce.</b> One agent's output is the next
+      one's input, and a single missing field silently breaks a downstream step. pyTracer
+      freezes the exact run and replays it, so the failure reproduces on demand instead of
+      by luck.</li>
+      <li><b>Tracing can't replay.</b> Langfuse, LangSmith, and MLflow show the trace per
+      step, but you can't re-execute it - so you fall back to hand-rebuilding state and
+      injecting it into a node. pyTracer replays the recorded run with the model and tool
+      responses frozen, no manual reconstruction.</li>
+      <li><b>You're never sure the fix worked.</b> Re-running live returns different model
+      and tool outputs, so a green run might just be drift. pyTracer holds those responses
+      frozen and reports <b>fixed / still-failing / diverged</b> per scenario across
+      branches.</li>
+      <li><b>Testing agents before merge is manual.</b> Teams keep a few golden examples and
+      test by hand. pyTracer turns a captured failure into a runnable regression test that
+      gates CI - and runs inside your existing <code>pytest</code> suite.</li>
+      <li><b>Retries and their cost are invisible.</b> When a validator retries the model,
+      tracing shows only the last attempt. Full retry-chain capture (every attempt and the
+      wasted spend) is on our roadmap.</li>
+    </ul>
+
+    <h2>How pyTracer compares</h2>
+    <p class="disclaimer">Based on each vendor's public documentation as of October 2026.
+    "Not documented" means we did not find the capability in the docs we checked, not that it
+    is impossible - check the latest docs before relying on any single row.</p>
+    <table class="cmp">
+      <thead>
+        <tr>
+          <th>Capability</th>
+          <th class="us">pyTracer</th>
+          <th>LangSmith</th>
+          <th>Langfuse</th>
+          <th>Braintrust</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Tracing of agent runs</td>
+          <td class="us yes">Yes</td><td>Yes</td><td>Yes</td><td>Yes</td>
+        </tr>
+        <tr>
+          <td>Turn production traces into test cases</td>
+          <td class="us yes">Yes</td><td>Yes (datasets)</td><td>Yes (datasets)</td><td>Yes (datasets)</td>
+        </tr>
+        <tr>
+          <td>Run tests in CI (incl. pytest)</td>
+          <td class="us yes">Yes</td><td>Yes</td><td>Yes</td><td>Yes</td>
+        </tr>
+        <tr>
+          <td>Recorded <strong>model</strong> responses replayed in tests</td>
+          <td class="us yes">Yes</td><td>Yes (test cache)</td><td class="no">Not documented</td><td class="no">Not documented</td>
+        </tr>
+        <tr>
+          <td>Recorded <strong>tool</strong> responses replayed (no live side effects)</td>
+          <td class="us yes">Yes</td><td class="no">Not documented</td><td class="no">Not documented</td><td class="no">Not documented</td>
+        </tr>
+        <tr>
+          <td>Deterministic replay of a full run (model + tools frozen)</td>
+          <td class="us yes">Yes</td><td class="no">Not documented</td><td class="no">Not documented</td><td class="no">Not documented</td>
+        </tr>
+        <tr>
+          <td>Reproduce a captured failure on another git branch with a verdict</td>
+          <td class="us yes">Yes</td><td class="no">Not documented</td><td class="no">Not documented</td><td class="no">Not documented</td>
+        </tr>
+        <tr>
+          <td>Self-host / open source</td>
+          <td class="us yes">Yes (Apache-2.0 + AGPL)</td><td>Enterprise self-host</td><td>Open source</td><td>Hybrid / enterprise</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Why teams choose pyTracer</h2>
+    <ul>
+      <li><strong>Executable, deterministic replay with frozen tool responses</strong> - the
+      one thing the tracing and eval tools above do not document. Your captured run becomes a
+      test you can run anywhere, with no live calls and no flakiness.</li>
+      <li><strong>Cross-branch reproduction with a clear verdict.</strong> Re-run the exact
+      failure on a fix branch and get fixed / still-failing / diverged - a direct answer to
+      "did my change fix it?"</li>
+      <li><strong>Open core, no lock-in.</strong> Apache-2.0 client toolchain and an AGPL
+      server you can self-host. The full replay engine, including the fidelity work, is open
+      source.</li>
+      <li><strong>Fits your stack.</strong> Adapters for LangGraph, CrewAI, AutoGen, and the
+      OpenAI Agents SDK; a CI gate and PR trigger; and a <code>pytest</code> plugin so agent
+      tests live beside your unit tests.</li>
+    </ul>
+
+    <div class="cta-band">
+      <h2>See it on your own agent</h2>
+      <p>Install the whole platform, or just the SDK, and replay your first captured failure.</p>
+      <div class="cta-row">
+        <a class="btn primary" href="/docs">Read the docs</a>
+        <a class="btn ghost" href="https://github.com/vi6120/pyTracer">View on GitHub</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer-xl">
+    <div class="inner">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="fb-logo"><span class="py">py</span>Tracer</div>
+          <p>The test-and-replay layer for AI agents. Deterministic replay and cross-branch reproduction, built on an open core.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Product</h4>
+          <a href="/docs">Docs</a>
+          <a href="/compare">Why pyTracer</a>
+          <a href="https://pypi.org/project/pytracer-all/">PyPI</a>
+          <a href="https://github.com/vi6120/pyTracer">GitHub</a>
+        </div>
+        <div class="footer-col">
+          <h4>Resources</h4>
+          <a href="/docs">User guide</a>
+          <a href="https://github.com/vi6120/pyTracer/tree/main/examples/reproduce-demo">Reproduce demo</a>
+          <a href="https://github.com/vi6120/pyTracer/issues">Issues</a>
+        </div>
+        <div class="footer-col">
+          <h4>Legal</h4>
+          <a href="/license">License</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="made">Built by <b><a href="https://www.linkedin.com/in/vikasramaswamy/">Vikas Ramaswamy</a></b> and <b><a href="https://www.linkedin.com/in/nageshasheshadri/">Nagesha Sheshadri</a></b></div>
+        <div>Apache-2.0 (client) &amp; AGPL-3.0 (server)</div>
+      </div>
+    </div>
+    <div class="footer-mark" aria-hidden="true">pyTracer</div>
+  </footer>
+</body>
+</html>

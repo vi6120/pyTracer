@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0  # scan full history, not just the tip
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Skip the SARIF artifact upload (it fails when Actions artifact storage

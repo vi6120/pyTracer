@@ -47,8 +47,10 @@ def test_record_does_not_block_caller() -> None:
     for _ in range(10_000):
         buf.record(_span())
     elapsed = time.perf_counter() - start
-    # 10k non-blocking enqueues should be well under a quarter second.
-    assert elapsed < 0.25, f"recording blocked: {elapsed:.3f}s"
+    # 10k non-blocking enqueues finish fast; a blocking implementation (a
+    # synchronous flush per record) would take orders of magnitude longer. The
+    # bound is generous so the test does not flake on a loaded CI runner.
+    assert elapsed < 1.0, f"recording blocked: {elapsed:.3f}s"
     buf.flush(timeout=10.0)
     buf.shutdown()
 

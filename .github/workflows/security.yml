@@ -21,4 +21,7 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Skip the SARIF artifact upload (it fails when Actions artifact storage
+          # is full); the scan's exit code is what gates the build.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
           # Uses the repo's .gitleaks.toml config automatically.

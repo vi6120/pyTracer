@@ -29,6 +29,11 @@
   .cta-band h2 { margin: 0 0 8px; padding: 0; border: none; }
   .cta-band p { color: var(--muted); margin: 0 auto 18px; max-width: 520px; }
   .cta-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .land { display: grid; gap: 12px; margin: 18px 0; }
+  .land-item { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--panel); }
+  .land-item h3 { margin: 0 0 4px; font-size: 15px; }
+  .land-item p:last-child { margin: 0; font-size: 14.5px; }
+  .land-us { background: var(--accent-soft); }
   @media (max-width: 640px) { .cmp { font-size: 13.5px; } .cmp th, .cmp td { padding: 8px 9px; } }
 </style>
 </head>
@@ -144,6 +149,32 @@
       OpenAI Agents SDK; a CI gate and PR trigger; and a <code>pytest</code> plugin so agent
       tests live beside your unit tests.</li>
     </ul>
+
+    <h2>Where we sit in the wider landscape</h2>
+    <p>The agent-tooling market clusters into four jobs. We track the whole field; here is its
+    shape and where deterministic replay fits.</p>
+    <div class="land">
+      <div class="land-item">
+        <h3>Observability and tracing</h3>
+        <p>Show you what happened in production, step by step. They surface the failure; they do not re-run it.</p>
+      </div>
+      <div class="land-item">
+        <h3>Evaluation and scoring</h3>
+        <p>Grade how good an output is with metrics or an LLM judge, usually by re-running the app live, so the score moves when the model or tools drift.</p>
+      </div>
+      <div class="land-item">
+        <h3>Gateways and proxies</h3>
+        <p>Route, cache, guardrail, and budget model traffic. Caching cuts cost; it is not a deterministic test.</p>
+      </div>
+      <div class="land-item">
+        <h3>Simulation</h3>
+        <p>Probe an agent with synthetic multi-turn scenarios. It generates new situations; it does not reproduce the exact one that broke.</p>
+      </div>
+      <div class="land-item land-us">
+        <h3>Deterministic replay, where pyTracer sits</h3>
+        <p>We re-run the exact captured run with the model and tool responses frozen, reproduce it across branches, and return a verdict. The closest-sounding features elsewhere (Phoenix "Span Replay", Laminar "session replay") re-invoke a call live or play a session back visually; neither freezes tool responses for a deterministic regression.</p>
+      </div>
+    </div>
 
     <div class="cta-band">
       <h2>See it on your own agent</h2>

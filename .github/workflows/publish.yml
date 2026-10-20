@@ -32,16 +32,24 @@ jobs:
       - run: python -m pip install --upgrade build
       - name: Build all packages
         run: |
-          rm -rf dist && mkdir -p dist
-          for p in sdk stores gateway replay runner registry cli pytracer \
+          rm -rf dist dist-meta && mkdir -p dist dist-meta
+          # Component packages into dist/.
+          for p in sdk stores gateway replay runner registry cli \
                    langgraph openai-agents crewai autogen; do
             python -m build --outdir dist "packages/$p"
           done
-          ls -1 dist
+          # The pytracer-all meta-package pins the others with ==, so build it into
+          # a separate dir and publish it last (see the publish job), to avoid a
+          # window where it advertises a version whose pinned deps are not yet on
+          # the index.
+          python -m build --outdir dist-meta "packages/pytracer"
+          ls -1 dist dist-meta
       - uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: dist/
+          path: |
+            dist
+            dist-meta
 
   publish:
     needs: build
@@ -52,12 +60,28 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: dist
-          path: dist/
-      - name: Publish to TestPyPI
+          path: .
+      # Publish the component packages first, then the pytracer-all meta-package,
+      # so pytracer-all only becomes installable once its pinned deps are live.
+      - name: Publish components to TestPyPI
         if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-      - name: Publish to PyPI
+          packages-dir: dist/
+      - name: Publish pytracer-all to TestPyPI
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist-meta/
+      - name: Publish components to PyPI
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+      - name: Publish pytracer-all to PyPI
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist-meta/

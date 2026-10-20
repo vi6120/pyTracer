@@ -17,6 +17,11 @@ from .transport import Transport
 
 _SENTINEL: Final = object()  # signals the worker to drain and stop
 
+# Default bound on flush() so an unreachable or no-answer gateway cannot stall the
+# caller (for example a flush at the end of a request). The background worker keeps
+# delivering regardless; pass timeout=None to wait for a full drain instead.
+DEFAULT_FLUSH_TIMEOUT: Final = 2.0
+
 
 class SpanBuffer:
     """Buffers spans and flushes them in batches on a background thread.
@@ -76,8 +81,13 @@ class SpanBuffer:
             with self._dropped_lock:
                 self._dropped += 1
 
-    def flush(self, timeout: float | None = None) -> None:
-        """Block until all currently-queued spans have been handed to the transport."""
+    def flush(self, timeout: float | None = DEFAULT_FLUSH_TIMEOUT) -> None:
+        """Wait until queued spans are handed to the transport, up to ``timeout`` s.
+
+        ``timeout`` defaults to a short bound so a stalled gateway cannot hang the
+        caller; the background worker keeps delivering after flush returns. Pass
+        ``None`` to wait until the queue is fully drained (used at shutdown).
+        """
         self._queue.join() if timeout is None else _join_with_timeout(self._queue, timeout)
 
     def shutdown(self, timeout: float = 5.0) -> None:

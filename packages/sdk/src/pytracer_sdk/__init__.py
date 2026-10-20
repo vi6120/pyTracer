@@ -15,6 +15,7 @@ stamp every span with the current service name, branch, and commit.
 
 from __future__ import annotations
 
+import atexit
 import functools
 import inspect
 from typing import Any
@@ -147,3 +148,20 @@ def flush(timeout: float | None = None) -> None:
 def shutdown(timeout: float = 5.0) -> None:
     """Drain and stop the default tracer's background worker."""
     get_tracer().shutdown(timeout)
+
+
+@atexit.register
+def _flush_on_exit() -> None:
+    """Drain the default tracer on normal interpreter exit.
+
+    The buffer's sender is a daemon thread, so a short script, CLI tool, or
+    serverless handler that never calls ``flush()`` / ``shutdown()`` would
+    otherwise lose its buffered spans silently when the process exits. The drain
+    is bounded so an unreachable gateway cannot hang shutdown, and it never raises
+    (an exception from an atexit hook would be printed to stderr).
+    """
+    if _default_tracer is not None:
+        try:
+            _default_tracer.shutdown(timeout=2.0)
+        except Exception:  # noqa: BLE001 - never raise from an atexit hook
+            pass

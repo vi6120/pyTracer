@@ -8,6 +8,8 @@ span definition and map cleanly onto the OpenTelemetry / OTLP model.
 from __future__ import annotations
 
 from enum import Enum
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -15,6 +17,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .ids import is_valid_span_id, is_valid_trace_id
 
 NANOS_PER_MILLI = 1_000_000
+
+try:
+    # Single source of truth: the installed distribution's version, so spans
+    # always report the real SDK version instead of a stale hardcoded default.
+    _SDK_VERSION = _pkg_version("pytracer-sdk")
+except PackageNotFoundError:  # running from a source tree without an installed dist
+    _SDK_VERSION = "0.0.0+unknown"
 
 
 class SpanKind(str, Enum):
@@ -48,7 +57,7 @@ class Resource(BaseModel):
 
     service_name: str = "unknown-agent"
     sdk_name: str = "pytracer-sdk"
-    sdk_version: str = "0.0.1"
+    sdk_version: str = _SDK_VERSION
     branch: str | None = None
     commit: str | None = None
     environment: str | None = None

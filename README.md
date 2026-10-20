@@ -197,6 +197,8 @@ worked for API testing.
 
 ## Installing
 
+pyTracer requires **Python 3.10 or newer**.
+
 The whole platform installs from PyPI with one command:
 
 ```bash

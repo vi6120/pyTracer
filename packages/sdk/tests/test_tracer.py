@@ -175,6 +175,26 @@ def test_async_generator_output_is_captured_over_iteration() -> None:
     assert span.output == ["Hel", "lo", "!"]
 
 
+def test_module_level_op_captures_generator_output() -> None:
+    import pytracer_sdk as pytracer
+
+    sink = InMemoryTransport()
+    pytracer.set_tracer(Tracer(sink))
+    try:
+
+        @pytracer.op(kind=SpanKind.LLM)
+        def stream_reply(prompt: str) -> Iterator[str]:
+            yield "a"
+            yield "b"
+
+        assert list(stream_reply("hi")) == ["a", "b"]
+        pytracer.flush()
+        (span,) = sink.spans
+        assert span.output == ["a", "b"]
+    finally:
+        pytracer.set_tracer(None)
+
+
 def test_generator_error_is_recorded_and_propagates() -> None:
     tracer, sink = _tracer()
 

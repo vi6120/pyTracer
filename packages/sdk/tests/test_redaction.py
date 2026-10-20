@@ -23,6 +23,16 @@ def test_secret_is_removed_from_text(label: str, secret: str, fragment: str) -> 
     assert "[redacted:" in out
 
 
+def test_credit_card_rule_ignores_ordinary_long_numbers() -> None:
+    r = Redactor()
+    # A Luhn-valid card number is still redacted.
+    assert "[redacted:credit_card]" in r.redact_text("card 4242 4242 4242 4242")
+    # Ordinary long numbers that are not Luhn-valid are left intact, so recorded
+    # inputs/outputs (and thus replay mocks) are not corrupted.
+    for ordinary in ("order 1111111111111111", "isbn 9780306406157", "ts 1700000000000"):
+        assert r.redact_text(ordinary) == ordinary
+
+
 def test_redaction_recurses_into_nested_structures() -> None:
     payload = {
         "messages": [

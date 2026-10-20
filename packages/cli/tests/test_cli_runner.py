@@ -90,3 +90,69 @@ def test_deterministic_replay_does_not_call_live_tools(tmp_path: Path) -> None:
     result = run_path(collection)
     assert result.passed
     assert result.scenarios[0].replay.return_value == "summary: {'results': ['result for find cats']}"
+
+
+def test_full_mode_fails_on_unrecorded_call_instead_of_going_live(tmp_path: Path) -> None:
+    # Record with one input, replay with a drifted input so the recorded call no
+    # longer matches. In full mode this must FAIL with a clear reason, not silently
+    # run the tool/model live (which would make the result depend on the machine).
+    record_trace(cli_sample_agent.agent, {"task": "find cats"}, tmp_path / "trace.jsonl")
+    collection = write_collection(
+        tmp_path,
+        [
+            {
+                "name": "prompt-drift",
+                "agent": "cli_sample_agent:agent",
+                "entry": {"task": "find dogs"},
+                "trace": "trace.jsonl",
+                "mode": "full",
+                "assertions": [{"type": "no_errors"}],
+            }
+        ],
+    )
+    result = run_path(collection)
+    assert not result.passed
+    assert result.scenarios[0].replay.error_type == "MissingMockError"
+    assert "no recording" in (result.scenarios[0].replay.error_message or "")
+
+
+def test_scenario_strict_false_allows_live_fallback(tmp_path: Path) -> None:
+    # With strict and sandbox turned off in the scenario, an unrecorded call runs
+    # live instead of failing (the sample tool is pure Python, so it just runs).
+    record_trace(cli_sample_agent.agent, {"task": "find cats"}, tmp_path / "trace.jsonl")
+    collection = write_collection(
+        tmp_path,
+        [
+            {
+                "name": "prompt-drift-live",
+                "agent": "cli_sample_agent:agent",
+                "entry": {"task": "find dogs"},
+                "trace": "trace.jsonl",
+                "mode": "full",
+                "strict": False,
+                "sandbox": False,
+                "assertions": [{"type": "no_errors"}],
+            }
+        ],
+    )
+    assert run_path(collection).passed
+
+
+def test_run_path_strict_override_beats_full_mode_default(tmp_path: Path) -> None:
+    # The CLI override (--no-strict/--no-sandbox) wins over the full-mode default.
+    record_trace(cli_sample_agent.agent, {"task": "find cats"}, tmp_path / "trace.jsonl")
+    collection = write_collection(
+        tmp_path,
+        [
+            {
+                "name": "drift",
+                "agent": "cli_sample_agent:agent",
+                "entry": {"task": "find dogs"},
+                "trace": "trace.jsonl",
+                "mode": "full",
+                "assertions": [{"type": "no_errors"}],
+            }
+        ],
+    )
+    assert not run_path(collection).passed  # full-mode default is strict
+    assert run_path(collection, strict=False, sandbox=False).passed  # override allows live

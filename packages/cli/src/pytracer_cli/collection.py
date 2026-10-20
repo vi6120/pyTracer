@@ -47,6 +47,12 @@ class ScenarioSpec(BaseModel):
     # Fall back to fuzzy mock matching when an exact input misses (for agents
     # whose op inputs drift slightly between capture and replay).
     fuzzy: bool = False
+    # Replay safety. ``strict`` fails a scenario on an unrecorded call instead of
+    # silently running it live; ``sandbox`` blocks outbound network during replay.
+    # ``None`` means use the mode default: both on in ``full`` mode (so a full
+    # replay really touches no live services), off in ``partial`` / ``live``.
+    strict: bool | None = None
+    sandbox: bool | None = None
     assertions: list[AssertionSpec] = Field(default_factory=list)
 
 

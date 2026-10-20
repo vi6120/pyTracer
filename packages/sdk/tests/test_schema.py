@@ -10,7 +10,7 @@ from hypothesis import strategies as st
 
 from pytracer_sdk import new_span_id, new_trace_id
 from pytracer_sdk.ids import is_valid_span_id, is_valid_trace_id
-from pytracer_sdk.schema import Span, SpanKind, SpanStatus
+from pytracer_sdk.schema import Resource, Span, SpanKind, SpanStatus
 
 
 def _span(**overrides: object) -> Span:
@@ -24,6 +24,13 @@ def _span(**overrides: object) -> Span:
     }
     base.update(overrides)
     return Span(**base)  # type: ignore[arg-type]
+
+
+def test_resource_reports_the_installed_sdk_version() -> None:
+    from importlib.metadata import version
+
+    assert Resource().sdk_version == version("pytracer-sdk")
+    assert Resource().sdk_version != "0.0.1"
 
 
 def test_ids_have_otel_shape() -> None:

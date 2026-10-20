@@ -122,7 +122,12 @@ class ReplayEngine:
                         return Intercept(list(output.replay()), stream=True)
                     return Intercept(output)
                 if self.strict:
-                    raise MissingMockError(f"no recorded mock for {kind.value} {tool_name or name!r}")
+                    raise MissingMockError(
+                        f"no recording for {kind.value} {tool_name or name!r} "
+                        f"(occurrence {occurrence}): its input did not match any recorded "
+                        f"call, so there is nothing to replay. Re-record the trace, or run "
+                        f"this scenario in partial/live mode."
+                    )
             # Not mocked (or a non-strict mock miss): the op runs live. A live tool
             # call is a real external side effect; record it for the safety checks.
             if kind is SpanKind.TOOL:

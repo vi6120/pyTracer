@@ -8,10 +8,43 @@ what the security baseline relies on.
 from __future__ import annotations
 
 import ssl
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
 
 import pytest
 
 from pytracer_sdk.transport import HTTPTransport, _build_ssl_context
+
+
+def test_spans_are_delivered_on_normal_exit_without_flush(tmp_path: Path) -> None:
+    # A script that records a span and exits WITHOUT calling flush()/shutdown()
+    # must still deliver the span, via the atexit hook, or short scripts lose
+    # their traces silently (the sender is a daemon thread).
+    out = tmp_path / "spans.txt"
+    script = textwrap.dedent(
+        """
+        import pathlib, sys
+        import pytracer_sdk as pytracer
+
+        out = pathlib.Path(sys.argv[1])
+
+        class FileTransport:
+            def send(self, spans):
+                with out.open("a", encoding="utf-8") as fh:
+                    for span in spans:
+                        print(span.span_id, file=fh)
+
+        pytracer.configure(FileTransport(), service_name="exit-test")
+        with pytracer.start_span("on-exit"):
+            pass
+        # deliberately no flush()/shutdown(): the atexit hook must deliver it
+        """
+    )
+    subprocess.run([sys.executable, "-c", script, str(out)], check=True, timeout=30)
+    delivered = [line for line in out.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(delivered) == 1
 
 
 def test_base_url_gets_the_endpoint_path() -> None:

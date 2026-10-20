@@ -79,17 +79,38 @@ def test_unknown_fields_are_forbidden() -> None:
         )
 
 
+_VALID_OTLP_KINDS = {
+    "SPAN_KIND_UNSPECIFIED",
+    "SPAN_KIND_INTERNAL",
+    "SPAN_KIND_SERVER",
+    "SPAN_KIND_CLIENT",
+    "SPAN_KIND_PRODUCER",
+    "SPAN_KIND_CONSUMER",
+}
+
+
 def test_otlp_mapping_shape() -> None:
     span = _span(status=SpanStatus.OK, token_count=10, agent_name="planner")
     otlp = span.to_otlp()
     assert otlp["traceId"] == span.trace_id
     assert otlp["spanId"] == span.span_id
-    assert otlp["kind"] == "SPAN_KIND_LLM"
+    # An LLM call is an outbound call, which maps to the OTLP CLIENT kind.
+    assert otlp["kind"] == "SPAN_KIND_CLIENT"
     assert otlp["status"]["code"] == "STATUS_CODE_OK"
     # Semantic fields are merged into OTLP attributes as KeyValue entries.
     keys = {a["key"] for a in otlp["attributes"]}
     assert "pytracer.agent_name" in keys
     assert "pytracer.token_count" in keys
+
+
+def test_otlp_kind_is_always_a_valid_otlp_kind() -> None:
+    # Every agent kind must export as one of OTLP's six valid kinds (a collector
+    # rejects anything else), and the real agent kind must survive as an attribute.
+    for kind in SpanKind:
+        otlp = _span(kind=kind).to_otlp()
+        assert otlp["kind"] in _VALID_OTLP_KINDS, f"{kind} -> {otlp['kind']}"
+        kv = {a["key"]: a["value"] for a in otlp["attributes"]}
+        assert kv["pytracer.kind"] == {"stringValue": kind.value}
 
 
 @given(

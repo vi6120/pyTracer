@@ -36,6 +36,21 @@ class SpanStatus(str, Enum):
     ERROR = "error"
 
 
+# OTLP defines exactly six span kinds; our richer agent kinds do not map onto them
+# one to one. We export a valid OTLP kind here and keep the real agent kind in the
+# ``pytracer.kind`` attribute (see Span._otlp_attribute_source), so no information
+# is lost and a collector still accepts the span. Model and tool calls are outbound
+# (CLIENT); agent, reasoning, and handoff are in-process (INTERNAL).
+_OTLP_SPAN_KIND: dict["SpanKind", str] = {
+    SpanKind.AGENT: "SPAN_KIND_INTERNAL",
+    SpanKind.LLM: "SPAN_KIND_CLIENT",
+    SpanKind.TOOL: "SPAN_KIND_CLIENT",
+    SpanKind.REASONING: "SPAN_KIND_INTERNAL",
+    SpanKind.HANDOFF: "SPAN_KIND_INTERNAL",
+    SpanKind.UNKNOWN: "SPAN_KIND_UNSPECIFIED",
+}
+
+
 class Resource(BaseModel):
     """Origin metadata shared by all spans in a process.
 
@@ -156,7 +171,7 @@ class Span(BaseModel):
             "spanId": self.span_id,
             "parentSpanId": self.parent_span_id or "",
             "name": self.name,
-            "kind": f"SPAN_KIND_{self.kind.value.upper()}",
+            "kind": _OTLP_SPAN_KIND.get(self.kind, "SPAN_KIND_UNSPECIFIED"),
             "startTimeUnixNano": str(self.start_time_ns),
             "endTimeUnixNano": str(self.end_time_ns) if self.end_time_ns is not None else "",
             "attributes": _to_otlp_attributes(self._otlp_attribute_source()),

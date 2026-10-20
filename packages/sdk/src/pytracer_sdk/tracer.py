@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, TypeVar
 
-from .buffer import SpanBuffer
+from .buffer import DEFAULT_FLUSH_TIMEOUT, SpanBuffer
 from .ids import new_span_id, new_trace_id
 from .redaction import Redactor
 from .schema import Resource, Span, SpanKind, SpanStatus
@@ -283,7 +283,7 @@ class Tracer:
             active.set_attribute("pytracer.replayed", True)
         return decision
 
-    def flush(self, timeout: float | None = None) -> None:
+    def flush(self, timeout: float | None = DEFAULT_FLUSH_TIMEOUT) -> None:
         self.buffer.flush(timeout)
 
     def shutdown(self, timeout: float = 5.0) -> None:

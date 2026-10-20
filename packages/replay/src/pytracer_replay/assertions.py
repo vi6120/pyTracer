@@ -14,6 +14,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+from pytracer_sdk.schema import SpanKind
+
 from .engine import ReplayResult
 
 
@@ -143,3 +145,82 @@ class LLMJudge:
         score = self.judge(str(result.return_value), self.rubric)
         ok = score >= self.threshold
         return AssertionResult(self.name, ok, f"score={score:.3f} threshold={self.threshold}")
+
+
+# --- structural assertions (how the agent got there, not just the output) ------
+# These judge the recorded span tree, so a regression that keeps the final answer
+# but changes the path - an extra step, a skipped tool, a different route between
+# agents - is caught. Output-only assertions miss exactly these.
+
+
+def _agents_in_order(result: ReplayResult) -> list[str]:
+    """Agent names in execution order (spans arrive sorted by start time)."""
+    return [s.agent_name or s.name for s in result.spans if s.kind is SpanKind.AGENT]
+
+
+def _tools_called(result: ReplayResult) -> list[str]:
+    """Tool names in execution order."""
+    return [s.tool_name or s.name for s in result.spans if s.kind is SpanKind.TOOL]
+
+
+@dataclass
+class Route:
+    """Passes when the ordered sequence of agents visited equals ``expected``.
+
+    Catches routing regressions, e.g. a run that loops back through a verifier a
+    second time, even when the final answer is unchanged.
+    """
+
+    expected: list[str]
+    name: str = "route"
+
+    def check(self, result: ReplayResult) -> AssertionResult:
+        actual = _agents_in_order(result)
+        ok = actual == list(self.expected)
+        return AssertionResult(
+            self.name, ok, "" if ok else f"route was {actual}, expected {list(self.expected)}"
+        )
+
+
+@dataclass
+class ToolsUsed:
+    """Passes when the tools called include ``expected`` (or equal it if ``exact``)."""
+
+    expected: list[str]
+    exact: bool = False
+    name: str = "tools_used"
+
+    def check(self, result: ReplayResult) -> AssertionResult:
+        actual = set(_tools_called(result))
+        want = set(self.expected)
+        if self.exact:
+            ok = actual == want
+            detail = "" if ok else f"tools were {sorted(actual)}, expected exactly {sorted(want)}"
+        else:
+            missing = want - actual
+            ok = not missing
+            detail = "" if ok else f"missing tools {sorted(missing)} (called {sorted(actual)})"
+        return AssertionResult(self.name, ok, detail)
+
+
+@dataclass
+class StepCount:
+    """Passes when the number of spans (optionally of ``kind``) equals ``expected``.
+
+    Catches a change that adds or drops a step, e.g. an extra retry round.
+    """
+
+    expected: int
+    kind: SpanKind | None = None
+    name: str = "step_count"
+
+    def check(self, result: ReplayResult) -> AssertionResult:
+        spans = (
+            result.spans if self.kind is None else [s for s in result.spans if s.kind is self.kind]
+        )
+        actual = len(spans)
+        ok = actual == self.expected
+        label = f"{self.kind.value} " if self.kind is not None else ""
+        return AssertionResult(
+            self.name, ok, "" if ok else f"{label}step count was {actual}, expected {self.expected}"
+        )

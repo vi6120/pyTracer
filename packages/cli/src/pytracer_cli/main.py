@@ -78,10 +78,21 @@ def run(
     comment_out: Path | None = typer.Option(
         None, "--comment", help="Write a Markdown PR-comment summary to a file."
     ),
+    strict: bool | None = typer.Option(
+        None,
+        "--strict/--no-strict",
+        help="Fail a scenario on an unrecorded call instead of running it live "
+        "(default: on in full mode).",
+    ),
+    sandbox: bool | None = typer.Option(
+        None,
+        "--sandbox/--no-sandbox",
+        help="Block outbound network during replay (default: on in full mode).",
+    ),
 ) -> None:
     """Run a collection; exit non-zero if any scenario fails."""
     try:
-        result = run_path(collection)
+        result = run_path(collection, strict=strict, sandbox=sandbox)
     except (FileNotFoundError, ValueError) as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2) from exc

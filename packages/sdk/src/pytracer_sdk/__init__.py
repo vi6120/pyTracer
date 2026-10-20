@@ -19,7 +19,7 @@ import functools
 import inspect
 from typing import Any
 
-from .buffer import SpanBuffer
+from .buffer import DEFAULT_FLUSH_TIMEOUT, SpanBuffer
 from .ids import new_span_id, new_trace_id
 from .recorder import SpanRecorder
 from .redaction import DEFAULT_RULES, RedactionRule, Redactor
@@ -139,8 +139,12 @@ def start_span(name: str, **kwargs: Any) -> ActiveSpan:
     return get_tracer().start_span(name, **kwargs)
 
 
-def flush(timeout: float | None = None) -> None:
-    """Flush the default tracer's buffer."""
+def flush(timeout: float | None = DEFAULT_FLUSH_TIMEOUT) -> None:
+    """Flush the default tracer's buffer, up to ``timeout`` seconds.
+
+    Bounded by default so a stalled gateway does not hang the caller; pass
+    ``None`` to wait until the buffer is fully drained.
+    """
     get_tracer().flush(timeout)
 
 

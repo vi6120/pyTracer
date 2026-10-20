@@ -264,7 +264,7 @@ To run the gateway and its stores together as containers, see
 Every package is covered by tests and checked with `ruff` and `mypy --strict`:
 
 ```bash
-pytest packages            # 279 tests
+pytest packages            # 288 tests
 ruff check packages
 mypy packages/*/src
 ```

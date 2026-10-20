@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 
 from pytracer_sdk import new_span_id, new_trace_id
-from pytracer_sdk.buffer import SpanBuffer
+from pytracer_sdk.buffer import DEFAULT_FLUSH_TIMEOUT, SpanBuffer
 from pytracer_sdk.schema import Span, SpanKind
 from pytracer_sdk.transport import InMemoryTransport
 
@@ -70,3 +70,22 @@ def test_bounded_queue_drops_and_counts_instead_of_blocking() -> None:
     assert elapsed < 0.25, f"recording blocked under backpressure: {elapsed:.3f}s"
     assert buf.dropped > 0
     buf.shutdown(timeout=0.1)
+
+
+def test_flush_returns_on_its_bound_when_the_transport_hangs() -> None:
+    # A no-answer gateway: send() hangs far longer than the flush bound. A default
+    # flush() must return on its bound, not wait for the hanging send, so an
+    # end-of-request flush cannot stall the caller.
+    class HangingSink(InMemoryTransport):
+        def send(self, spans: list[Span]) -> None:
+            time.sleep(5.0)
+            super().send(spans)
+
+    buf = SpanBuffer(HangingSink(), batch_size=1, flush_interval=0.01)
+    buf.record(_span())
+    start = time.perf_counter()
+    buf.flush()  # default bounded timeout
+    elapsed = time.perf_counter() - start
+    buf.shutdown(timeout=0.1)
+    assert elapsed < DEFAULT_FLUSH_TIMEOUT + 1.0, f"flush took {elapsed:.2f}s"
+    assert elapsed < 5.0  # did not wait for the hanging send

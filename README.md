@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://pypi.org/project/pytracer-all/"><img src="https://img.shields.io/pypi/v/pytracer-all.svg?color=2563eb" alt="PyPI"></a>
-  <img src="https://img.shields.io/pypi/pyversions/pytracer-sdk.svg" alt="Python versions">
+  <img src="https://img.shields.io/pypi/pyversions/pytracer-sdk.svg" alt="Python versions 3.10">
   <img src="https://img.shields.io/badge/license-Apache--2.0%20%7C%20AGPL--3.0-blue.svg" alt="License">
 </p>
 

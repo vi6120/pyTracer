@@ -49,10 +49,10 @@ Seven core packages, each an installable Python package under `packages/`:
 | `pytracer-sdk` | 1. Instrumentation | `@op` decorator captures agent actions as OpenTelemetry-compatible spans, with local secret/PII redaction and non-blocking flush |
 | `pytracer-gateway` | 2. Ingestion | FastAPI service that validates spans, authenticates per project by API key (static map or managed keys in Postgres, with per-key rate limiting), and writes them through to storage without blocking; an optional Redis Streams queue makes ingestion durable across restarts |
 | `pytracer-stores` | 3. Storage | Trace store (ClickHouse) for captured spans, mock store (PostgreSQL) for recorded tool responses |
-| `pytracer-replay` | 4. Replay engine | Deterministic replay in three modes, an assertion framework, run diffing, failure fingerprinting, a three-way outcome classifier, and a network sandbox |
+| `pytracer-replay` | 4. Replay engine | Deterministic replay in three modes, an assertion framework, run diffing, failure fingerprinting, a three-way outcome classifier, and a network sandbox; replay stays faithful on real agents (streaming responses, concurrent and repeated tool calls replayed in order, nondeterminism controls for a frozen clock and seeded RNG, retry dedupe, and side-effect detection) |
 | `pytracer-runner` | 4. Isolation | Per-commit isolated runner: check out any ref into a clean workspace and replay a frozen trace against it |
 | `pytracer-registry` | 5. Collaboration | Versioned, forkable, access-controlled test collections with pull requests and discovery |
-| `pytracer-cli` | 6. CI/CD | `pytracer run` executes test collections locally and in CI; ships a GitHub Action and a GitLab template |
+| `pytracer-cli` | 6. CI/CD | `pytracer run` executes test collections locally and in CI, with a pytest plugin (`pytracer-cli[pytest]`) that runs them as pytest tests and a `pytracer reproduce --pr` "try on this branch" PR comment; ships a GitHub Action and a GitLab template |
 
 A `pytracer-all` meta-package ties them together: installing it pulls in all seven,
 so `pip install pytracer-all` gives you the whole platform in one command (and
@@ -179,6 +179,9 @@ per-scenario verdict of **fixed**, **still failing**, or **diverged** (a new,
 different failure), exiting non-zero unless every scenario is fixed. Needs the
 runner: `pip install pytracer-cli[runner]`.
 
+Add `--pr <number> --pr-repo owner/name` to post the verdict as a "try on this
+branch" comment on the pull request.
+
 The same thing is available as a library (`CrossBranchRunner`,
 `classify_reproduction`) for building it into your own tooling.
 
@@ -259,7 +262,7 @@ To run the gateway and its stores together as containers, see
 Every package is covered by tests and checked with `ruff` and `mypy --strict`:
 
 ```bash
-pytest packages            # 258 tests
+pytest packages            # 279 tests
 ruff check packages
 mypy packages/*/src
 ```
@@ -273,8 +276,12 @@ in Postgres with create/revoke and per-key rate limiting, failures auto-document
 as deduplicated GitHub issues, the deploy stack has a TLS-terminating reverse
 proxy with a self-hosting hardening guide ([SECURITY.md](SECURITY.md)), and a
 k6 + Prometheus benchmark harness ([benchmarks/](benchmarks/)) load-tests the
-gateway. Remaining work is the last CI glue (a "try on this branch" PR-comment
-trigger, webhooks), the registry web UI, and further replay-fidelity hardening.
+gateway. The replay engine now holds fidelity on real agents (streaming
+responses, concurrent and repeated tool calls replayed in order, nondeterminism
+controls for a frozen clock and seeded RNG, retry dedupe, and side-effect
+detection), `pytracer reproduce --pr` posts a "try on this branch" verdict as a
+PR comment, and a pytest plugin runs collections inside your existing suite.
+Remaining work is the registry web UI and outbound webhooks.
 
 ## Contributing
 

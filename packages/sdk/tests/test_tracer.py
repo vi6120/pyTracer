@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator, Iterator
 
 import pytest
 
@@ -130,3 +131,61 @@ def test_intercept_stream_delivers_an_async_iterator() -> None:
         return [chunk async for chunk in await model("hi")]
 
     assert asyncio.run(consume()) == ["x", "y"]
+
+
+def test_sync_generator_output_is_captured_over_iteration() -> None:
+    tracer, sink = _tracer()
+
+    @tracer.op(kind=SpanKind.LLM)
+    def stream_reply(prompt: str) -> Iterator[str]:
+        yield "Hel"
+        yield "lo"
+        yield "!"
+
+    gen = stream_reply("hi")
+    # The span must stay open until the stream is consumed, not close early.
+    tracer.flush()
+    assert sink.spans == []
+    assert list(gen) == ["Hel", "lo", "!"]  # behavior unchanged: same items, same order
+    tracer.flush()
+    (span,) = sink.spans
+    assert span.name == "stream_reply"
+    assert span.kind is SpanKind.LLM
+    assert span.status is SpanStatus.OK
+    # The assembled stream is captured, not the bare generator object.
+    assert span.output == ["Hel", "lo", "!"]
+
+
+def test_async_generator_output_is_captured_over_iteration() -> None:
+    tracer, sink = _tracer()
+
+    @tracer.op(kind=SpanKind.LLM)
+    async def stream_reply(prompt: str) -> AsyncIterator[str]:
+        for chunk in ("Hel", "lo", "!"):
+            yield chunk
+
+    async def consume() -> list[str]:
+        return [c async for c in stream_reply("hi")]
+
+    assert asyncio.run(consume()) == ["Hel", "lo", "!"]
+    tracer.flush()
+    (span,) = sink.spans
+    assert span.name == "stream_reply"
+    assert span.status is SpanStatus.OK
+    assert span.output == ["Hel", "lo", "!"]
+
+
+def test_generator_error_is_recorded_and_propagates() -> None:
+    tracer, sink = _tracer()
+
+    @tracer.op(kind=SpanKind.LLM)
+    def stream_reply(prompt: str) -> Iterator[str]:
+        yield "Hel"
+        raise ValueError("stream broke")
+
+    with pytest.raises(ValueError, match="stream broke"):
+        list(stream_reply("hi"))
+    tracer.flush()
+    (span,) = sink.spans
+    assert span.status is SpanStatus.ERROR
+    assert span.error_type == "ValueError"

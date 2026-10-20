@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from pytracer_sdk import SpanStatus
+from pytracer_sdk import SpanKind, SpanStatus, new_span_id, new_trace_id
+from pytracer_sdk.schema import Span
 
 from pytracer_replay import (
     Contains,
@@ -12,11 +13,41 @@ from pytracer_replay import (
     Predicate,
     ReplayMode,
     ReplayResult,
+    Route,
     SemanticSimilarity,
+    StepCount,
+    ToolsUsed,
     all_passed,
     run_assertions,
     token_jaccard,
 )
+
+_TRACE = new_trace_id()
+
+
+def _span(
+    kind: SpanKind,
+    *,
+    agent_name: str | None = None,
+    tool_name: str | None = None,
+    name: str = "op",
+    t: int = 1,
+) -> Span:
+    return Span(
+        trace_id=_TRACE,
+        span_id=new_span_id(),
+        name=name,
+        kind=kind,
+        agent_name=agent_name,
+        tool_name=tool_name,
+        start_time_ns=t,
+        end_time_ns=t + 1,
+    )
+
+
+def _with_spans(spans: list[Span]) -> ReplayResult:
+    # The engine hands spans in execution order; mirror that here.
+    return ReplayResult(return_value="ok", status=SpanStatus.OK, mode=ReplayMode.FULL, spans=spans)
 
 
 def _ok(rv: object) -> ReplayResult:
@@ -74,3 +105,47 @@ def test_run_assertions_and_all_passed() -> None:
     assert all_passed(results)
     results2 = run_assertions(_ok("the cat"), [Contains("dog")])
     assert not all_passed(results2)
+
+
+def test_route_checks_ordered_agents() -> None:
+    r = _with_spans(
+        [
+            _span(SpanKind.AGENT, agent_name="orchestrator", t=1),
+            _span(SpanKind.AGENT, agent_name="library", t=2),
+            _span(SpanKind.AGENT, agent_name="verifier", t=3),
+        ]
+    )
+    assert Route(["orchestrator", "library", "verifier"]).check(r).passed
+    # A run that looped back through the verifier a second time would not match a
+    # two-step expected route; output-only assertions miss this.
+    bad = Route(["orchestrator", "library"]).check(r)
+    assert not bad.passed
+    assert "verifier" in bad.detail
+
+
+def test_tools_used_subset_and_exact() -> None:
+    r = _with_spans(
+        [
+            _span(SpanKind.TOOL, tool_name="search", t=1),
+            _span(SpanKind.TOOL, tool_name="fetch", t=2),
+        ]
+    )
+    assert ToolsUsed(["search"]).check(r).passed  # subset: the listed tool was used
+    assert not ToolsUsed(["search", "web"]).check(r).passed  # a required tool is missing
+    assert ToolsUsed(["search", "fetch"], exact=True).check(r).passed
+    assert not ToolsUsed(["search"], exact=True).check(r).passed  # exact rejects the extra tool
+
+
+def test_step_count_total_and_by_kind() -> None:
+    r = _with_spans(
+        [
+            _span(SpanKind.AGENT, agent_name="a", t=1),
+            _span(SpanKind.TOOL, tool_name="t", t=2),
+            _span(SpanKind.LLM, name="m", t=3),
+        ]
+    )
+    assert StepCount(3).check(r).passed
+    assert StepCount(1, kind=SpanKind.TOOL).check(r).passed
+    bad = StepCount(2, kind=SpanKind.AGENT).check(r)
+    assert not bad.passed
+    assert "agent step count was 1" in bad.detail

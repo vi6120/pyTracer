@@ -6,4 +6,4 @@ from .processor import PyTracerTracingProcessor
 
 __all__ = ["PyTracerTracingProcessor"]
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

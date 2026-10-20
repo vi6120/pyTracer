@@ -21,6 +21,7 @@ from pytracer_replay import (
     MockSet,
     NoErrors,
     ReplayEngine,
+    ReplayMode,
     ReplayResult,
     SemanticSimilarity,
     all_passed,
@@ -128,8 +129,28 @@ def build_assertion(spec: AssertionSpec) -> Assertion:
     raise ScenarioError(f"unsupported assertion type in collection: {spec.type!r}")
 
 
-def run_scenario(scenario: ScenarioSpec, base_dir: Path) -> ScenarioResult:
-    """Replay one scenario and evaluate its assertions."""
+def _effective(override: bool | None, scenario_value: bool | None, mode_default: bool) -> bool:
+    """Resolve a safety flag: CLI override wins, then the scenario field, then the mode default."""
+    if override is not None:
+        return override
+    if scenario_value is not None:
+        return scenario_value
+    return mode_default
+
+
+def run_scenario(
+    scenario: ScenarioSpec,
+    base_dir: Path,
+    *,
+    strict: bool | None = None,
+    sandbox: bool | None = None,
+) -> ScenarioResult:
+    """Replay one scenario and evaluate its assertions.
+
+    ``strict`` / ``sandbox`` are optional run-wide overrides (from the CLI). When
+    unset they fall back to the scenario's own fields, then to the mode default:
+    both on in ``full`` mode, off in ``partial`` / ``live``.
+    """
     try:
         agent = load_agent(scenario.agent)
         spans = load_trace(base_dir / scenario.trace)
@@ -138,10 +159,13 @@ def run_scenario(scenario: ScenarioSpec, base_dir: Path) -> ScenarioResult:
         empty = ReplayResult(return_value=None, status=SpanStatus.ERROR, mode=scenario.mode)
         return ScenarioResult(scenario.name, False, empty, [], None, str(exc))
 
+    full = scenario.mode is ReplayMode.FULL
+    strict_eff = _effective(strict, scenario.strict, full)
+    sandbox_eff = _effective(sandbox, scenario.sandbox, full)
     mocks = MockSet.from_trace(spans)
-    result = ReplayEngine(scenario.mode, fuzzy_match=scenario.fuzzy).replay(
-        lambda: agent(**scenario.entry), mocks
-    )
+    result = ReplayEngine(
+        scenario.mode, strict=strict_eff, sandbox=sandbox_eff, fuzzy_match=scenario.fuzzy
+    ).replay(lambda: agent(**scenario.entry), mocks)
     assertion_results = run_assertions(result, assertions)
     # A scenario passes when it did not error and every assertion passed.
     passed = not result.failed and all_passed(assertion_results)
@@ -154,13 +178,23 @@ def run_scenario(scenario: ScenarioSpec, base_dir: Path) -> ScenarioResult:
     )
 
 
-def run_collection(collection: Collection, base_dir: Path) -> CollectionResult:
+def run_collection(
+    collection: Collection,
+    base_dir: Path,
+    *,
+    strict: bool | None = None,
+    sandbox: bool | None = None,
+) -> CollectionResult:
     """Run every scenario in a collection and aggregate the results."""
-    results = [run_scenario(s, base_dir) for s in collection.scenarios]
+    results = [
+        run_scenario(s, base_dir, strict=strict, sandbox=sandbox) for s in collection.scenarios
+    ]
     return CollectionResult(collection.name, results)
 
 
-def run_path(path: str | Path) -> CollectionResult:
+def run_path(
+    path: str | Path, *, strict: bool | None = None, sandbox: bool | None = None
+) -> CollectionResult:
     """Load a collection file and run it end to end."""
     collection, base_dir = load_collection(path)
-    return run_collection(collection, base_dir)
+    return run_collection(collection, base_dir, strict=strict, sandbox=sandbox)

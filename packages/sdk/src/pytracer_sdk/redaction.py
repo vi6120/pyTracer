@@ -10,6 +10,7 @@ shape of the data is preserved for debugging.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from re import Pattern
 from typing import Any
 
@@ -18,18 +19,58 @@ MAX_DEPTH = 20  # guard against pathological / cyclic structures
 
 
 class RedactionRule:
-    """A named regex whose matches are replaced with a labeled placeholder."""
+    """A named regex whose matches are replaced with a labeled placeholder.
 
-    __slots__ = ("label", "pattern")
+    An optional ``validate`` callable gates replacement: a match is redacted only
+    when ``validate(match_text)`` is true. This lets a broad pattern (such as the
+    card-number regex) avoid false positives on ordinary long numbers.
+    """
 
-    def __init__(self, label: str, pattern: str | Pattern[str]) -> None:
+    __slots__ = ("label", "pattern", "validate")
+
+    def __init__(
+        self,
+        label: str,
+        pattern: str | Pattern[str],
+        *,
+        validate: Callable[[str], bool] | None = None,
+    ) -> None:
         self.label = label
         self.pattern: Pattern[str] = (
             re.compile(pattern) if isinstance(pattern, str) else pattern
         )
+        self.validate = validate
 
     def apply(self, text: str) -> str:
-        return self.pattern.sub(PLACEHOLDER.format(label=self.label), text)
+        placeholder = PLACEHOLDER.format(label=self.label)
+        validate = self.validate
+        if validate is None:
+            return self.pattern.sub(placeholder, text)
+
+        def _repl(match: re.Match[str]) -> str:
+            return placeholder if validate(match.group(0)) else match.group(0)
+
+        return self.pattern.sub(_repl, text)
+
+
+def _luhn_ok(text: str) -> bool:
+    """True if the digits in ``text`` form a Luhn-valid number of card length.
+
+    Real card numbers (13-19 digits) satisfy the Luhn checksum, while ordinary
+    long numbers such as order ids, ISBNs, and millisecond timestamps almost
+    never do, so this removes the card rule's false positives.
+    """
+    digits = [int(c) for c in text if c.isdigit()]
+    if not 13 <= len(digits) <= 19:
+        return False
+    total = 0
+    for index, digit in enumerate(reversed(digits)):
+        if index % 2 == 1:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+    return total % 10 == 0
 
 
 # Order matters: more specific patterns first.
@@ -39,7 +80,7 @@ DEFAULT_RULES: list[RedactionRule] = [
     RedactionRule("api_key", r"\b(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{20,}\b"),
     RedactionRule("api_key", r"\bAKIA[0-9A-Z]{16}\b"),
     RedactionRule("api_key", r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
-    RedactionRule("credit_card", r"\b(?:\d[ -]?){13,19}\b"),
+    RedactionRule("credit_card", r"\b(?:\d[ -]?){13,19}\b", validate=_luhn_ok),
     RedactionRule("email", r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
 ]
 

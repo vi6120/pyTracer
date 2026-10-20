@@ -117,6 +117,16 @@ def op(func: Any = None, **kwargs: Any) -> Any:
             kwargs.get("tool_name"),
             kwargs.get("capture_io", True),
         )
+        # An async generator function is not a coroutine function, so it must be
+        # checked first; generator functions need the streaming capture path too.
+        if inspect.isasyncgenfunction(fn):
+
+            @functools.wraps(fn)
+            def async_gen_wrapper(*args: Any, **kw: Any) -> Any:
+                return get_tracer().call_async_gen_op(fn, args, kw, meta)
+
+            return async_gen_wrapper
+
         if inspect.iscoroutinefunction(fn):
 
             @functools.wraps(fn)
@@ -124,6 +134,14 @@ def op(func: Any = None, **kwargs: Any) -> Any:
                 return await get_tracer().acall_op(fn, args, kw, meta)
 
             return async_wrapper
+
+        if inspect.isgeneratorfunction(fn):
+
+            @functools.wraps(fn)
+            def gen_wrapper(*args: Any, **kw: Any) -> Any:
+                return get_tracer().call_gen_op(fn, args, kw, meta)
+
+            return gen_wrapper
 
         @functools.wraps(fn)
         def sync_wrapper(*args: Any, **kw: Any) -> Any:

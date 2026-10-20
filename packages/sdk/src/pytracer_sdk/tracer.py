@@ -210,6 +210,17 @@ class Tracer:
 
         def decorator(fn: F) -> F:
             meta = _OpMeta(name or fn.__name__, kind, agent_name, tool_name, capture_io)
+            # An async generator function is not a coroutine function, so it must
+            # be checked first or it would fall through to the sync path and never
+            # capture its streamed items.
+            if inspect.isasyncgenfunction(fn):
+
+                @functools.wraps(fn)
+                def async_gen_wrapper(*args: Any, **kwargs: Any) -> Any:
+                    return self.call_async_gen_op(fn, args, kwargs, meta)
+
+                return async_gen_wrapper  # type: ignore[return-value]
+
             if inspect.iscoroutinefunction(fn):
 
                 @functools.wraps(fn)
@@ -217,6 +228,14 @@ class Tracer:
                     return await self.acall_op(fn, args, kwargs, meta)
 
                 return async_wrapper  # type: ignore[return-value]
+
+            if inspect.isgeneratorfunction(fn):
+
+                @functools.wraps(fn)
+                def gen_wrapper(*args: Any, **kwargs: Any) -> Any:
+                    return self.call_gen_op(fn, args, kwargs, meta)
+
+                return gen_wrapper  # type: ignore[return-value]
 
             @functools.wraps(fn)
             def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -266,6 +285,79 @@ class Tracer:
             if meta.capture_io:
                 active.set_output(result)
             return result
+
+    def call_gen_op(
+        self, fn: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any], meta: _OpMeta
+    ) -> Any:
+        """Execute a sync generator op, capturing the streamed items as the output.
+
+        The span stays open for the whole iteration and records the assembled
+        sequence of yielded items, so a streaming response is captured instead of
+        the bare generator object. Items are still yielded lazily, so the caller's
+        streaming behavior is unchanged. The span is created (fixing its parent)
+        when the op is called, but its context is not entered during the deferred
+        iteration, so a span cannot leak into an unrelated context.
+        """
+        active = self.start_span(
+            meta.name,
+            kind=meta.kind,
+            agent_name=meta.agent_name,
+            tool_name=meta.tool_name,
+            input=_make_op_input(meta, args, kwargs),
+        )
+        injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
+        source = injected.output if injected is not None else fn(*args, **kwargs)
+        return self._stream_sync(active, source, meta, live=injected is None)
+
+    def _stream_sync(self, active: ActiveSpan, source: Any, meta: _OpMeta, *, live: bool) -> Any:
+        collected: list[Any] = []
+        try:
+            for item in source:
+                if live:
+                    collected.append(item)
+                yield item
+        except Exception as exc:
+            active.set_error(exc)
+            raise
+        finally:
+            if live and meta.capture_io:
+                active.set_output(collected)
+            active.close()
+
+    def call_async_gen_op(
+        self, fn: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any], meta: _OpMeta
+    ) -> Any:
+        """Async-generator counterpart of :meth:`call_gen_op`."""
+        active = self.start_span(
+            meta.name,
+            kind=meta.kind,
+            agent_name=meta.agent_name,
+            tool_name=meta.tool_name,
+            input=_make_op_input(meta, args, kwargs),
+        )
+        injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
+        source = injected.output if injected is not None else fn(*args, **kwargs)
+        return self._stream_async(active, source, meta, live=injected is None)
+
+    async def _stream_async(
+        self, active: ActiveSpan, source: Any, meta: _OpMeta, *, live: bool
+    ) -> Any:
+        collected: list[Any] = []
+        try:
+            if live:
+                async for item in source:
+                    collected.append(item)
+                    yield item
+            else:
+                for item in source:  # a recorded stream replays as a plain sequence
+                    yield item
+        except Exception as exc:
+            active.set_error(exc)
+            raise
+        finally:
+            if live and meta.capture_io:
+                active.set_output(collected)
+            active.close()
 
     def _maybe_intercept(
         self,

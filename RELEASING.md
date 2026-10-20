@@ -79,7 +79,10 @@ twine upload dist/*
 
 - Because packages depend on each other with exact pins (`==<version>`), publish
   all 12 at the same version; a partial release leaves the meta-package
-  uninstallable until the rest land.
+  uninstallable until the rest land. The publish workflow builds the 11 component
+  packages first and publishes `pytracer-all` **last** for this reason, so the
+  meta-package only becomes installable once its pinned dependencies are already
+  on the index.
 - To reclaim the bare `pytracer` name later, the abandoned project (last released
   2019) could be requested through PyPI's PEP 541 process; it is slow and not
   guaranteed, so `pytracer-all` is the name to use now.

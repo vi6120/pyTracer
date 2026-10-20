@@ -156,3 +156,25 @@ def test_run_path_strict_override_beats_full_mode_default(tmp_path: Path) -> Non
     )
     assert not run_path(collection).passed  # full-mode default is strict
     assert run_path(collection, strict=False, sandbox=False).passed  # override allows live
+
+
+def test_structural_assertions_pass_from_a_collection(tmp_path: Path) -> None:
+    # route / tools_used / step_count wired through the collection schema.
+    collection = _make(
+        tmp_path,
+        [
+            {"type": "route", "expected": ["researcher"]},
+            {"type": "tools_used", "expected": ["search"]},
+            {"type": "step_count", "kind": "tool", "expected": 1},
+        ],
+    )
+    assert run_path(collection).passed
+
+
+def test_route_assertion_catches_an_unexpected_route(tmp_path: Path) -> None:
+    # A route expectation that does not match the run fails, catching a path
+    # regression that an output-only assertion would miss.
+    collection = _make(tmp_path, [{"type": "route", "expected": ["researcher", "verifier"]}])
+    result = run_path(collection)
+    assert not result.passed
+    assert not result.scenarios[0].assertions[0].passed

@@ -23,12 +23,15 @@ from pytracer_replay import (
     ReplayEngine,
     ReplayMode,
     ReplayResult,
+    Route,
     SemanticSimilarity,
+    StepCount,
+    ToolsUsed,
     all_passed,
     fingerprint,
     run_assertions,
 )
-from pytracer_sdk.schema import Span, SpanStatus
+from pytracer_sdk.schema import Span, SpanKind, SpanStatus
 
 from .collection import AssertionSpec, Collection, ScenarioSpec, load_collection
 
@@ -126,6 +129,24 @@ def build_assertion(spec: AssertionSpec) -> Assertion:
         return SemanticSimilarity(
             spec.expected, threshold=spec.threshold, name=name or "semantic_similarity"
         )
+    if spec.type == "route":
+        if not isinstance(spec.expected, list) or not all(isinstance(x, str) for x in spec.expected):
+            raise ScenarioError("'route' requires 'expected' to be a list of agent names")
+        return Route(spec.expected, name=name or "route")
+    if spec.type == "tools_used":
+        if not isinstance(spec.expected, list) or not all(isinstance(x, str) for x in spec.expected):
+            raise ScenarioError("'tools_used' requires 'expected' to be a list of tool names")
+        return ToolsUsed(spec.expected, exact=spec.exact, name=name or "tools_used")
+    if spec.type == "step_count":
+        if not isinstance(spec.expected, int) or isinstance(spec.expected, bool):
+            raise ScenarioError("'step_count' requires an integer 'expected'")
+        kind = None
+        if spec.kind is not None:
+            try:
+                kind = SpanKind(spec.kind)
+            except ValueError as exc:
+                raise ScenarioError(f"'step_count' has unknown kind {spec.kind!r}") from exc
+        return StepCount(spec.expected, kind=kind, name=name or "step_count")
     raise ScenarioError(f"unsupported assertion type in collection: {spec.type!r}")
 
 

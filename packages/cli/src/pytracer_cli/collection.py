@@ -18,7 +18,16 @@ from pytracer_replay import ReplayMode
 # Assertion types expressible declaratively in a file (predicate / llm_judge
 # need Python callables and are used programmatically, not from a collection).
 DECLARATIVE_ASSERTIONS = frozenset(
-    {"no_errors", "exact_match", "contains", "semantic_similarity"}
+    {
+        "no_errors",
+        "exact_match",
+        "contains",
+        "semantic_similarity",
+        # Structural assertions on the span tree (how the agent got there):
+        "route",  # ordered agents visited
+        "tools_used",  # tools called
+        "step_count",  # number of steps (optionally of one kind)
+    }
 )
 
 
@@ -32,6 +41,10 @@ class AssertionSpec(BaseModel):
     needle: str | None = None
     threshold: float = 0.7
     name: str | None = None
+    # Structural assertions: `tools_used` uses `exact`; `step_count` uses `kind`
+    # (agent / llm / tool / reasoning / handoff) to count one kind of span.
+    exact: bool = False
+    kind: str | None = None
 
 
 class ScenarioSpec(BaseModel):

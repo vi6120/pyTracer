@@ -20,3 +20,11 @@ add_trace_processor(PyTracerTracingProcessor())   # now every agent run is captu
 Agent spans map to agent spans, generations and responses to LLM spans, function
 calls to tool spans, and handoffs to handoff spans, all linked into one trace by
 the SDK's own span tree.
+
+## Replay
+
+This adapter **captures** runs. Replaying a captured run currently requires `@op`
+instrumentation, because the replay engine intercepts `@op` calls; replay through
+the adapter itself is on the roadmap. Attempting to replay an adapter-only trace
+is flagged (the run has recordings but hits no `@op` seam) rather than silently
+running live. See the main README for the replay workflow.

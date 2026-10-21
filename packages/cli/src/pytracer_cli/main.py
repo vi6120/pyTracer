@@ -198,6 +198,15 @@ def reproduce(
     pr_dry_run: bool = typer.Option(
         False, "--pr-dry-run", help="Print the PR comment instead of posting it."
     ),
+    env_file: Path | None = typer.Option(
+        None,
+        "--env-file",
+        help="A settings file (e.g. .env) copied into each ref's clean checkout, so "
+        "both reach the bug instead of failing on missing configuration.",
+    ),
+    env_dest: str = typer.Option(
+        ".env", help="Repo-relative path to place --env-file at in each checkout."
+    ),
 ) -> None:
     """Reproduce a captured failure on another branch (fixed / still failing / diverged)."""
     try:
@@ -228,6 +237,8 @@ def reproduce(
             classify=classify_reproduction,
             frozen_trace=str(freeze_trace) if freeze_trace else None,
             trace_dest=trace_dest,
+            env_file=str(env_file) if env_file else None,
+            env_dest=env_dest,
         )
     except (RuntimeError, OSError) as exc:
         typer.echo(f"error: {exc}", err=True)

@@ -21,3 +21,11 @@ runtime = SingleThreadedAgentRuntime(tracer_provider=pytracer_tracer_provider())
 Because it keys off standard GenAI attributes (`gen_ai.operation.name`,
 `gen_ai.tool.name`, `gen_ai.agent.name`, `gen_ai.usage.*`), the same exporter
 captures spans from any GenAI-instrumented library, not only AutoGen.
+
+## Replay
+
+This adapter **captures** runs. Replaying a captured run currently requires `@op`
+instrumentation, because the replay engine intercepts `@op` calls; replay through
+the adapter itself is on the roadmap. Attempting to replay an adapter-only trace
+is flagged (the run has recordings but hits no `@op` seam) rather than silently
+running live. See the main README for the replay workflow.

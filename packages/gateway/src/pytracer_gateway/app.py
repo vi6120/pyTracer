@@ -97,6 +97,13 @@ def create_app(
             ],
         }
 
+    @app.post("/v1/dead-letters/requeue")
+    async def requeue_dead_letters(limit: int = 200) -> dict[str, Any]:
+        # Re-enqueue storage dead letters for another write (after an outage recovers).
+        capped = min(max(limit, 1), 10_000)
+        requeued = await pipeline.requeue_dead_letters(capped)
+        return {"requeued": requeued, "remaining": await pipeline.dead_letter_count()}
+
     @app.post("/v1/spans")
     async def ingest_spans(request: Request, project: str = Depends(require_project)) -> JSONResponse:
         body = await _parse_body(request)

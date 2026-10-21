@@ -7,10 +7,21 @@ start/end calls, so an agent is instrumented just by passing the handler in the
 run config, with no ``@op`` decorators in the agent code.
 
 Mapping:
-- ``on_chat_model_start`` / ``on_llm_start`` -> LLM spans
+- ``on_chat_model_start`` / ``on_llm_start`` -> LLM spans, named after the model
+  (read from ``invocation_params`` / the LangSmith ``ls_model_name`` metadata) with
+  the provider recorded, so a recording is tied to a model version
 - ``on_tool_start``                          -> tool spans
-- ``on_chain_start``                         -> agent spans for LangGraph nodes,
-                                                unknown-kind spans for other chains
+- ``on_chain_start``                         -> an AGENT span for each LangGraph node
+  run and for the graph root; a HANDOFF span for a conditional-edge routing run
+  (which executes under its own function name while carrying the source node's
+  ``langgraph_node`` metadata, so it is not counted as another run of the node);
+  an UNKNOWN-kind span for any other chain
+
+Scope: the handler only sees work that flows through LangChain callbacks. Model
+calls made on a raw provider client, and tools that are plain Python functions
+(not LangChain tools), do not emit callbacks and are not captured; instrument those
+with ``@op`` if you need them. Replay also needs ``@op``: the handler records but
+adds no interception seam, so an adapter-only capture replays live.
 """
 
 from __future__ import annotations
@@ -39,6 +50,49 @@ def _name(serialized: dict[str, Any] | None, default: str) -> str:
     if isinstance(ident, list) and ident:
         return str(ident[-1])
     return default
+
+
+# Class names LangGraph gives the compiled graph run, so its root chain is recorded
+# as the run's agent rather than an UNKNOWN "LangGraph" span the AGENT column misses.
+_GRAPH_ROOT_NAMES = frozenset({"LangGraph", "Pregel", "CompiledStateGraph", "CompiledGraph"})
+
+
+def _model_and_provider(
+    metadata: dict[str, Any] | None, invocation_params: dict[str, Any] | None
+) -> tuple[str | None, str | None]:
+    """Pull the model name and provider from a chat/LLM start callback.
+
+    LangChain puts the resolved model in ``invocation_params`` (``model`` or
+    ``model_name`` / a deployment name) and the LangSmith standard metadata
+    (``ls_model_name`` / ``ls_provider``). Either is enough to tie a recording to a
+    model version; without them the span would only know the client class name.
+    """
+    meta = metadata or {}
+    inv = invocation_params or {}
+    model = (
+        meta.get("ls_model_name")
+        or inv.get("model")
+        or inv.get("model_name")
+        or inv.get("deployment_name")
+        or inv.get("azure_deployment")
+    )
+    provider = meta.get("ls_provider")
+    return (str(model) if model else None), (str(provider) if provider else None)
+
+
+def _is_graph_root(
+    serialized: dict[str, Any] | None, run_name: str | None, parent_run_id: UUID | None
+) -> bool:
+    """True when this chain is the compiled graph's own top-level run."""
+    if parent_run_id is not None:
+        return False
+    candidates = {run_name}
+    if serialized:
+        candidates.add(serialized.get("name"))
+        ident = serialized.get("id")
+        if isinstance(ident, list) and ident:
+            candidates.add(str(ident[-1]))
+    return any(c in _GRAPH_ROOT_NAMES for c in candidates if c)
 
 
 def _jsonify(value: Any, depth: int = 0) -> Any:
@@ -87,6 +141,18 @@ class PyTracerCallbackHandler(BaseCallbackHandler):
         self._recorder = SpanRecorder(tracer or get_tracer())
 
     # --- LLM / chat model -> LLM spans --------------------------------------
+    def _llm_attributes(
+        self, metadata: dict[str, Any] | None, invocation_params: dict[str, Any] | None
+    ) -> tuple[str | None, dict[str, Any]]:
+        """Build the LLM span's model name and attributes (framework/model/provider)."""
+        model, provider = _model_and_provider(metadata, invocation_params)
+        attributes: dict[str, Any] = {"framework": "langgraph"}
+        if model:
+            attributes["model"] = model
+        if provider:
+            attributes["provider"] = provider
+        return model, attributes
+
     def on_chat_model_start(
         self,
         serialized: dict[str, Any],
@@ -94,15 +160,17 @@ class PyTracerCallbackHandler(BaseCallbackHandler):
         *,
         run_id: UUID,
         parent_run_id: UUID | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
+        model, attributes = self._llm_attributes(metadata, kwargs.get("invocation_params"))
         self._recorder.start(
             str(run_id),
-            name=_name(serialized, "chat_model"),
+            name=model or _name(serialized, "chat_model"),
             kind=SpanKind.LLM,
             parent_run_id=_rid(parent_run_id),
             input=_jsonify(messages),
-            attributes={"framework": "langgraph"},
+            attributes=attributes,
         )
 
     def on_llm_start(
@@ -112,15 +180,17 @@ class PyTracerCallbackHandler(BaseCallbackHandler):
         *,
         run_id: UUID,
         parent_run_id: UUID | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
+        model, attributes = self._llm_attributes(metadata, kwargs.get("invocation_params"))
         self._recorder.start(
             str(run_id),
-            name=_name(serialized, "llm"),
+            name=model or _name(serialized, "llm"),
             kind=SpanKind.LLM,
             parent_run_id=_rid(parent_run_id),
             input=list(prompts),
-            attributes={"framework": "langgraph"},
+            attributes=attributes,
         )
 
     def on_llm_end(self, response: LLMResult, *, run_id: UUID, **kwargs: Any) -> None:
@@ -170,12 +240,28 @@ class PyTracerCallbackHandler(BaseCallbackHandler):
         **kwargs: Any,
     ) -> None:
         node = (metadata or {}).get("langgraph_node")
-        name = node or kwargs.get("name") or _name(serialized, "chain")
+        own = kwargs.get("name")
+        own_name = str(own) if isinstance(own, str) and own else None
+        if node:
+            # A node run executes under the node's name; a conditional-edge routing
+            # function runs under its own function name while still carrying the
+            # source node's langgraph_node metadata. Treat the latter as a handoff,
+            # so it is not recorded as another run of the node (which inflated the
+            # node's count and left a 0 ms agent span whose output was a node name).
+            if own_name is not None and own_name != str(node):
+                kind, name, agent_name = SpanKind.HANDOFF, own_name, None
+            else:
+                kind, name, agent_name = SpanKind.AGENT, str(node), str(node)
+        elif _is_graph_root(serialized, own_name or _name(serialized, ""), parent_run_id):
+            root = own_name or _name(serialized, "LangGraph")
+            kind, name, agent_name = SpanKind.AGENT, root, root
+        else:
+            kind, name, agent_name = SpanKind.UNKNOWN, own_name or _name(serialized, "chain"), None
         self._recorder.start(
             str(run_id),
-            name=str(name),
-            kind=SpanKind.AGENT if node else SpanKind.UNKNOWN,
-            agent_name=str(node) if node else None,
+            name=name,
+            kind=kind,
+            agent_name=agent_name,
             parent_run_id=_rid(parent_run_id),
             input=_jsonify(inputs),
             attributes={"framework": "langgraph"},

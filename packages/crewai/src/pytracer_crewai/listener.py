@@ -46,6 +46,24 @@ from pytracer_sdk import SpanKind, SpanRecorder, Tracer, get_tracer
 _MAX_DEPTH = 6
 
 
+def _agent_role(event: Any) -> str | None:
+    """The agent's role, so its span is named for the role rather than "agent".
+
+    CrewAI carries the role on the event (``agent_role``) or on a nested ``agent``
+    object (``event.agent.role``); fall back to a plain ``role`` attribute.
+    """
+    role = getattr(event, "agent_role", None)
+    if role:
+        return str(role)
+    agent = getattr(event, "agent", None)
+    if agent is not None:
+        nested = getattr(agent, "role", None)
+        if nested:
+            return str(nested)
+    role = getattr(event, "role", None)
+    return str(role) if role else None
+
+
 def _jsonify(value: Any, depth: int = 0) -> Any:
     if depth > _MAX_DEPTH:
         return str(value)
@@ -81,6 +99,10 @@ class PyTracerEventListener(BaseEventListener):
 
     def __init__(self, tracer: Tracer | None = None, *, register: bool = True) -> None:
         self._recorder = SpanRecorder(tracer or get_tracer())
+        # Open agent runs, innermost last. CrewAI emits LLM and tool events without a
+        # parent_event_id, so they are attached to the current agent instead of each
+        # starting its own trace (which hid which agent made the call).
+        self._agent_ids: list[str] = []
         # ``register`` is False in unit tests that call the handlers directly and
         # do not want to attach to the global bus.
         if register:
@@ -117,18 +139,24 @@ class PyTracerEventListener(BaseEventListener):
         agent_name: str | None = None,
         tool_name: str | None = None,
         input: Any | None = None,
+        fallback_parent: str | None = None,
     ) -> None:
         parent = getattr(event, "parent_event_id", None)
+        parent_id = str(parent) if parent else fallback_parent
         self._recorder.start(
             str(event.event_id),
             name=name,
             kind=kind,
             agent_name=agent_name,
             tool_name=tool_name,
-            parent_run_id=str(parent) if parent else None,
+            parent_run_id=parent_id,
             input=_jsonify(input) if input is not None else None,
             attributes={"framework": "crewai"},
         )
+
+    def _current_agent(self) -> str | None:
+        """The innermost open agent run, used as the parent for LLM/tool events."""
+        return self._agent_ids[-1] if self._agent_ids else None
 
     def _end(
         self, event: Any, *, output: Any = None, tokens: int | None = None, error: Any = None
@@ -165,17 +193,24 @@ class PyTracerEventListener(BaseEventListener):
 
     # --- agent --------------------------------------------------------------
     def on_agent_start(self, source: Any, event: Any) -> None:
-        role = getattr(event, "agent_role", None)
+        role = _agent_role(event)
         self._start(
             event, name=role or "agent", kind=SpanKind.AGENT, agent_name=role,
             input=getattr(event, "task_prompt", None),
         )
+        self._agent_ids.append(str(event.event_id))
 
     def on_agent_end(self, source: Any, event: Any) -> None:
+        self._pop_agent(getattr(event, "started_event_id", None))
         self._end(event, output=getattr(event, "output", None))
 
     def on_agent_error(self, source: Any, event: Any) -> None:
+        self._pop_agent(getattr(event, "started_event_id", None))
         self._end(event, error=str(getattr(event, "error", "agent failed")))
+
+    def _pop_agent(self, started: Any) -> None:
+        if started is not None and str(started) in self._agent_ids:
+            self._agent_ids.remove(str(started))
 
     # --- tool ---------------------------------------------------------------
     def on_tool_start(self, source: Any, event: Any) -> None:
@@ -183,6 +218,7 @@ class PyTracerEventListener(BaseEventListener):
         self._start(
             event, name=name, kind=SpanKind.TOOL, tool_name=name,
             input=getattr(event, "tool_args", None),
+            fallback_parent=self._current_agent(),
         )
 
     def on_tool_end(self, source: Any, event: Any) -> None:
@@ -200,6 +236,7 @@ class PyTracerEventListener(BaseEventListener):
         self._start(
             event, name=getattr(event, "model", None) or "llm", kind=SpanKind.LLM,
             input=getattr(event, "messages", None),
+            fallback_parent=self._current_agent(),
         )
 
     def on_llm_end(self, source: Any, event: Any) -> None:

@@ -6,16 +6,21 @@ generations, tool (function) calls, and handoffs are captured as pyTracer spans.
 
 ```python
 import pytracer_sdk as pytracer
-from agents.tracing import add_trace_processor
-from pytracer_openai_agents import PyTracerTracingProcessor
+from pytracer_openai_agents import install
 
 pytracer.configure(
     pytracer.HTTPTransport("https://gateway.internal", api_key="YOUR_KEY"),
     service_name="my-agent", branch="main", commit="abc123",
 )
 
-add_trace_processor(PyTracerTracingProcessor())   # now every agent run is captured
+install()   # now every agent run is captured, and only pyTracer receives traces
 ```
+
+`install()` uses the SDK's `set_trace_processors` to make pyTracer the **only**
+trace processor. Do not use `add_trace_processor`: it appends, leaving the SDK's
+default processor in place, which uploads every trace to OpenAI when
+`OPENAI_API_KEY` is set. If you deliberately want both destinations, add the
+processor yourself with `add_trace_processor(PyTracerTracingProcessor())`.
 
 Agent spans map to agent spans, generations and responses to LLM spans, function
 calls to tool spans, and handoffs to handoff spans, all linked into one trace by

@@ -25,6 +25,7 @@ from agents.tracing import (
     ResponseSpanData,
     Span,
     TracingProcessor,
+    set_trace_processors,
 )
 from agents.tracing import Trace as AgentsTrace
 from pytracer_sdk import SpanKind, SpanRecorder, Tracer, get_tracer
@@ -150,3 +151,17 @@ class PyTracerTracingProcessor(TracingProcessor):
 
     def shutdown(self) -> None:
         pass
+
+
+def install(tracer: Tracer | None = None) -> PyTracerTracingProcessor:
+    """Register pyTracer as the sole trace processor and return it.
+
+    Uses ``set_trace_processors`` (replace), not ``add_trace_processor`` (append).
+    The Agents SDK ships a default processor that exports traces to OpenAI when
+    ``OPENAI_API_KEY`` is set, so appending would quietly upload every run to
+    OpenAI as well; replacing sends traces only to pyTracer. Call this after
+    ``pytracer.configure(...)``.
+    """
+    processor = PyTracerTracingProcessor(tracer)
+    set_trace_processors([processor])
+    return processor

@@ -118,6 +118,22 @@ def test_error_marks_span_failed() -> None:
     assert span.status is SpanStatus.ERROR
 
 
+def test_install_replaces_processors_rather_than_appending() -> None:
+    # install() must REPLACE the processor list (set_trace_processors), not append,
+    # or the SDK's default exporter keeps uploading every trace to OpenAI (A6).
+    import pytracer_openai_agents.processor as mod
+
+    captured: dict[str, Any] = {}
+    original = mod.set_trace_processors
+    mod.set_trace_processors = lambda procs: captured.update(procs=procs)  # type: ignore[assignment]
+    try:
+        returned = mod.install()
+    finally:
+        mod.set_trace_processors = original  # type: ignore[assignment]
+    assert captured["procs"] == [returned]
+    assert isinstance(returned, PyTracerTracingProcessor)
+
+
 def test_input_is_redacted() -> None:
     proc, sink, tracer = _setup()
     secret = "sk-abc123DEF456ghi789JKL012mno"

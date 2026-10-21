@@ -70,6 +70,34 @@ def test_end_without_started_id_is_ignored() -> None:
     assert sink.spans == []  # the still-open span is never buffered
 
 
+def test_llm_and_tool_without_parent_id_nest_under_current_agent() -> None:
+    # CrewAI fires LLM and tool events with no parent_event_id; they must still land
+    # under the agent that is running, not each in its own trace (A4).
+    lis, sink, tracer = _setup()
+    lis.on_agent_start(None, _E(event_id="a1", agent_role="researcher"))
+    lis.on_llm_start(None, _E(event_id="l1", model="gpt-4o", messages=[]))
+    lis.on_llm_end(None, _E(started_event_id="l1", response="hi"))
+    lis.on_tool_start(None, _E(event_id="t1", tool_name="search", tool_args={}))
+    lis.on_tool_end(None, _E(started_event_id="t1", output="ok"))
+    lis.on_agent_end(None, _E(started_event_id="a1", output="done"))
+    tracer.flush()
+    by_name = {s.name: s for s in sink.spans}
+    agent = by_name["researcher"]
+    assert by_name["gpt-4o"].parent_span_id == agent.span_id
+    assert by_name["search"].parent_span_id == agent.span_id
+    assert by_name["gpt-4o"].trace_id == agent.trace_id == by_name["search"].trace_id
+
+
+def test_agent_role_read_from_nested_agent_object() -> None:
+    # The role can live on a nested agent object; the span is named for it, not "agent".
+    lis, sink, tracer = _setup()
+    lis.on_agent_start(None, _E(event_id="a1", agent=_E(role="librarian")))
+    lis.on_agent_end(None, _E(started_event_id="a1", output="done"))
+    tracer.flush()
+    (span,) = sink.spans
+    assert span.name == "librarian" and span.agent_name == "librarian"
+
+
 def test_tool_args_are_redacted() -> None:
     lis, sink, tracer = _setup()
     secret = "sk-abc123DEF456ghi789JKL012mno"

@@ -173,6 +173,9 @@ def run_scenario(
     both on in ``full`` mode, off in ``partial`` / ``live``.
     """
     try:
+        overlap = set(scenario.live) & set(scenario.freeze)
+        if overlap:
+            raise ScenarioError(f"ops cannot be both live and frozen: {sorted(overlap)}")
         agent = load_agent(scenario.agent)
         spans = load_trace(base_dir / scenario.trace)
         assertions = [build_assertion(a) for a in scenario.assertions]
@@ -182,10 +185,18 @@ def run_scenario(
 
     full = scenario.mode is ReplayMode.FULL
     strict_eff = _effective(strict, scenario.strict, full)
-    sandbox_eff = _effective(sandbox, scenario.sandbox, full)
+    # Ops listed in `live` are meant to run for real, so don't sandbox the network by
+    # default when any op is live, or the step under test would be blocked.
+    sandbox_default = full and not scenario.live
+    sandbox_eff = _effective(sandbox, scenario.sandbox, sandbox_default)
     mocks = MockSet.from_trace(spans)
     result = ReplayEngine(
-        scenario.mode, strict=strict_eff, sandbox=sandbox_eff, fuzzy_match=scenario.fuzzy
+        scenario.mode,
+        strict=strict_eff,
+        sandbox=sandbox_eff,
+        fuzzy_match=scenario.fuzzy,
+        live_ops=scenario.live,
+        frozen_ops=scenario.freeze,
     ).replay(lambda: agent(**scenario.entry), mocks)
     assertion_results = run_assertions(result, assertions)
     # A scenario passes when it did not error and every assertion passed.

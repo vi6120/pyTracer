@@ -38,6 +38,11 @@ def to_json(result: CollectionResult) -> dict[str, Any]:
                 "error_type": s.replay.error_type,
                 "config_error": s.config_error,
                 "fingerprint": s.fingerprint,
+                "side_effects": s.replay.side_effects.summary(),
+                "non_idempotent": [
+                    {"target": e.target, "kind": e.kind.value}
+                    for e in s.replay.side_effects.non_idempotent()
+                ],
                 "assertions": [
                     {"name": a.name, "passed": a.passed, "detail": a.detail} for a in s.assertions
                 ],
@@ -75,7 +80,32 @@ def to_markdown(result: CollectionResult) -> str:
         mark = _PASS if s.passed else _FAIL
         detail = _scenario_reason(s).replace("|", "\\|") or "-"
         lines.append(f"| `{s.name}` | {mark} | {detail} |")
+    lines += _side_effect_lines(result)
     return "\n".join(lines) + "\n"
+
+
+def _side_effect_lines(result: CollectionResult) -> list[str]:
+    """A footer noting any live external effects seen during replay.
+
+    A full replay should touch nothing live; when one does (a live/partial mode,
+    or a non-strict miss that ran a tool for real), surface it so it is not silent,
+    and call out writes replayed more than once as a non-idempotency risk.
+    """
+    notes: list[str] = []
+    for s in result.scenarios:
+        log = s.replay.side_effects
+        if not len(log):
+            continue
+        kinds = ", ".join(f"{v}×{k}" for k, v in sorted(log.summary().items()))
+        note = f"- `{s.name}`: {kinds}"
+        repeated = log.non_idempotent()
+        if repeated:
+            targets = ", ".join(sorted({e.target for e in repeated}))
+            note += f" — non-idempotent write replayed: {targets}"
+        notes.append(note)
+    if not notes:
+        return []
+    return ["", "**Live side effects during replay:**", *notes]
 
 
 def to_junit(result: CollectionResult) -> str:

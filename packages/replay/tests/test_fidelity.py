@@ -107,6 +107,30 @@ def test_controlled_freezes_and_restores_time() -> None:
     assert time.time() != 1000.0  # real clock restored
 
 
+def test_controlled_freezes_time_ns_and_datetime() -> None:
+    import datetime
+
+    original_ns = time.time_ns
+    with controlled(NondeterminismControls(freeze_time=1000.0)):
+        assert time.time_ns() == 1_000_000_000_000
+        assert datetime.datetime.now().timestamp() == pytest.approx(1000.0, abs=1.0)  # noqa: DTZ005
+        assert datetime.datetime.now(datetime.timezone.utc).timestamp() == 1000.0
+    assert time.time_ns is original_ns
+    assert time.time_ns() != 1_000_000_000_000  # real clock restored
+
+
+def test_controlled_makes_uuid4_deterministic_and_restores() -> None:
+    import uuid
+
+    original = uuid.uuid4
+    with controlled(NondeterminismControls(seed=5)):
+        first = [str(uuid.uuid4()) for _ in range(3)]
+    with controlled(NondeterminismControls(seed=5)):
+        second = [str(uuid.uuid4()) for _ in range(3)]
+    assert first == second
+    assert uuid.uuid4 is original  # real uuid4 restored
+
+
 def test_retry_deduper_flags_second_identical_call() -> None:
     deduper = RetryDeduper()
     assert deduper.is_retry("llm", {"p": 1}) is False
@@ -159,7 +183,7 @@ def test_engine_seeds_random_for_reproducible_live_runs() -> None:
     assert first == second
 
 
-def test_engine_records_live_tool_calls_as_side_effects() -> None:
+def test_engine_records_declared_writes_and_flags_non_idempotent() -> None:
     @pytracer.op(kind=SpanKind.TOOL, tool_name="writer")
     def writer(x: int) -> str:
         return f"wrote-{x}"
@@ -171,10 +195,33 @@ def test_engine_records_live_tool_calls_as_side_effects() -> None:
         writer(2)
         return "done"
 
-    result = ReplayEngine(ReplayMode.LIVE).replay(agent, MockSet())
+    # The tool is declared a writer, so its live calls log as writes and the
+    # repeated write(1) is flagged non-idempotent.
+    result = ReplayEngine(ReplayMode.LIVE, writes=["writer"]).replay(agent, MockSet())
     targets = [e.target for e in result.side_effects.effects]
     assert targets.count("writer") == 3
+    assert all(e.kind is SideEffectKind.WRITE for e in result.side_effects.effects)
     assert len(result.side_effects.non_idempotent()) == 1  # writer(1) ran twice
+
+
+def test_engine_does_not_flag_repeated_reads_as_non_idempotent() -> None:
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="reader")
+    def reader(q: str) -> str:
+        return "catalog"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        reader("same")
+        reader("same")
+        reader("same")
+        return "done"
+
+    # An undeclared tool logs as an unclassified external call, so reading the
+    # same thing three times is surfaced but never flagged non-idempotent (R11).
+    result = ReplayEngine(ReplayMode.LIVE).replay(agent, MockSet())
+    assert len(result.side_effects) == 3
+    assert all(e.kind is SideEffectKind.EXTERNAL_CALL for e in result.side_effects.effects)
+    assert result.side_effects.non_idempotent() == []
 
 
 def test_engine_records_no_side_effects_when_fully_mocked() -> None:

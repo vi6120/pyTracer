@@ -103,6 +103,7 @@ class ReplayEngine:
         fuzzy_match: bool = False,
         live_ops: Iterable[str] = (),
         frozen_ops: Iterable[str] = (),
+        writes: Iterable[str] = (),
         controls: NondeterminismControls | None = None,
     ) -> None:
         self.mode = mode
@@ -121,6 +122,11 @@ class ReplayEngine:
         # they changed.
         self.live_ops = frozenset(live_ops)
         self.frozen_ops = frozenset(frozen_ops)
+        # Identifiers of tools known to mutate external state. A live call to one
+        # is logged as a WRITE (so a repeat is flagged non-idempotent); every other
+        # live tool call is logged as an unclassified EXTERNAL_CALL, never as a
+        # write, so read-only tools are not falsely flagged.
+        self.writes = frozenset(writes)
         # When set, the clock is frozen and the RNG seeded around agent execution,
         # so a live (or partially live) replay is reproducible beyond the mocks.
         self.controls = controls
@@ -159,12 +165,15 @@ class ReplayEngine:
             if mock_this:
                 occurrence = ledger.key_for(identifier, inp).occurrence
                 # In partial mode the model runs live and words tool inputs
-                # differently each run, so a frozen tool matches by call order.
+                # differently each run, so a frozen tool matches by call order
+                # (its per-identifier index), not by the re-worded input.
                 positional = self.mode is ReplayMode.PARTIAL and kind is SpanKind.TOOL
+                pos_occurrence = ledger.positional_for(identifier) if positional else None
                 hit, output, match = mocks.lookup(
                     identifier,
                     inp,
                     occurrence=occurrence,
+                    positional_occurrence=pos_occurrence,
                     fuzzy=self.fuzzy_match,
                     positional=positional,
                 )
@@ -184,10 +193,17 @@ class ReplayEngine:
                         f"this scenario in partial/live mode."
                     )
             # Not mocked (or a non-strict mock miss): the op runs live. A live tool
-            # call is a real external side effect; record it for the safety checks.
+            # call is a real external side effect; record it for the safety checks,
+            # as a WRITE when the tool was declared a writer, else as an
+            # unclassified external call.
             if kind is SpanKind.TOOL:
+                effect = (
+                    SideEffectKind.WRITE
+                    if identifier in self.writes
+                    else SideEffectKind.EXTERNAL_CALL
+                )
                 with se_lock:
-                    side_effects.record(identifier, SideEffectKind.EXTERNAL_CALL, inp)
+                    side_effects.record(identifier, effect, inp)
             return None  # fall back to a live call
 
         tracer = Tracer(

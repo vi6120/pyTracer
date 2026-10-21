@@ -73,6 +73,19 @@ def _emit(result: CollectionResult) -> None:
     for s in result.scenarios:
         mark = "PASS" if s.passed else "FAIL"
         typer.echo(f"  [{mark}] {s.name}")
+        log = s.replay.side_effects
+        if len(log):
+            kinds = ", ".join(f"{v}×{k}" for k, v in sorted(log.summary().items()))
+            typer.echo(f"      live side effects: {kinds}")
+            repeated = log.non_idempotent()
+            if repeated:
+                targets = ", ".join(sorted({e.target for e in repeated}))
+                typer.echo(
+                    typer.style(
+                        f"      non-idempotent write replayed: {targets}",
+                        fg=typer.colors.YELLOW,
+                    )
+                )
     summary = f"{c['passed']}/{c['total']} passed"
     typer.echo(typer.style(summary, fg=typer.colors.GREEN if result.passed else typer.colors.RED))
 

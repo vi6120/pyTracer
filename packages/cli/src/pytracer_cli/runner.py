@@ -20,6 +20,7 @@ from pytracer_replay import (
     ExactMatch,
     MockSet,
     NoErrors,
+    NondeterminismControls,
     ReplayEngine,
     ReplayMode,
     ReplayResult,
@@ -189,6 +190,12 @@ def run_scenario(
     # default when any op is live, or the step under test would be blocked.
     sandbox_default = full and not scenario.live
     sandbox_eff = _effective(sandbox, scenario.sandbox, sandbox_default)
+    # Pin the clock / RNG only when the scenario asks, so most runs keep the real ones.
+    controls = (
+        NondeterminismControls(freeze_time=scenario.freeze_time, seed=scenario.seed)
+        if scenario.freeze_time is not None or scenario.seed is not None
+        else None
+    )
     mocks = MockSet.from_trace(spans)
     result = ReplayEngine(
         scenario.mode,
@@ -197,6 +204,8 @@ def run_scenario(
         fuzzy_match=scenario.fuzzy,
         live_ops=scenario.live,
         frozen_ops=scenario.freeze,
+        writes=scenario.writes,
+        controls=controls,
     ).replay(lambda: agent(**scenario.entry), mocks)
     if result.uninstrumented:
         # Recordings existed but the agent hit no @op seam, so nothing was injected

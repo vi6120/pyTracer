@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytracer-cli"
-version = "0.1.1"
+version = "0.1.2"
 description = "pyTracer CLI - run agent test collections locally and in CI."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Vikas Ramaswamy" }, { name = "Nagesha Sheshadri" }]
 dependencies = [
-    "pytracer-sdk==0.1.1",
-    "pytracer-replay==0.1.1",
+    "pytracer-sdk==0.1.2",
+    "pytracer-replay==0.1.2",
     "typer>=0.12",
     "pyyaml>=6.0",
     "pydantic>=2.6",
@@ -26,15 +26,15 @@ Issues = "https://github.com/vi6120/pyTracer/issues"
 
 [project.optional-dependencies]
 # Trace browsing / recording commands need the store client.
-stores = ["pytracer-stores==0.1.1"]
+stores = ["pytracer-stores==0.1.2"]
 # The reproduce command needs the cross-branch runner.
-runner = ["pytracer-runner==0.1.1"]
+runner = ["pytracer-runner==0.1.2"]
 # The pytest plugin (run collections as native pytest tests) needs pytest.
 pytest = ["pytest>=8.0"]
 dev = [
     "pytest>=8.0",
-    "pytracer-stores==0.1.1",
-    "pytracer-runner==0.1.1",
+    "pytracer-stores==0.1.2",
+    "pytracer-runner==0.1.2",
     "ruff>=0.5",
     "mypy>=1.10",
     "types-PyYAML>=6.0",

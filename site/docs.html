@@ -78,9 +78,15 @@ pip install pytracer-sdk
 # the CLI, with the extras you need
 pip install pytracer-cli[stores]   # browse/record traces
 pip install pytracer-cli[runner]   # cross-branch reproduce</code></pre>
+    <p>The packages are standard PyPI wheels, so <a href="https://docs.astral.sh/uv/">uv</a>
+    works the same way, either adding to a project or into an environment:</p>
+    <pre><code>uv add pytracer-sdk                # add to your project
+uv pip install pytracer-all        # or into the active environment</code></pre>
+    <p>pyTracer is a Python library; there is no npm package. A TypeScript SDK (and a
+    vitest integration for JS/TS agents) is on the roadmap, not yet released.</p>
 
     <h2 id="packages">Packages on PyPI</h2>
-    <p>All twelve packages are published on PyPI at version 0.1.1 (each with a wheel
+    <p>All twelve packages are published on PyPI at version 0.1.2 (each with a wheel
     and a source distribution). Install only what you need; every name below links
     to its page on PyPI.</p>
     <table>

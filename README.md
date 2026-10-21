@@ -218,7 +218,12 @@ pip install pytracer-crewai           # CrewAI
 pip install pytracer-autogen          # AutoGen
 ```
 
-All twelve packages are on PyPI at 0.1.1 (each with a wheel and a source
+These are standard PyPI wheels, so [uv](https://docs.astral.sh/uv/) works too
+(`uv add pytracer-sdk`, or `uv pip install pytracer-all`). pyTracer is a Python
+library; there is no npm package (a TypeScript SDK is on the roadmap, not yet
+released).
+
+All twelve packages are on PyPI at 0.1.2 (each with a wheel and a source
 distribution); the full list is on the [docs site](https://pytracer.com/docs#packages).
 To hack on pyTracer itself instead, install from this repo (see below).
 
@@ -266,14 +271,14 @@ To run the gateway and its stores together as containers, see
 Every package is covered by tests and checked with `ruff` and `mypy --strict`:
 
 ```bash
-pytest packages            # 288 tests
+pytest packages            # 332 tests
 ruff check packages
 mypy packages/*/src
 ```
 
 ## Status
 
-pyTracer 0.1.1 is released: all twelve packages are on PyPI. All seven core
+pyTracer 0.1.2 is released: all twelve packages are on PyPI. All seven core
 layers have working, tested engines. Ingestion is durable (the gateway's queue
 and dead-letter list survive a restart on Redis Streams), API keys are managed
 in Postgres with create/revoke and per-key rate limiting, failures auto-document

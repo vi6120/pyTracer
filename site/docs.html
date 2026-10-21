@@ -273,6 +273,15 @@ pytest -v
 pip install pytracer-openai-agents    # OpenAI Agents SDK
 pip install pytracer-crewai           # CrewAI
 pip install pytracer-autogen          # AutoGen</code></pre>
+    <p>An adapter captures only what its framework reports. The LangGraph adapter sees
+    calls made through LangChain, so a model call on a raw provider client, or a tool
+    that is a plain Python function, is not captured; instrument those with
+    <code>@op</code>. For the OpenAI Agents SDK, use the adapter's <code>install()</code>
+    helper, which makes pyTracer the only trace processor; adding it with the SDK's
+    <code>add_trace_processor</code> instead leaves OpenAI's own exporter in place, so
+    runs would also upload to OpenAI when a key is set. Adapters capture only:
+    replaying a captured run still needs <code>@op</code>, and an adapter-only run is
+    flagged rather than replayed live.</p>
 
     <h2 id="selfhost">Self-hosting the gateway</h2>
     <p>The gateway plus its stores run as a Docker stack. A single-instance setup

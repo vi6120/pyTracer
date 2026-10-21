@@ -529,6 +529,58 @@
       </div>
     </section>
 
+    <!-- 7c. moat / open problems -->
+    <section class="band" id="moat">
+      <div class="container">
+        <div class="band-head">
+          <div class="eyebrow reveal">Why it's defensible</div>
+          <h2 class="reveal d1">The open problems in agent replay.</h2>
+          <p class="reveal d2">
+            That record-and-replay works for agents is becoming well understood - the
+            research shows it. The hard, still-open parts are what come next, and they are
+            where pyTracer lives. This is the frontier most tools and benchmarks have not
+            reached yet.
+          </p>
+        </div>
+        <div class="feat">
+          <div class="card reveal">
+            <span class="ic">verdict</span>
+            <h3>Did my change fix it, or did the model drift?</h3>
+            <p>Replay research and eval tools answer pass / fail. pyTracer answers fixed / still-failing / diverged across branches - the question pass / fail cannot.</p>
+          </div>
+          <div class="card reveal d1">
+            <span class="ic">determinism</span>
+            <h3>Replay that survives real nondeterminism</h3>
+            <p>One unmarked clock, timestamp, UUID or RNG read silently runs live and breaks a "deterministic" replay. pyTracer pins all of them, so a run reproduces beyond the mocks.</p>
+          </div>
+          <div class="card reveal d2">
+            <span class="ic">matching</span>
+            <h3>Matching when the agent re-words the call</h3>
+            <p>Matching by name and call count misses reordered or re-worded inputs. pyTracer matches on hashed inputs with a fuzzy and positional fallback, and marks a non-exact match instead of serving the wrong recording.</p>
+          </div>
+          <div class="card reveal">
+            <span class="ic">streaming</span>
+            <h3>Streaming and concurrency, not one call at a time</h3>
+            <p>Streamed model output replays token by token and concurrent or repeated tool calls replay in order - the cases record-and-replay systems commonly scope out.</p>
+          </div>
+          <div class="card reveal d1">
+            <span class="ic">multi-agent</span>
+            <h3>Multi-agent routing, loops and retries</h3>
+            <p>Assert the route the agents took and freeze just the step under test - the multi-agent structure most benchmarks leave out.</p>
+          </div>
+          <div class="card reveal d2">
+            <span class="ic">side effects</span>
+            <h3>Honest about side effects</h3>
+            <p>A live call during replay is surfaced, and repeated reads are not mislabeled as writes, so a green replay never hides a real side effect.</p>
+          </div>
+        </div>
+        <p class="stat-note reveal d2">
+          And it compounds: as a team captures more failures, that history becomes shared
+          regression intelligence - <a href="#roadmap">where we are heading next</a>.
+        </p>
+      </div>
+    </section>
+
     <!-- 8. positioning statement (honest, attributed to the project) -->
     <section class="band band--tint">
       <div class="container">

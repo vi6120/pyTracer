@@ -42,32 +42,57 @@ def test_full_replay_injects_recorded_and_skips_live_body() -> None:
 
 def test_fuzzy_match_injects_recorded_output_on_drifted_input() -> None:
     calls = {"n": 0}
-    state = {"x": 1}
+    state = {"q": "summarize the quarterly earnings report"}
 
     @pytracer.op(kind=SpanKind.TOOL, tool_name="t")
-    def t(x: int) -> str:
+    def t(q: str) -> str:
         calls["n"] += 1
-        return f"out-{x}"
+        return "recorded-output"
 
     @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
     def agent() -> str:
-        return t(state["x"])
+        return t(state["q"])
 
-    rec = _record(agent)  # records t(1) -> "out-1"
+    rec = _record(agent)
     assert calls["n"] == 1
     mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
 
-    state["x"] = 2  # the op input drifts between capture and replay
+    # Small drift: one word changes, so the input stays highly similar.
+    state["q"] = "summarize the quarterly earnings summary"
 
     # Exact match misses the drifted input, so the tool body runs live.
     exact = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
     assert calls["n"] == 2
-    assert exact.return_value == "out-2"
-
-    # Fuzzy falls back to the identifier's sole recording: no live call, recorded output.
+    # Fuzzy falls back to the near recording: no live call, recorded output.
     fuzzy = ReplayEngine(ReplayMode.FULL, fuzzy_match=True).replay(agent, mocks)
     assert calls["n"] == 2  # tool body was NOT executed again
-    assert fuzzy.return_value == "out-1"
+    assert fuzzy.return_value == "recorded-output"
+
+
+def test_partial_mode_positional_matches_drifted_tool_input() -> None:
+    # In partial mode the model runs live and words a tool's input differently;
+    # the frozen tool still matches by call order, and the match is marked.
+    tool_calls = {"n": 0}
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="search")
+    def search(q: str) -> str:
+        tool_calls["n"] += 1
+        return f"hits for {q}"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent(q: str) -> str:
+        return search(q)
+
+    rec = ReplayEngine(ReplayMode.LIVE).replay(lambda: agent("recorded wording"), MockSet())
+    assert tool_calls["n"] == 1
+    mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+
+    # Tool input drifts, but positional matching serves the recording (no live call).
+    res = ReplayEngine(ReplayMode.PARTIAL).replay(lambda: agent("different wording now"), mocks)
+    assert tool_calls["n"] == 1
+    assert res.return_value == "hits for recorded wording"
+    tool_span = next(s for s in res.spans if s.tool_name == "search")
+    assert tool_span.attributes.get("pytracer.mock_match") == "positional"
 
 
 def test_partial_mode_mocks_tools_but_runs_model() -> None:

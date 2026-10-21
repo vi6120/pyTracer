@@ -1,4 +1,4 @@
-"""MockSet matching: exact by default, opt-in identifier/fuzzy fallback."""
+"""MockSet matching: exact by default, opt-in positional and fuzzy fallback."""
 
 from __future__ import annotations
 
@@ -8,43 +8,51 @@ from pytracer_replay import MockSet
 def test_exact_match_hits() -> None:
     mocks = MockSet()
     mocks.add("search", {"q": "cats"}, ["a"])
-    assert mocks.lookup("search", {"q": "cats"}) == (True, ["a"])
+    assert mocks.lookup("search", {"q": "cats"}) == (True, ["a"], "exact")
 
 
-def test_exact_miss_without_fuzzy() -> None:
+def test_exact_miss_without_fallback() -> None:
     mocks = MockSet()
     mocks.add("search", {"q": "cats"}, ["a"])
-    assert mocks.lookup("search", {"q": "dogs"}) == (False, None)
+    assert mocks.lookup("search", {"q": "dogs"}) == (False, None, "miss")
 
 
 def test_fuzzy_off_by_default() -> None:
     mocks = MockSet()
     mocks.add("search", {"q": "cats", "ts": 1}, ["a"])
     # A drifted input misses without fuzzy, preserving exact-match fidelity.
-    assert mocks.lookup("search", {"q": "cats", "ts": 2}) == (False, None)
+    assert mocks.lookup("search", {"q": "cats", "ts": 2}) == (False, None, "miss")
 
 
-def test_fuzzy_single_candidate_fallback() -> None:
+def test_fuzzy_single_candidate_similar_matches() -> None:
     mocks = MockSet()
     mocks.add("search", {"q": "cats", "ts": 1}, ["a"])
-    # Only one recording for this identifier: use it despite the drifted input.
-    assert mocks.lookup("search", {"q": "cats", "ts": 999}, fuzzy=True) == (True, ["a"])
+    # A similar drifted input (only the timestamp changed) clears the threshold.
+    assert mocks.lookup("search", {"q": "cats", "ts": 999}, fuzzy=True) == (True, ["a"], "fuzzy")
+
+
+def test_fuzzy_single_candidate_dissimilar_misses() -> None:
+    mocks = MockSet()
+    mocks.add("search", {"q": "cats"}, ["a"])
+    # A wildly different input must NOT be served the sole recording (R9).
+    assert mocks.lookup(
+        "search", {"unrelated": "an entirely different question"}, fuzzy=True
+    ) == (False, None, "miss")
 
 
 def test_fuzzy_picks_nearest_among_many() -> None:
     mocks = MockSet()
     mocks.add("search", {"q": "cats"}, "CATS")
     mocks.add("search", {"q": "dogs"}, "DOGS")
-    hit, output = mocks.lookup("search", {"q": "catss"}, fuzzy=True)
-    assert hit and output == "CATS"
+    hit, output, match = mocks.lookup("search", {"q": "catss"}, fuzzy=True)
+    assert hit and output == "CATS" and match == "fuzzy"
 
 
 def test_fuzzy_below_threshold_misses() -> None:
     mocks = MockSet()
     mocks.add("search", {"q": "cats"}, "CATS")
     mocks.add("search", {"q": "dogs"}, "DOGS")
-    # Nothing close among the candidates, and a strict threshold: no injection.
-    hit, output = mocks.lookup(
+    hit, output, _ = mocks.lookup(
         "search", {"unrelated": "a very different structure"}, fuzzy=True, threshold=0.95
     )
     assert (hit, output) == (False, None)
@@ -53,7 +61,25 @@ def test_fuzzy_below_threshold_misses() -> None:
 def test_fuzzy_unknown_identifier_misses() -> None:
     mocks = MockSet()
     mocks.add("search", {"q": "x"}, 1)
-    assert mocks.lookup("other", {"q": "x"}, fuzzy=True) == (False, None)
+    assert mocks.lookup("other", {"q": "x"}, fuzzy=True) == (False, None, "miss")
+
+
+def test_positional_matches_by_call_order_regardless_of_input() -> None:
+    # A live model words a tool's input differently each run; positional matching
+    # serves the Nth recording for the Nth call, marked as a substitution.
+    mocks = MockSet()
+    mocks.add("search", {"q": "worded one way"}, "first")
+    mocks.add("search", {"q": "worded another way"}, "second")
+    assert mocks.lookup("search", {"q": "worded a third way"}, occurrence=0, positional=True) == (
+        True,
+        "first",
+        "positional",
+    )
+    assert mocks.lookup("search", {"q": "yet another wording"}, occurrence=1, positional=True) == (
+        True,
+        "second",
+        "positional",
+    )
 
 
 def test_sequence_returns_recordings_in_order() -> None:
@@ -61,9 +87,9 @@ def test_sequence_returns_recordings_in_order() -> None:
     mocks.add("counter", {"k": 1}, "a")
     mocks.add("counter", {"k": 1}, "b")
     mocks.add("counter", {"k": 1}, "c")
-    assert mocks.lookup("counter", {"k": 1}, occurrence=0) == (True, "a")
-    assert mocks.lookup("counter", {"k": 1}, occurrence=1) == (True, "b")
-    assert mocks.lookup("counter", {"k": 1}, occurrence=2) == (True, "c")
+    assert mocks.lookup("counter", {"k": 1}, occurrence=0) == (True, "a", "exact")
+    assert mocks.lookup("counter", {"k": 1}, occurrence=1) == (True, "b", "exact")
+    assert mocks.lookup("counter", {"k": 1}, occurrence=2) == (True, "c", "exact")
 
 
 def test_sequence_clamps_to_last_recording() -> None:
@@ -71,4 +97,4 @@ def test_sequence_clamps_to_last_recording() -> None:
     mocks.add("t", {"k": 1}, "a")
     mocks.add("t", {"k": 1}, "b")
     # Extra repeat calls beyond the recorded sequence reuse the last recording.
-    assert mocks.lookup("t", {"k": 1}, occurrence=5) == (True, "b")
+    assert mocks.lookup("t", {"k": 1}, occurrence=5) == (True, "b", "exact")

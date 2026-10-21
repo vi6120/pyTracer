@@ -150,8 +150,15 @@ class ReplayEngine:
                 mock_this = kind in mocked
             if mock_this:
                 occurrence = ledger.key_for(identifier, inp).occurrence
-                hit, output = mocks.lookup(
-                    identifier, inp, occurrence=occurrence, fuzzy=self.fuzzy_match
+                # In partial mode the model runs live and words tool inputs
+                # differently each run, so a frozen tool matches by call order.
+                positional = self.mode is ReplayMode.PARTIAL and kind is SpanKind.TOOL
+                hit, output, match = mocks.lookup(
+                    identifier,
+                    inp,
+                    occurrence=occurrence,
+                    fuzzy=self.fuzzy_match,
+                    positional=positional,
                 )
                 if hit:
                     if isinstance(output, RecordedError):
@@ -159,8 +166,8 @@ class ReplayEngine:
                         # replays exactly, instead of serving it as a success.
                         raise _rebuild_exception(output)
                     if isinstance(output, RecordedStream):
-                        return Intercept(list(output.replay()), stream=True)
-                    return Intercept(output)
+                        return Intercept(list(output.replay()), stream=True, match=match)
+                    return Intercept(output, match=match)
                 if self.strict:
                     raise MissingMockError(
                         f"no recording for {kind.value} {tool_name or name!r} "

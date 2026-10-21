@@ -49,6 +49,9 @@ class Intercept:
 
     output: Any
     stream: bool = False
+    # How the recording was matched: "exact", or a substitution ("fuzzy" by input
+    # similarity, "positional" by call order) that the span is marked with.
+    match: str = "exact"
 
 
 # Called with (kind, name, tool_name, redacted_input); returns Intercept to
@@ -373,6 +376,9 @@ class Tracer:
         if decision is not None:
             active.set_output(decision.output)
             active.set_attribute("pytracer.replayed", True)
+            if decision.match != "exact":
+                # Mark a substituted (non-exact) match so it is visible, not silent.
+                active.set_attribute("pytracer.mock_match", decision.match)
         return decision
 
     def flush(self, timeout: float | None = DEFAULT_FLUSH_TIMEOUT) -> None:

@@ -91,38 +91,41 @@ class MockSet:
         *,
         occurrence: int = 0,
         fuzzy: bool = False,
+        positional: bool = False,
         threshold: float = DEFAULT_FUZZY_THRESHOLD,
-    ) -> tuple[bool, Any]:
-        """Return (hit, output).
+    ) -> tuple[bool, Any, str]:
+        """Return ``(hit, output, match)``.
 
+        ``match`` is ``"exact"``, ``"positional"``, ``"fuzzy"``, or ``"miss"``.
         Exact match first: the recording at ``occurrence`` for this
         (identifier, input), clamped to the last recording when the sequence is
-        shorter (so extra repeat calls reuse the final one). With ``fuzzy`` on,
-        fall back to the recordings for this identifier when the exact key misses:
-        the sole recording if there is only one, otherwise the nearest by input
-        similarity if it clears ``threshold``. ``hit`` is False when nothing
-        suitable was recorded.
+        shorter. With ``positional`` on, fall back to this identifier's Nth
+        recording by call order regardless of input (for a live model that words a
+        tool's input differently each run). With ``fuzzy`` on, fall back to the
+        nearest recording for this identifier by input similarity if it clears
+        ``threshold``. A non-exact match is reported so the caller can mark it.
         """
         seq = self._sequences.get((identifier, input_hash(input)))
         if seq:
-            return True, seq[min(occurrence, len(seq) - 1)]
-        if fuzzy:
-            candidates = self._by_identifier.get(identifier)
-            if candidates:
-                found, output = self._best_candidate(input, candidates, threshold)
-                if found:
-                    return True, output
-        return False, None
+            return True, seq[min(occurrence, len(seq) - 1)], "exact"
+        candidates = self._by_identifier.get(identifier)
+        if positional and candidates:
+            return True, candidates[min(occurrence, len(candidates) - 1)][1], "positional"
+        if fuzzy and candidates:
+            found, output = self._best_candidate(input, candidates, threshold)
+            if found:
+                return True, output, "fuzzy"
+        return False, None, "miss"
 
     @staticmethod
     def _best_candidate(
         input: Any, candidates: list[tuple[Any, Any]], threshold: float
     ) -> tuple[bool, Any]:
-        """Pick a fallback output for ``input`` from an identifier's recordings."""
-        if len(candidates) == 1:
-            # Only one recording for this identifier: the drift is in the input,
-            # so use it rather than falling through to a live call.
-            return True, candidates[0][1]
+        """Pick the nearest recording for ``input`` if it clears ``threshold``.
+
+        The threshold applies even when there is a single recording, so a wildly
+        different input is not served the sole recording of a different question.
+        """
         target = canonical_json(input)
         best_ratio = -1.0
         best_output: Any = None

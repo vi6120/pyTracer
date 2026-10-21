@@ -13,11 +13,19 @@ from pathlib import Path
 from typing import Any
 
 import typer
+from pytracer_sdk.schema import Span
 
 from . import __version__
 from .github import GitHubClient, sync_issue
 from .keys import format_key_table, format_new_key
-from .report import dumps_json, issue_body_from_json, issue_title, to_junit, to_markdown
+from .report import (
+    dedup_key,
+    dumps_json,
+    issue_body_from_json,
+    issue_title,
+    to_junit,
+    to_markdown,
+)
 from .runner import CollectionResult, run_path
 from .traces import format_summary_table, format_trace_tree, parse_entry, record_trace
 
@@ -146,19 +154,41 @@ def traces_show(
 
 @app.command()
 def record(
-    trace_id: str = typer.Argument(..., help="The captured trace to turn into a test."),
+    trace_id: str | None = typer.Argument(
+        None, help="The captured trace to turn into a test (omit when using --from-file)."
+    ),
     agent: str = typer.Option(..., help="Agent entrypoint, 'module:callable'."),
     entry: list[str] = typer.Option([], "--entry", help="Agent kwargs as key=value."),
     project: str | None = typer.Option(None, help="Project the trace belongs to."),
     out: Path = typer.Option(Path("tests"), help="Directory to write the collection into."),
     name: str | None = typer.Option(None, help="Scenario name."),
     mode: str = typer.Option("full", help="Replay mode: full | partial | live."),
+    from_file: Path | None = typer.Option(
+        None, "--from-file", help="Read the trace from a local JSONL file instead of the store."
+    ),
 ) -> None:
-    """Scaffold a test collection from a captured trace."""
-    store = _open_trace_store()
-    spans = store.get_trace(trace_id, project=project)
+    """Scaffold a test collection from a captured trace (trace store or local file)."""
+    if from_file is not None:
+        if not from_file.exists():
+            typer.echo(f"error: trace file not found: {from_file}", err=True)
+            raise typer.Exit(code=2)
+        spans = [
+            Span.from_json(line)
+            for line in from_file.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        source = str(from_file)
+    else:
+        if not trace_id:
+            typer.echo(
+                "error: give a trace id, or --from-file to read a locally captured trace", err=True
+            )
+            raise typer.Exit(code=2)
+        store = _open_trace_store()
+        spans = store.get_trace(trace_id, project=project)
+        source = repr(trace_id)
     if not spans:
-        typer.echo(f"error: no spans for trace {trace_id!r}", err=True)
+        typer.echo(f"error: no spans for trace {source}", err=True)
         raise typer.Exit(code=2)
     jsonl, collection = record_trace(
         spans, agent=agent, entry=parse_entry(entry), out_dir=out, name=name, mode=mode
@@ -358,8 +388,9 @@ def issues_sync(
 
     if dry_run:
         for s in failures:
-            fp = s.get("fingerprint") or "none"
-            typer.echo(f"would sync issue for {s['name']!r} (fingerprint {fp})")
+            typer.echo(
+                f"would sync issue for {s['name']!r} (key {dedup_key(s['name'], s.get('fingerprint'))})"
+            )
         return
 
     token = token or os.getenv("GITHUB_TOKEN") or os.getenv("PYTRACER_GITHUB_TOKEN")
@@ -373,9 +404,9 @@ def issues_sync(
 
     client = GitHubClient(token, repo, api_url=api_url)
     for s in failures:
-        # A fingerprint dedups by failure; fall back to the scenario name so
-        # distinct un-fingerprinted failures still get distinct issues.
-        fingerprint = s.get("fingerprint") or f"name:{s['name']}"
+        # Search by the same key the body marker embeds (see report.dedup_key),
+        # so a recurring un-fingerprinted failure updates one issue, not a new one.
+        fingerprint = dedup_key(s["name"], s.get("fingerprint"))
         body = issue_body_from_json(s, branch=branch, commit=commit)
         try:
             outcome = sync_issue(

@@ -56,6 +56,13 @@ def test_traces_list() -> None:
     assert "FAIL" in result.stdout
 
 
+def test_traces_list_prints_full_trace_id() -> None:
+    # The full 32-char id must be shown so `traces show` / `record` accept it (G3).
+    result = runner.invoke(app, ["traces", "list"])
+    assert result.exit_code == 0
+    assert TRACE_ID in result.stdout
+
+
 def test_traces_show() -> None:
     result = runner.invoke(app, ["traces", "show", TRACE_ID])
     assert result.exit_code == 0
@@ -80,3 +87,16 @@ def test_record_scaffolds_collection(tmp_path: Path) -> None:
     assert data["scenarios"][0]["agent"] == "myapp:run"
     assert data["scenarios"][0]["entry"] == {"task": "hi"}
     assert (tmp_path / "traces").is_dir()
+
+
+def test_record_from_file_scaffolds_without_the_store(tmp_path: Path) -> None:
+    # `record --from-file` reads a locally captured trace, no gateway/store (C2).
+    trace = tmp_path / "run.jsonl"
+    trace.write_text("\n".join(s.to_json() for s in FakeStore().spans) + "\n", encoding="utf-8")
+    result = runner.invoke(
+        app,
+        ["record", "--from-file", str(trace), "--agent", "myapp:run", "--out", str(tmp_path)],
+    )
+    assert result.exit_code == 0
+    data = yaml.safe_load((tmp_path / "collection.yaml").read_text())
+    assert data["scenarios"][0]["agent"] == "myapp:run"

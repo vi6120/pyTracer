@@ -269,3 +269,25 @@ def test_recorded_failure_is_catchable_by_its_builtin_type() -> None:
     assert res.return_value == "handled"
     assert res.status is rec.status  # type: ignore[attr-defined]
     assert res.error_type == rec.error_type  # type: ignore[attr-defined]
+
+
+def test_uninstrumented_replay_is_flagged() -> None:
+    # Recordings exist, but the agent makes no @op calls (stands in for an
+    # adapter-captured run): nothing is injected and the result is flagged.
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="t")
+    def t(x: int) -> int:
+        return x
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> int:
+        return t(1)
+
+    rec = _record(agent)
+    mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+    assert len(mocks) > 0
+
+    flagged = ReplayEngine(ReplayMode.FULL).replay(lambda: 42, mocks)
+    assert flagged.uninstrumented is True
+
+    ok = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert ok.uninstrumented is False

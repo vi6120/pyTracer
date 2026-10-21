@@ -8,6 +8,7 @@ run is deterministic. Three modes control what is mocked.
 
 from __future__ import annotations
 
+import builtins
 import threading
 from collections.abc import Callable, Iterable
 from contextlib import AbstractContextManager, nullcontext
@@ -25,7 +26,7 @@ from .fidelity import (
     SideEffectLog,
     controlled,
 )
-from .mocks import MockSet, _identifier
+from .mocks import MockSet, RecordedError, _identifier
 from .sandbox import NetworkSandbox
 
 
@@ -46,6 +47,25 @@ _MOCKED_KINDS: dict[ReplayMode, frozenset[SpanKind]] = {
 
 class MissingMockError(RuntimeError):
     """Raised in strict mode when a mocked op has no recorded response."""
+
+
+class ReplayedError(Exception):
+    """Stand-in raised on replay for a recorded failure whose original exception
+    type is not a builtin and so cannot be reconstructed exactly."""
+
+
+def _rebuild_exception(rec: RecordedError) -> BaseException:
+    """Reconstruct a recorded failure as a live exception to re-raise on replay.
+
+    Builtin exception types are re-created exactly (so the agent's ``except`` for
+    that type still fires); anything else becomes a :class:`ReplayedError` that
+    carries the original type name and message.
+    """
+    exc_cls = getattr(builtins, rec.error_type, None)
+    if isinstance(exc_cls, type) and issubclass(exc_cls, Exception):
+        return exc_cls(rec.error_message or "")
+    label = f"{rec.error_type}: {rec.error_message}" if rec.error_message else rec.error_type
+    return ReplayedError(label)
 
 
 @dataclass
@@ -134,6 +154,10 @@ class ReplayEngine:
                     identifier, inp, occurrence=occurrence, fuzzy=self.fuzzy_match
                 )
                 if hit:
+                    if isinstance(output, RecordedError):
+                        # Re-raise the recorded failure so the agent's error path
+                        # replays exactly, instead of serving it as a success.
+                        raise _rebuild_exception(output)
                     if isinstance(output, RecordedStream):
                         return Intercept(list(output.replay()), stream=True)
                     return Intercept(output)

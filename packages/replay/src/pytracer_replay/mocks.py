@@ -19,12 +19,23 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from typing import Any
 
-from pytracer_sdk.schema import Span, SpanKind
+from pytracer_sdk.schema import Span, SpanKind, SpanStatus
 
 from .hashing import canonical_json, input_hash
 
 # Kinds that carry a mockable external effect.
 MOCKABLE_KINDS: frozenset[SpanKind] = frozenset({SpanKind.TOOL, SpanKind.LLM})
+
+
+@dataclass(frozen=True)
+class RecordedError:
+    """A recorded op failure. The engine re-raises this on replay so the agent's
+    error path runs exactly as it did when captured, instead of a recorded failure
+    being served as a (different, or successful) output.
+    """
+
+    error_type: str
+    error_message: str | None = None
 
 # When several recordings share an identifier, a fuzzy candidate must be at least
 # this similar to the requested input to be used, so replay never injects a wildly
@@ -59,7 +70,14 @@ class MockSet:
         mocks = cls()
         for span in spans:
             if span.kind in kinds:
-                mocks.add(_identifier(span.kind, span.name, span.tool_name), span.input, span.output)
+                # A span that failed is recorded as an error to re-raise on replay,
+                # not as its (empty) output served as a success.
+                recorded: Any = (
+                    RecordedError(span.error_type or "Exception", span.error_message)
+                    if span.status is SpanStatus.ERROR
+                    else span.output
+                )
+                mocks.add(_identifier(span.kind, span.name, span.tool_name), span.input, recorded)
         return mocks
 
     def add(self, identifier: str, input: Any, output: Any) -> None:

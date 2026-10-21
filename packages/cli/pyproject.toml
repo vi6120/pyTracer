@@ -18,6 +18,12 @@ dependencies = [
     "pydantic>=2.6",
 ]
 
+[project.urls]
+Homepage = "https://pytracer.com"
+Documentation = "https://pytracer.com/docs.html"
+Repository = "https://github.com/vi6120/pyTracer"
+Issues = "https://github.com/vi6120/pyTracer/issues"
+
 [project.optional-dependencies]
 # Trace browsing / recording commands need the store client.
 stores = ["pytracer-stores==0.1.1"]

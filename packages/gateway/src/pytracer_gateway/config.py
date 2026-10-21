@@ -18,8 +18,12 @@ class GatewayConfig:
     queue_maxsize: int = int(os.getenv("PYTRACER_GATEWAY_QUEUE_MAXSIZE", "10000"))
     batch_size: int = int(os.getenv("PYTRACER_GATEWAY_BATCH_SIZE", "256"))
     flush_interval: float = float(os.getenv("PYTRACER_GATEWAY_FLUSH_INTERVAL", "0.5"))
-    max_write_retries: int = int(os.getenv("PYTRACER_GATEWAY_MAX_WRITE_RETRIES", "5"))
-    retry_backoff: float = float(os.getenv("PYTRACER_GATEWAY_RETRY_BACKOFF", "0.1"))
+    max_write_retries: int = int(os.getenv("PYTRACER_GATEWAY_MAX_WRITE_RETRIES", "10"))
+    retry_backoff: float = float(os.getenv("PYTRACER_GATEWAY_RETRY_BACKOFF", "0.2"))
+    # Cap the per-attempt wait so a long outage retries steadily instead of the
+    # backoff growing without bound; beyond the retry budget, spans go to the DLQ
+    # and can be re-queued once storage recovers.
+    retry_backoff_max: float = float(os.getenv("PYTRACER_GATEWAY_RETRY_BACKOFF_MAX", "5.0"))
     max_errors_in_response: int = int(os.getenv("PYTRACER_GATEWAY_MAX_ERRORS_IN_RESPONSE", "20"))
 
     # Queue backend: "memory" (default, in-process) or "redis" (durable, so a

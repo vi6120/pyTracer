@@ -45,6 +45,7 @@
         <a href="/#problem">Problem</a>
         <a href="/#how">How it works</a>
         <a href="/compare" class="active">Why</a>
+        <a href="/#roadmap">Roadmap</a>
         <a href="/docs">Docs</a>
       </nav>
       <a class="nav-cta" href="https://github.com/vi6120/pyTracer">GitHub</a>
@@ -142,6 +143,10 @@
       <li><strong>Cross-branch reproduction with a clear verdict.</strong> Re-run the exact
       failure on a fix branch and get fixed / still-failing / diverged - a direct answer to
       "did my change fix it?"</li>
+      <li><strong>Assert the route, not just the output.</strong> Check which agents ran, in
+      what order, and which tools they called - so a multi-agent regression is caught even
+      when the final text looks fine. Replay also holds streaming, concurrency, the clock and
+      UUIDs steady, the cases nondeterminism usually hides behind.</li>
       <li><strong>Open core, no lock-in.</strong> Apache-2.0 client toolchain and an AGPL
       server you can self-host. The full replay engine, including the fidelity work, is open
       source.</li>

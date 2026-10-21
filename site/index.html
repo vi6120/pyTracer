@@ -257,6 +257,7 @@
         <a href="#problem">Problem</a>
         <a href="#how">How it works</a>
         <a href="/compare">Why</a>
+        <a href="#roadmap">Roadmap</a>
         <a href="#faq">FAQ</a>
         <a href="/docs">Docs</a>
       </nav>
@@ -420,11 +421,14 @@
             <p class="reveal d2">
               Choose how much to hold frozen: <strong>full</strong> (recorded model and
               tools), <strong>partial</strong> (recorded tools, live model), or
-              <strong>live</strong> (re-run everything). Every mode adds assertions, run
+              <strong>live</strong> (re-run everything) - or <strong>freeze everything
+              except the one step you changed</strong>. Every mode adds assertions on the
+              <strong>route the agents took</strong>, not just the final output, plus run
               diffing, a failure fingerprint, and a three-way outcome classifier. Replay
               stays faithful on real agents: <strong>streaming</strong> responses and
-              <strong>concurrent or repeated tool calls</strong> replay in order, the clock
-              is frozen and the RNG seeded, and <strong>side-effects</strong> are detected.
+              <strong>concurrent or repeated tool calls</strong> replay in order, the clock,
+              timestamps and UUIDs are pinned and the RNG seeded, and live
+              <strong>side-effects</strong> are surfaced.
             </p>
           </div>
           <div class="pipe">
@@ -445,8 +449,11 @@
       <div class="container">
         <div class="band-head">
           <div class="eyebrow reveal">What ships today</div>
-          <h2 class="reveal d1">Open source, and already complete.</h2>
-          <p class="reveal d2">pyTracer 0.1.2 is released on PyPI and the repository is public. No waitlist, no beta flag.</p>
+          <h2 class="reveal d1">Open source, and ready to use today.</h2>
+          <p class="reveal d2">pyTracer <a href="https://github.com/vi6120/pyTracer/releases/tag/v0.1.2">0.1.2</a>
+          is live on PyPI and the repository is public - no waitlist, no beta flag. This
+          release folds in fixes from pilot testing across the SDK, replay engine, gateway,
+          CLI and all four framework adapters.</p>
         </div>
         <div class="stat-grid">
           <div class="stat reveal"><div class="big">12</div><div class="lbl">PyPI packages</div></div>
@@ -458,6 +465,67 @@
           Apache-2.0 for the client toolchain, AGPL-3.0 for the hosted server components.
           See the <a href="/docs#packages">full package list</a>.
         </p>
+      </div>
+    </section>
+
+    <!-- 7b. roadmap -->
+    <section class="band band--tint" id="roadmap">
+      <style>
+        .road { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; max-width: 1040px; margin: 0 auto; }
+        .road-col { border: 1px solid var(--border); border-radius: 14px; padding: 22px 20px; background: var(--panel); }
+        .road-col h3 { margin: 0 0 4px; font-size: 16px; }
+        .road-tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+                    text-transform: uppercase; margin: 0 0 12px; }
+        .road-col.shipped { background: var(--accent-soft); }
+        .road-col.shipped .road-tag { color: var(--accent); }
+        .road-col .road-tag.next, .road-col .road-tag.later { color: var(--muted); }
+        .road-col ul { list-style: none; margin: 0; padding: 0; }
+        .road-col li { position: relative; padding-left: 20px; margin: 10px 0; font-size: 14.5px;
+                       color: var(--muted); line-height: 1.5; }
+        .road-col li b { color: var(--text); font-weight: 650; }
+        .road-col.shipped li::before { content: "\2713"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+        .road-col.plan li::before { content: "\2192"; position: absolute; left: 0; color: var(--muted); }
+        @media (max-width: 860px) { .road { grid-template-columns: 1fr; } }
+      </style>
+      <div class="container">
+        <div class="band-head">
+          <div class="eyebrow reveal">Roadmap</div>
+          <h2 class="reveal d1">Where we are, and where we are going.</h2>
+          <p class="reveal d2">Shipped is on PyPI today; the rest is planned, not released. We build
+          against real pilot and interview feedback, so the order can shift.</p>
+        </div>
+        <div class="road reveal d1">
+          <div class="road-col shipped">
+            <span class="road-tag">Shipped &middot; 0.1.2</span>
+            <h3>Deterministic test &amp; replay</h3>
+            <ul>
+              <li><b>Cross-branch reproduction</b> with a fixed / still-failing / diverged verdict</li>
+              <li><b>Three replay modes</b> plus selective, per-step freeze</li>
+              <li><b>Route, tools and step assertions</b>, not just output checks</li>
+              <li><b>Fidelity:</b> streaming, concurrent calls, pinned clock / UUID / RNG, side-effect reporting</li>
+              <li><b>Four adapters</b> (LangGraph, CrewAI, AutoGen, OpenAI Agents), CI gate, PR trigger, pytest plugin</li>
+            </ul>
+          </div>
+          <div class="road-col plan">
+            <span class="road-tag next">On the roadmap</span>
+            <h3>Near-term</h3>
+            <ul>
+              <li><b>Replay through adapters</b> without hand-adding <code>@op</code> (adapters capture today; replay needs <code>@op</code>)</li>
+              <li><b>Coexist with your observability</b> - reuse OpenTelemetry / Langfuse spans instead of double-instrumenting</li>
+              <li><b>Published SDK overhead benchmark</b> for <code>@op</code></li>
+              <li><b>Full retry-chain capture</b>, every attempt and its wasted spend</li>
+            </ul>
+          </div>
+          <div class="road-col plan">
+            <span class="road-tag later">Exploring</span>
+            <h3>Later</h3>
+            <ul>
+              <li><b>TypeScript SDK</b> and a vitest integration for JS/TS agents</li>
+              <li><b>Enterprise side-effect governance</b> - audit and access control on the hosted service</li>
+              <li><b>Cross-run failure intelligence</b> over a team's captured history</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -497,6 +565,14 @@
             <div class="body" style="max-width: 720px;">LangGraph, CrewAI, AutoGen, and the OpenAI Agents SDK have dedicated adapters, and any Python agent works once you instrument it by hand.</div>
           </details>
           <details class="item">
+            <summary>Can I replay a run captured through an adapter?</summary>
+            <div class="body" style="max-width: 720px;">Adapters <strong>capture</strong> a run; deterministic replay currently injects at the <code>@op</code> seam, so replaying a run needs <code>@op</code> on the functions that call your models and tools. An adapter-only run is flagged (not silently run live), and replay through the adapters themselves is on the roadmap.</div>
+          </details>
+          <details class="item">
+            <summary>Is there a JavaScript / TypeScript SDK?</summary>
+            <div class="body" style="max-width: 720px;">Not yet - pyTracer is Python-only today. A TypeScript SDK and a vitest integration for JS/TS agents are on the roadmap. The packages are standard PyPI wheels, so <code>pip</code> and <a href="https://docs.astral.sh/uv/">uv</a> both work; there is no npm package.</div>
+          </details>
+          <details class="item">
             <summary>Is it open source? What license?</summary>
             <div class="body" style="max-width: 720px;">Yes. The client toolchain is Apache-2.0 and the hosted server components are AGPL-3.0. All 12 packages are on PyPI and the repository is public.</div>
           </details>
@@ -525,6 +601,8 @@
           <div class="row"><code>pip install pytracer-all</code><button class="copy" type="button" data-copy="pip install pytracer-all" aria-label="Copy install command">Copy</button></div>
           <div class="lbl"># or just the SDK</div>
           <div class="row"><code>pip install pytracer-sdk</code><button class="copy" type="button" data-copy="pip install pytracer-sdk" aria-label="Copy install command">Copy</button></div>
+          <div class="lbl"># uv works too</div>
+          <div class="row"><code>uv add pytracer-all</code><button class="copy" type="button" data-copy="uv add pytracer-all" aria-label="Copy install command">Copy</button></div>
         </div>
         <div class="cta reveal d2" style="margin-top: 26px; display: flex; justify-content: center;">
           <a class="btn primary" href="/docs">Read the docs</a>

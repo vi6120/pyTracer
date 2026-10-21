@@ -20,12 +20,19 @@ class _Result:
 class FakeRunner:
     def __init__(self, by_ref: dict[str, Any]) -> None:
         self._by_ref = by_ref
-        self.calls: list[tuple[str, str, Any, Any]] = []
+        self.calls: list[tuple[str, str, Any, Any, Any, Any]] = []
 
     def reproduce(
-        self, ref: str, collection_path: str, *, frozen_trace: Any = None, trace_dest: Any = None
+        self,
+        ref: str,
+        collection_path: str,
+        *,
+        frozen_trace: Any = None,
+        trace_dest: Any = None,
+        env_file: Any = None,
+        env_dest: Any = ".env",
     ) -> _Result:
-        self.calls.append((ref, collection_path, frozen_trace, trace_dest))
+        self.calls.append((ref, collection_path, frozen_trace, trace_dest, env_file, env_dest))
         return _Result(self._by_ref[ref])
 
 
@@ -81,6 +88,38 @@ def test_missing_results_raises() -> None:
             runner, collection_path="c.yaml", baseline_ref="main", candidate_ref="feature",
             classify=classify_reproduction,
         )
+
+
+def test_env_file_is_passed_through() -> None:
+    same = _run([{"name": "s", "passed": True}])
+    runner = FakeRunner({"main": same, "feature": same})
+    run_reproduction(
+        runner, collection_path="c.yaml", baseline_ref="main", candidate_ref="feature",
+        classify=classify_reproduction, env_file="prod.env", env_dest="config/.env",
+    )
+    assert runner.calls[0][4] == "prod.env"
+    assert runner.calls[0][5] == "config/.env"
+
+
+def test_missing_results_error_shows_full_stderr() -> None:
+    # The real cause (here at the end of a long stderr) must be shown, not cut at 200.
+    class _R:
+        def __init__(self, results: Any, stderr: str = "") -> None:
+            self.results = results
+            self.stderr = stderr
+
+    class Runner:
+        def reproduce(self, ref: str, collection_path: str, **_: Any) -> Any:
+            if ref == "main":
+                return _R(None, "pip noise\n" + ("x" * 500) + "\nNo module named pytracer_cli")
+            return _R(_run([{"name": "s", "passed": True}]))
+
+    with pytest.raises(RuntimeError) as exc:
+        run_reproduction(
+            Runner(), collection_path="c.yaml", baseline_ref="main", candidate_ref="feature",
+            classify=classify_reproduction,
+        )
+    assert "No module named pytracer_cli" in str(exc.value)
 
 
 def test_format_verdicts() -> None:

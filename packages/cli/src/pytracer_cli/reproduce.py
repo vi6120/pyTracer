@@ -21,7 +21,15 @@ class _Runner(Protocol):
         *,
         frozen_trace: str | None = None,
         trace_dest: str | None = None,
+        env_file: str | None = None,
+        env_dest: str = ".env",
     ) -> Any: ...
+
+
+def _tail(text: str, limit: int = 2000) -> str:
+    """The last ``limit`` characters of ``text`` (so the real error is not cut off)."""
+    text = (text or "").strip()
+    return text if len(text) <= limit else "...\n" + text[-limit:]
 
 
 def run_reproduction(
@@ -33,22 +41,39 @@ def run_reproduction(
     classify: Callable[[Any, Any], dict[str, Any]],
     frozen_trace: str | None = None,
     trace_dest: str | None = None,
+    env_file: str | None = None,
+    env_dest: str = ".env",
 ) -> tuple[Any, Any, dict[str, Any]]:
     """Reproduce the collection on both refs and classify each scenario.
 
     Returns (baseline_result, candidate_result, verdicts). Raises if either run
-    produced no results (for example a failed dependency install).
+    produced no results (for example a failed dependency install); the error
+    carries the run's stderr so the cause is visible, not truncated.
     """
     baseline = runner.reproduce(
-        baseline_ref, collection_path, frozen_trace=frozen_trace, trace_dest=trace_dest
+        baseline_ref,
+        collection_path,
+        frozen_trace=frozen_trace,
+        trace_dest=trace_dest,
+        env_file=env_file,
+        env_dest=env_dest,
     )
     candidate = runner.reproduce(
-        candidate_ref, collection_path, frozen_trace=frozen_trace, trace_dest=trace_dest
+        candidate_ref,
+        collection_path,
+        frozen_trace=frozen_trace,
+        trace_dest=trace_dest,
+        env_file=env_file,
+        env_dest=env_dest,
     )
     if baseline.results is None:
-        raise RuntimeError(f"baseline run on {baseline_ref!r} produced no results: {baseline.stderr[:200]}")
+        raise RuntimeError(
+            f"baseline run on {baseline_ref!r} produced no results:\n{_tail(baseline.stderr)}"
+        )
     if candidate.results is None:
-        raise RuntimeError(f"candidate run on {candidate_ref!r} produced no results: {candidate.stderr[:200]}")
+        raise RuntimeError(
+            f"candidate run on {candidate_ref!r} produced no results:\n{_tail(candidate.stderr)}"
+        )
     verdicts = classify(baseline.results, candidate.results)
     return baseline, candidate, verdicts
 

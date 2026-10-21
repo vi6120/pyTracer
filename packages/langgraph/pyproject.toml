@@ -15,6 +15,12 @@ dependencies = [
     "langchain-core>=0.3",
 ]
 
+[project.urls]
+Homepage = "https://pytracer.com"
+Documentation = "https://pytracer.com/docs.html"
+Repository = "https://github.com/vi6120/pyTracer"
+Issues = "https://github.com/vi6120/pyTracer/issues"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",

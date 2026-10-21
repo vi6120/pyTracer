@@ -62,17 +62,33 @@ class Stats:
 
 
 def validate_spans(raw: list[Any]) -> tuple[list[Span], list[dict[str, Any]]]:
-    """Split a raw payload into valid spans and per-item validation errors."""
+    """Split a raw payload into valid spans and per-item validation errors.
+
+    A span missing ``resource.branch`` or ``resource.commit`` is rejected here,
+    because the trace store requires both; otherwise it would be accepted, the
+    sender told success, then silently dead-lettered at write time.
+    """
     spans: list[Span] = []
     errors: list[dict[str, Any]] = []
     for i, item in enumerate(raw):
         try:
-            spans.append(Span.model_validate(item))
+            span = Span.model_validate(item)
         except ValidationError as exc:
             # Drop context/input so the error payload is always JSON-serializable
             # (ctx can hold the original exception object).
             detail = exc.errors(include_url=False, include_context=False, include_input=False)
             errors.append({"index": i, "error": detail})
+            continue
+        if not span.resource.branch or not span.resource.commit:
+            errors.append(
+                {
+                    "index": i,
+                    "error": "span is missing resource.branch and/or resource.commit, "
+                    "which the trace store requires (set them via configure())",
+                }
+            )
+            continue
+        spans.append(span)
     return spans, errors
 
 
@@ -133,6 +149,32 @@ class IngestPipeline:
     async def dead_letters(self, limit: int) -> list[DeadLetter]:
         return await self._queue.peek_dead_letters(limit)
 
+    async def requeue_dead_letters(self, limit: int) -> int:
+        """Re-enqueue storage dead letters for another write (after an outage).
+
+        Drains up to ``limit`` dead letters; the ones that failed on storage and
+        still carry their span are re-enqueued, and anything else (validation
+        failures, or a span that no longer parses) is put back so nothing is lost.
+        Returns the number re-enqueued.
+        """
+        letters = await self._queue.drain_dead_letters(limit)
+        requeued = 0
+        keep: list[DeadLetter] = []
+        for letter in letters:
+            if letter.reason == "storage" and letter.span is not None and letter.project:
+                try:
+                    span = Span.model_validate(letter.span)
+                except ValidationError:
+                    keep.append(letter)
+                    continue
+                await self.enqueue(letter.project, [span])
+                requeued += 1
+            else:
+                keep.append(letter)
+        if keep:
+            await self._queue.push_dead_letters(keep)
+        return requeued
+
     # --- worker -------------------------------------------------------------
     async def _run(self) -> None:
         while True:
@@ -171,7 +213,9 @@ class IngestPipeline:
                         ]
                     )
                     return
-                await asyncio.sleep(self._config.retry_backoff * attempt)
+                await asyncio.sleep(
+                    min(self._config.retry_backoff * attempt, self._config.retry_backoff_max)
+                )
 
 
 class TraceStoreWriter:

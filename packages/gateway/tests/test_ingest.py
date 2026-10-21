@@ -66,3 +66,59 @@ def test_healthz_and_readyz() -> None:
     with TestClient(create_app(writer=FakeWriter(), api_keys=API_KEYS)) as client:
         assert client.get("/healthz").json() == {"status": "ok"}
         assert client.get("/readyz").status_code == 200
+
+
+def test_span_missing_branch_or_commit_is_rejected_at_ingest() -> None:
+    # The trace store requires branch/commit; reject at ingest so the sender learns
+    # now, instead of a silent accept-then-dead-letter at write time.
+    from pytracer_sdk import new_span_id, new_trace_id
+    from pytracer_sdk.schema import Resource, Span, SpanKind
+
+    writer = FakeWriter()
+    no_meta = Span(
+        trace_id=new_trace_id(),
+        span_id=new_span_id(),
+        name="x",
+        kind=SpanKind.TOOL,
+        start_time_ns=1,
+        end_time_ns=2,
+        resource=Resource(service_name="t"),  # no branch/commit
+    ).model_dump(mode="json")
+    with TestClient(create_app(writer=writer, api_keys=API_KEYS)) as client:
+        resp = client.post("/v1/spans", headers=HEADERS, json={"spans": [no_meta]})
+        assert resp.status_code == 202
+        body = resp.json()
+        assert body["accepted"] == 0
+        assert body["rejected"] == 1
+        assert "branch" in str(body["errors"][0]["error"])
+        assert client.get("/v1/stats").json()["stats"]["written"] == 0
+
+
+def test_requeue_re_enqueues_storage_dead_letters() -> None:
+    # After an outage, storage dead letters can be re-queued for another write;
+    # validation dead letters are kept (not re-runnable).
+    import asyncio
+
+    from pytracer_gateway import GatewayConfig
+    from pytracer_gateway.ingest import IngestPipeline
+    from pytracer_gateway.queue import DeadLetter
+
+    async def scenario() -> None:
+        pipe = IngestPipeline(FakeWriter(), GatewayConfig())
+        await pipe._queue.start()
+        payload = make_span("replayed").model_dump(mode="json")
+        await pipe._queue.push_dead_letters(
+            [
+                DeadLetter("storage", "proj", "outage", payload),
+                DeadLetter("validation", "proj", "bad schema", None),
+            ]
+        )
+        assert await pipe.dead_letter_count() == 2
+        requeued = await pipe.requeue_dead_letters(10)
+        assert requeued == 1
+        assert await pipe.dead_letter_count() == 1  # the validation one is kept
+        batch = await pipe._queue.reserve(10, 0.1)
+        assert [r.span.name for r in batch] == ["replayed"]
+        await pipe._queue.close()
+
+    asyncio.run(scenario())

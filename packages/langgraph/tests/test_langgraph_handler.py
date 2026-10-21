@@ -66,6 +66,56 @@ def test_non_node_chain_is_unknown_kind() -> None:
     assert span.kind is K.UNKNOWN
 
 
+def test_model_and_provider_are_recorded_on_llm_spans() -> None:
+    # The span is named after the model and carries the provider, so a recording is
+    # tied to a model version instead of only the client class name.
+    handler, sink, tracer = _setup()
+    rid = uuid.uuid4()
+    handler.on_chat_model_start(
+        {"name": "ChatOpenAI"},
+        [[]],
+        run_id=rid,
+        metadata={"ls_model_name": "gpt-5-mini", "ls_provider": "azure"},
+        invocation_params={"model": "gpt-5-mini"},
+    )
+    handler.on_llm_end(LLMResult(generations=[[Generation(text="ok")]]), run_id=rid)
+    tracer.flush()
+    (span,) = sink.spans
+    assert span.name == "gpt-5-mini"
+    assert span.attributes["model"] == "gpt-5-mini"
+    assert span.attributes["provider"] == "azure"
+
+
+def test_conditional_edge_routing_run_is_a_handoff_not_another_node_run() -> None:
+    # The routing function carries the source node's metadata but runs under its own
+    # name; it must not be recorded as a second run of the node.
+    handler, sink, tracer = _setup()
+    node_id, route_id = uuid.uuid4(), uuid.uuid4()
+    handler.on_chain_start({"name": "orchestrator"}, {}, run_id=node_id,
+                           metadata={"langgraph_node": "orchestrator"}, name="orchestrator")
+    handler.on_chain_end({}, run_id=node_id)
+    handler.on_chain_start({"name": "route_after_orchestrator"}, {}, run_id=route_id,
+                           metadata={"langgraph_node": "orchestrator"}, name="route_after_orchestrator")
+    handler.on_chain_end("library", run_id=route_id)
+    tracer.flush()
+    spans = {s.name: s for s in sink.spans}
+    assert spans["orchestrator"].kind is K.AGENT
+    assert spans["route_after_orchestrator"].kind is K.HANDOFF
+    assert sum(1 for s in sink.spans if s.kind is K.AGENT) == 1  # node not double-counted
+
+
+def test_graph_root_is_an_agent_span() -> None:
+    # The compiled graph's own run is the root agent, not an UNKNOWN "LangGraph" span.
+    handler, sink, tracer = _setup()
+    rid = uuid.uuid4()
+    handler.on_chain_start({"name": "LangGraph"}, {}, run_id=rid, name="LangGraph")
+    handler.on_chain_end({}, run_id=rid)
+    tracer.flush()
+    (span,) = sink.spans
+    assert span.kind is K.AGENT
+    assert span.agent_name == "LangGraph"
+
+
 def test_error_maps_to_failed_span() -> None:
     handler, sink, tracer = _setup()
     rid = uuid.uuid4()

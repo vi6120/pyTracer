@@ -72,6 +72,16 @@ class ScenarioSpec(BaseModel):
     # freeze a whole run except the one step under test.
     live: list[str] = Field(default_factory=list)
     freeze: list[str] = Field(default_factory=list)
+    # Tools that mutate external state (by identifier). A live call to one is
+    # logged as a write, so a repeat is flagged non-idempotent; other live tool
+    # calls are logged as unclassified, so read-only tools are not falsely flagged.
+    writes: list[str] = Field(default_factory=list)
+    # Nondeterminism controls, for an agent that reads the clock or generates ids
+    # or random numbers directly (not only through mocked ops). ``freeze_time``
+    # pins ``time.*`` and ``datetime.now`` to that unix instant; ``seed`` seeds
+    # ``random`` and ``uuid.uuid4``, so the run reproduces beyond the recording.
+    freeze_time: float | None = None
+    seed: int | None = None
     assertions: list[AssertionSpec] = Field(default_factory=list)
 
 

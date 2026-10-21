@@ -154,6 +154,18 @@ def run(task: str) -> str:
     branch="main",
     commit="abc123",
 )</code></pre>
+    <p><strong>Redaction runs before anything leaves your process.</strong> As each span
+    closes, its input, output and error message are scanned and secrets are replaced in
+    place with a labeled placeholder: provider API keys (OpenAI, GitHub, AWS, Slack),
+    Luhn-valid card numbers, and email addresses, out of the box. Pass your own
+    <code>Redactor</code> to extend the defaults:</p>
+    <pre><code>from pytracer_sdk import Redactor, RedactionRule, DEFAULT_RULES
+
+pytracer.configure(
+    pytracer.HTTPTransport("https://gateway.pytracer.com", api_key="YOUR_PROJECT_KEY"),
+    service_name="researcher",
+    redactor=Redactor(rules=[*DEFAULT_RULES, RedactionRule("ssn", r"\b\d{3}-\d{2}-\d{4}\b")]),
+)</code></pre>
 
     <h2 id="capture">3. Turn a failure into a test</h2>
     <p>When a run fails, browse recent captured runs and scaffold a test from one,
@@ -189,6 +201,23 @@ scenarios:
     run (so a live or partial replay stays reproducible beyond the mocks), and it records
     the external tool calls a replay makes, so you can flag non-idempotent or conflicting
     writes.</p>
+    <p><strong>How matching works.</strong> A replay looks up each recorded response by
+    the op's identifier (its tool or op name) and an exact hash of its input, so by
+    default a replayed input must match what was captured. Three scenario fields control
+    what happens when it does not:</p>
+    <ul>
+      <li><code>fuzzy: true</code> - when an exact input misses, fall back to the nearest
+      recording for that op by input similarity, so small drift (a timestamp in a prompt,
+      a reordered field) still replays.</li>
+      <li><code>strict: true</code> - fail the scenario on an unrecorded call instead of
+      silently running it live. On by default in <code>full</code> mode.</li>
+      <li><code>sandbox: true</code> - block outbound network during the replay, so a
+      miss cannot fire a real side effect. On by default in <code>full</code> mode.</li>
+    </ul>
+    <p>Replay injects at the <code>@op</code> seam. A run captured only through a
+    framework adapter records spans but adds no interception point, so there is nothing
+    to inject and the scenario runs live and fails loudly until you add <code>@op</code>
+    to the functions that call your models and tools.</p>
 
     <h2 id="ci">5. Gate branches in CI</h2>
     <p>Add the GitHub Action (see

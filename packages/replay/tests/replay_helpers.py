@@ -17,6 +17,7 @@ def span(
     kind: SpanKind = SpanKind.TOOL,
     status: SpanStatus = SpanStatus.OK,
     error_type: str | None = None,
+    error_message: str | None = None,
     output: object = None,
     t: int = 0,
 ) -> Span:
@@ -28,6 +29,7 @@ def span(
         tool_name=tool,
         status=status,
         error_type=error_type,
+        error_message=error_message,
         output=output,
         start_time_ns=t,
         end_time_ns=t + 1,
@@ -35,8 +37,10 @@ def span(
     )
 
 
-def failing_result(sequence: list[str], error_type: str) -> ReplayResult:
-    """A failing result whose last step errored with ``error_type``."""
+def failing_result(
+    sequence: list[str], error_type: str, message: str | None = None
+) -> ReplayResult:
+    """A failing result whose last step errored with ``error_type``/``message``."""
     spans = []
     for i, name in enumerate(sequence):
         is_last = i == len(sequence) - 1
@@ -46,6 +50,7 @@ def failing_result(sequence: list[str], error_type: str) -> ReplayResult:
                 tool=name,
                 status=SpanStatus.ERROR if is_last else SpanStatus.OK,
                 error_type=error_type if is_last else None,
+                error_message=message if is_last else None,
                 t=i,
             )
         )
@@ -55,6 +60,7 @@ def failing_result(sequence: list[str], error_type: str) -> ReplayResult:
         mode=ReplayMode.FULL,
         spans=spans,
         error_type=error_type,
+        error_message=message,
     )
 
 

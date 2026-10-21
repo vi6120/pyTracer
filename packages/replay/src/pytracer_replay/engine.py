@@ -77,6 +77,8 @@ class ReplayEngine:
         sandbox: bool = False,
         network_allow: Iterable[str] = (),
         fuzzy_match: bool = False,
+        live_ops: Iterable[str] = (),
+        frozen_ops: Iterable[str] = (),
         controls: NondeterminismControls | None = None,
     ) -> None:
         self.mode = mode
@@ -88,6 +90,13 @@ class ReplayEngine:
         # When on, an exact mock miss falls back to the identifier's recordings
         # (nearest by input similarity), so small input drift still replays.
         self.fuzzy_match = fuzzy_match
+        # Per-op selective freeze: ops named in live_ops run live (freeze the rest),
+        # ops named in frozen_ops are served from the recording, each overriding the
+        # mode's kind-based default. An op is matched by its identifier (tool name,
+        # else span name). This is how a user freezes a whole run except the one step
+        # they changed.
+        self.live_ops = frozenset(live_ops)
+        self.frozen_ops = frozenset(frozen_ops)
         # When set, the clock is frozen and the RNG seeded around agent execution,
         # so a live (or partially live) replay is reproducible beyond the mocks.
         self.controls = controls
@@ -112,7 +121,14 @@ class ReplayEngine:
             kind: SpanKind, name: str, tool_name: str | None, inp: object
         ) -> Intercept | None:
             identifier = _identifier(kind, name, tool_name)
-            if kind in mocked:
+            # Per-op selective freeze overrides the mode's kind-based default.
+            if identifier in self.frozen_ops:
+                mock_this = True
+            elif identifier in self.live_ops:
+                mock_this = False
+            else:
+                mock_this = kind in mocked
+            if mock_this:
                 occurrence = ledger.key_for(identifier, inp).occurrence
                 hit, output = mocks.lookup(
                     identifier, inp, occurrence=occurrence, fuzzy=self.fuzzy_match

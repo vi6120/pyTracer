@@ -178,3 +178,46 @@ def test_route_assertion_catches_an_unexpected_route(tmp_path: Path) -> None:
     result = run_path(collection)
     assert not result.passed
     assert not result.scenarios[0].assertions[0].passed
+
+
+def test_selective_live_runs_from_a_collection(tmp_path: Path) -> None:
+    # `live` names ops to run live while the rest stay frozen; the scenario still
+    # passes (search is served from the recording, summarize runs live).
+    record_trace(cli_sample_agent.agent, {"task": "find cats"}, tmp_path / "trace.jsonl")
+    collection = write_collection(
+        tmp_path,
+        [
+            {
+                "name": "selective",
+                "agent": "cli_sample_agent:agent",
+                "entry": {"task": "find cats"},
+                "trace": "trace.jsonl",
+                "mode": "full",
+                "live": ["summarize"],
+                "assertions": [{"type": "no_errors"}, {"type": "contains", "needle": "summary"}],
+            }
+        ],
+    )
+    assert run_path(collection).passed
+
+
+def test_live_and_freeze_overlap_is_config_error(tmp_path: Path) -> None:
+    record_trace(cli_sample_agent.agent, {"task": "find cats"}, tmp_path / "trace.jsonl")
+    collection = write_collection(
+        tmp_path,
+        [
+            {
+                "name": "bad",
+                "agent": "cli_sample_agent:agent",
+                "entry": {"task": "find cats"},
+                "trace": "trace.jsonl",
+                "mode": "full",
+                "live": ["search"],
+                "freeze": ["search"],
+                "assertions": [{"type": "no_errors"}],
+            }
+        ],
+    )
+    result = run_path(collection)
+    assert not result.passed
+    assert "both live and frozen" in (result.scenarios[0].config_error or "")

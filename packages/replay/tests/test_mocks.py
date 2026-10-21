@@ -92,9 +92,20 @@ def test_sequence_returns_recordings_in_order() -> None:
     assert mocks.lookup("counter", {"k": 1}, occurrence=2) == (True, "c", "exact")
 
 
-def test_sequence_clamps_to_last_recording() -> None:
+def test_over_run_past_recorded_sequence_is_a_miss() -> None:
     mocks = MockSet()
     mocks.add("t", {"k": 1}, "a")
     mocks.add("t", {"k": 1}, "b")
-    # Extra repeat calls beyond the recorded sequence reuse the last recording.
-    assert mocks.lookup("t", {"k": 1}, occurrence=5) == (True, "b", "exact")
+    # Calling the op more times than it was recorded is a real divergence, not a
+    # cue to replay the last recording again (which would silently hide it).
+    assert mocks.lookup("t", {"k": 1}, occurrence=2) == (False, None, "miss")
+
+
+def test_positional_over_run_is_a_miss() -> None:
+    mocks = MockSet()
+    mocks.add("search", {"q": "one"}, "first")
+    mocks.add("search", {"q": "two"}, "second")
+    # A third positional call has no recording to stand in for it.
+    assert mocks.lookup(
+        "search", {"q": "three"}, positional_occurrence=2, positional=True
+    ) == (False, None, "miss")

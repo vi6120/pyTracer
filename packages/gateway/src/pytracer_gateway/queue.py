@@ -79,6 +79,10 @@ class SpanQueue(Protocol):
 
     async def peek_dead_letters(self, limit: int) -> list[DeadLetter]: ...
 
+    async def drain_dead_letters(self, limit: int) -> list[DeadLetter]:
+        """Remove and return up to ``limit`` dead letters (for re-queueing)."""
+        ...
+
     async def is_drained(self) -> bool:
         """True when nothing is queued or in flight (used for graceful shutdown)."""
         ...
@@ -144,6 +148,11 @@ class InProcessQueue:
 
     async def peek_dead_letters(self, limit: int) -> list[DeadLetter]:
         return list(self._dead_letters[:limit])
+
+    async def drain_dead_letters(self, limit: int) -> list[DeadLetter]:
+        taken = self._dead_letters[:limit]
+        del self._dead_letters[:limit]
+        return taken
 
     async def is_drained(self) -> bool:
         assert self._queue is not None
@@ -301,6 +310,27 @@ class RedisQueue:
                     span,
                 )
             )
+        return out
+
+    async def drain_dead_letters(self, limit: int) -> list[DeadLetter]:
+        entries = await self._redis.xrange(self._dlq, count=limit)
+        if not entries:
+            return []
+        out: list[DeadLetter] = []
+        ids: list[str] = []
+        for _id, fields in entries:
+            ids.append(_id)
+            raw = fields.get("span")
+            span = json.loads(raw) if raw else None
+            out.append(
+                DeadLetter(
+                    fields.get("reason", ""),
+                    fields.get("project") or None,
+                    fields.get("detail", ""),
+                    span,
+                )
+            )
+        await self._redis.xdel(self._dlq, *ids)
         return out
 
     async def is_drained(self) -> bool:

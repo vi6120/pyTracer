@@ -60,8 +60,10 @@ so `pip install pytracer-all` gives you the whole platform in one command (and
 
 Four framework adapter packages (`pytracer-langgraph`, `pytracer-openai-agents`,
 `pytracer-crewai`, `pytracer-autogen`) auto-instrument agents built on those
-frameworks. Twelve packages in all, published on PyPI; the full list is on the
-[docs site](https://pytracer.com/docs#packages).
+frameworks for **capture**. Replaying a captured run currently requires `@op`
+instrumentation (the replay engine intercepts `@op` calls); replay through the
+adapters is on the roadmap. Twelve packages in all, published on PyPI; the full
+list is on the [docs site](https://pytracer.com/docs#packages).
 
 Backing services (ClickHouse, PostgreSQL, and Redis for the durable ingest
 queue) run via [docker-compose.yml](docker-compose.yml).

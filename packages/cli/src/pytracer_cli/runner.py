@@ -198,6 +198,19 @@ def run_scenario(
         live_ops=scenario.live,
         frozen_ops=scenario.freeze,
     ).replay(lambda: agent(**scenario.entry), mocks)
+    if result.uninstrumented:
+        # Recordings existed but the agent hit no @op seam, so nothing was injected
+        # and it ran live. Fail loudly instead of a misleading green.
+        return ScenarioResult(
+            scenario.name,
+            False,
+            result,
+            [],
+            fingerprint(result),
+            "the agent made no @op calls during replay, so nothing was injected and it "
+            "ran live; if the run was captured via an adapter, note that replay needs "
+            "@op instrumentation",
+        )
     assertion_results = run_assertions(result, assertions)
     # A scenario passes when it did not error and every assertion passed.
     passed = not result.failed and all_passed(assertion_results)

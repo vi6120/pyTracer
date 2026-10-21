@@ -201,6 +201,32 @@ def test_selective_live_runs_from_a_collection(tmp_path: Path) -> None:
     assert run_path(collection).passed
 
 
+def test_uninstrumented_agent_fails_with_guidance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A non-empty trace, but the scenario's agent makes no @op calls (as an
+    # adapter-captured run would): fail loudly with guidance, not a false green.
+    record_trace(cli_sample_agent.agent, {"task": "find cats"}, tmp_path / "trace.jsonl")
+    (tmp_path / "noop_agent.py").write_text("def run(**kw):\n    return 'ran live'\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delitem(sys.modules, "noop_agent", raising=False)
+    collection = write_collection(
+        tmp_path,
+        [
+            {
+                "name": "adapter-like",
+                "agent": "noop_agent:run",
+                "trace": "trace.jsonl",
+                "mode": "full",
+                "assertions": [{"type": "no_errors"}],
+            }
+        ],
+    )
+    result = run_path(collection)
+    assert not result.passed
+    assert "@op" in (result.scenarios[0].config_error or "")
+
+
 def test_live_and_freeze_overlap_is_config_error(tmp_path: Path) -> None:
     record_trace(cli_sample_agent.agent, {"task": "find cats"}, tmp_path / "trace.jsonl")
     collection = write_collection(

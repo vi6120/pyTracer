@@ -66,6 +66,12 @@ class ScenarioSpec(BaseModel):
     # replay really touches no live services), off in ``partial`` / ``live``.
     strict: bool | None = None
     sandbox: bool | None = None
+    # Selective freeze: `live` names ops to run live (freezing the rest of the run),
+    # `freeze` names ops to serve from the recording (running the rest per mode).
+    # Ops are matched by identifier (tool name, else op/agent name). Use `live` to
+    # freeze a whole run except the one step under test.
+    live: list[str] = Field(default_factory=list)
+    freeze: list[str] = Field(default_factory=list)
     assertions: list[AssertionSpec] = Field(default_factory=list)
 
 

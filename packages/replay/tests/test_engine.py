@@ -199,3 +199,48 @@ def test_frozen_ops_serves_named_op_from_recording_in_live_mode() -> None:
     assert tool_calls["n"] == 1  # search frozen (served from the recording, no new call)
     assert model_calls["n"] == 2  # model ran live
     assert res.return_value == "answer-2"
+
+
+def test_recorded_failure_replays_as_the_same_failure() -> None:
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="boom")
+    def boom(x: int) -> int:
+        raise ValueError("kaboom")
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> int:
+        return boom(1)
+
+    rec = _record(agent)  # LIVE: boom raises, captured as an ERROR span
+    assert rec.status is SpanStatus.ERROR  # type: ignore[attr-defined]
+    assert rec.error_type == "ValueError"  # type: ignore[attr-defined]
+    mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+
+    # Full replay must re-raise the recorded failure, not serve it as a success.
+    res = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert res.status is SpanStatus.ERROR
+    assert res.error_type == "ValueError"
+
+
+def test_recorded_failure_is_catchable_by_its_builtin_type() -> None:
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="boom")
+    def boom(x: int) -> str:
+        raise KeyError("missing")
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        try:
+            return str(boom(1))
+        except KeyError:
+            return "handled"
+
+    rec = _record(agent)  # boom raises KeyError; the agent catches it -> "handled"
+    assert rec.return_value == "handled"  # type: ignore[attr-defined]
+    mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+
+    # The recorded KeyError is re-raised as a real KeyError, so the agent's
+    # `except KeyError` path replays identically (not str(None) == "None"), and the
+    # replay matches the recording.
+    res = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert res.return_value == "handled"
+    assert res.status is rec.status  # type: ignore[attr-defined]
+    assert res.error_type == rec.error_type  # type: ignore[attr-defined]

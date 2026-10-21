@@ -20,3 +20,11 @@ app.invoke(inputs, config={"callbacks": [handler]})   # spans captured for this 
 `on_chat_model_start` / `on_llm_start` become LLM spans, `on_tool_start` become
 tool spans, and LangGraph nodes become agent spans, all linked into one trace by
 the run tree.
+
+## Replay
+
+This adapter **captures** runs. Replaying a captured run currently requires `@op`
+instrumentation, because the replay engine intercepts `@op` calls; replay through
+the adapter itself is on the roadmap. Attempting to replay an adapter-only trace
+is flagged (the run has recordings but hits no `@op` seam) rather than silently
+running live. See the main README for the replay workflow.

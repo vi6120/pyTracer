@@ -100,3 +100,44 @@ def test_reproduce_parses_results_and_injects_trace(tmp_path: Path) -> None:
     assert result.results is not None
     assert result.results["scenarios"][0]["passed"] is True
     assert injected["present"] == "[]"
+
+
+def test_reproduce_invokes_python_m_and_does_not_silence_install() -> None:
+    captured: dict[str, str] = {}
+
+    class Source:
+        def checkout(self, ref: str, dest: Path) -> None:
+            dest.mkdir(parents=True, exist_ok=True)
+
+    class Executor:
+        def run(
+            self, workdir: Path, command: str, *, artifacts: list[str] | None = None
+        ) -> ExecResult:
+            captured["cmd"] = command
+            return ExecResult(0, "", "", artifacts={"pytracer-out.json": '{"scenarios":[]}'})
+
+    runner = CrossBranchRunner(Source(), Executor())
+    runner.reproduce("main", "tests/collection.yaml")
+    assert "python -m pytracer_cli run" in captured["cmd"]
+    assert ">/dev/null" not in captured["cmd"]  # install errors stay visible
+
+
+def test_reproduce_injects_env_file(tmp_path: Path) -> None:
+    env = tmp_path / "prod.env"
+    env.write_text("API_KEY=xyz\n", encoding="utf-8")
+    seen: dict[str, str] = {}
+
+    class Source:
+        def checkout(self, ref: str, dest: Path) -> None:
+            dest.mkdir(parents=True, exist_ok=True)
+
+    class Executor:
+        def run(
+            self, workdir: Path, command: str, *, artifacts: list[str] | None = None
+        ) -> ExecResult:
+            seen["env"] = (workdir / ".env").read_text(encoding="utf-8")
+            return ExecResult(0, "", "", artifacts={"pytracer-out.json": '{"scenarios":[]}'})
+
+    runner = CrossBranchRunner(Source(), Executor())
+    runner.reproduce("main", "tests/collection.yaml", env_file=env)
+    assert seen["env"] == "API_KEY=xyz\n"  # the run's settings reached the clean checkout

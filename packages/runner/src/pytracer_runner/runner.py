@@ -75,17 +75,30 @@ class CrossBranchRunner:
         *,
         frozen_trace: str | Path | None = None,
         trace_dest: str | None = None,
-        install: str = "pip install -e . >/dev/null 2>&1",
+        env_file: str | Path | None = None,
+        env_dest: str = ".env",
+        install: str = "pip install -e . -q",
     ) -> ReproduceResult:
         """Run a collection at ``ref`` with the frozen trace injected.
 
         The command installs the ref's own dependencies (in its clean workspace),
-        then runs ``pytracer run`` emitting JSON results, which are parsed back.
+        then runs the collection emitting JSON results, which are parsed back.
+        ``env_file`` carries the run's settings (e.g. a ``.env``) into the clean
+        checkout so both refs reach the bug instead of failing on configuration.
+        Install output is not silenced, so a failure (such as a missing CLI) is
+        visible in ``stderr`` rather than hidden.
         """
         inject: dict[str, Path] = {}
         if frozen_trace is not None and trace_dest is not None:
             inject[trace_dest] = Path(frozen_trace)
-        command = f"{install} && pytracer run {collection_path} --json {_RESULT_ARTIFACT}"
+        if env_file is not None:
+            inject[env_dest] = Path(env_file)
+        # `python -m` works whenever pytracer-cli is importable, even if the
+        # project does not put the `pytracer` script on PATH.
+        command = (
+            f"{install} && python -m pytracer_cli run {collection_path} "
+            f"--json {_RESULT_ARTIFACT}"
+        )
         result = self.run_ref(ref, command, artifacts=[_RESULT_ARTIFACT], inject=inject)
         parsed = (
             json.loads(result.artifacts[_RESULT_ARTIFACT])

@@ -90,6 +90,7 @@ class MockSet:
         input: Any,
         *,
         occurrence: int = 0,
+        positional_occurrence: int | None = None,
         fuzzy: bool = False,
         positional: bool = False,
         threshold: float = DEFAULT_FUZZY_THRESHOLD,
@@ -98,19 +99,29 @@ class MockSet:
 
         ``match`` is ``"exact"``, ``"positional"``, ``"fuzzy"``, or ``"miss"``.
         Exact match first: the recording at ``occurrence`` for this
-        (identifier, input), clamped to the last recording when the sequence is
-        shorter. With ``positional`` on, fall back to this identifier's Nth
-        recording by call order regardless of input (for a live model that words a
-        tool's input differently each run). With ``fuzzy`` on, fall back to the
-        nearest recording for this identifier by input similarity if it clears
+        (identifier, input). When the call count runs past the recorded sequence
+        the result is a ``miss``, not the last recording again: an over-run is a
+        real divergence (the agent called the op more often than it did when
+        captured), and silently reusing a stale response would hide it. With
+        ``positional`` on, fall back to this identifier's Nth recording by call
+        order regardless of input (for a live model that words a tool's input
+        differently each run), where N is ``positional_occurrence`` (the per
+        identifier call index) when given, else ``occurrence``; a positional
+        over-run is likewise a miss. With ``fuzzy`` on, fall back to the nearest
+        recording for this identifier by input similarity if it clears
         ``threshold``. A non-exact match is reported so the caller can mark it.
         """
         seq = self._sequences.get((identifier, input_hash(input)))
-        if seq:
-            return True, seq[min(occurrence, len(seq) - 1)], "exact"
+        if seq is not None:
+            if occurrence < len(seq):
+                return True, seq[occurrence], "exact"
+            return False, None, "miss"
         candidates = self._by_identifier.get(identifier)
         if positional and candidates:
-            return True, candidates[min(occurrence, len(candidates) - 1)][1], "positional"
+            idx = occurrence if positional_occurrence is None else positional_occurrence
+            if idx < len(candidates):
+                return True, candidates[idx][1], "positional"
+            return False, None, "miss"
         if fuzzy and candidates:
             found, output = self._best_candidate(input, candidates, threshold)
             if found:

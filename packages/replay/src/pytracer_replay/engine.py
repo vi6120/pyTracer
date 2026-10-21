@@ -80,6 +80,10 @@ class ReplayResult:
     error_message: str | None = None
     # External (unmocked) tool calls that ran live during this replay.
     side_effects: SideEffectLog = field(default_factory=SideEffectLog)
+    # True when there were recordings to inject but the agent hit no @op seam, so
+    # nothing could be replayed (e.g. a run captured via an adapter, which records
+    # only; replay needs @op instrumentation). The run therefore executed live.
+    uninstrumented: bool = False
 
     @property
     def failed(self) -> bool:
@@ -136,10 +140,14 @@ class ReplayEngine:
         # Numbers each (identifier, input) call so concurrent/repeat calls resolve
         # to their recording in order; thread-safe for concurrent tool execution.
         ledger = ConcurrencyLedger()
+        # Flags whether any @op was seen, to detect replaying a run that has
+        # recordings but never hits the @op seam (adapter-captured, record-only).
+        seen_op = {"any": False}
 
         def interceptor(
             kind: SpanKind, name: str, tool_name: str | None, inp: object
         ) -> Intercept | None:
+            seen_op["any"] = True
             identifier = _identifier(kind, name, tool_name)
             # Per-op selective freeze overrides the mode's kind-based default.
             if identifier in self.frozen_ops:
@@ -227,4 +235,5 @@ class ReplayEngine:
             error_type=error_type,
             error_message=error_message,
             side_effects=side_effects,
+            uninstrumented=(len(mocks) > 0 and not seen_op["any"]),
         )

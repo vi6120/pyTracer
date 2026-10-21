@@ -86,9 +86,11 @@
     </ul>
 
     <h2>How pyTracer compares</h2>
-    <p class="disclaimer">Based on each vendor's public documentation as of October 2026 (re-verified 2026-10-19).
-    "Not documented" means we did not find the capability in the docs we checked, not that it
-    is impossible - check the latest docs before relying on any single row.</p>
+    <p class="disclaimer">Based on each vendor's public documentation as of October 2026; the replay
+    rows re-verified 2026-10-21. "Not documented" means we did not find the capability in the docs
+    we checked, not that it is impossible - check the latest docs before relying on any single row.
+    These are the tracing and eval platforms teams already run; the newer class of dedicated
+    record-and-replay tools is covered in the landscape below.</p>
     <table class="cmp">
       <thead>
         <tr>
@@ -177,7 +179,8 @@
       </div>
       <div class="land-item land-us">
         <h3>Deterministic replay, where pyTracer sits</h3>
-        <p>We re-run the exact captured run with the model and tool responses frozen, reproduce it across branches, and return a verdict. The closest-sounding features elsewhere (Phoenix "Span Replay", Laminar "session replay") re-invoke a call live or play a session back visually; neither freezes tool responses for a deterministic regression.</p>
+        <p>We re-run the exact captured run with the model and tool responses frozen, reproduce it across branches, and return a fixed / still-failing / diverged verdict. Tracing tools' closest-sounding features (Phoenix "Span Replay", Laminar "session replay") re-invoke a call live or play a session back visually - not a deterministic regression.</p>
+        <p>A newer class of dedicated record-and-replay tools, and research on cut-point replay, do freeze responses - deterministic replay itself is becoming established. Our edge is the parts that are still hard: the <b>cross-branch verdict</b> (not just pass/fail), <b>input-aware matching</b> that survives a re-worded call, <b>streaming and concurrent-call</b> fidelity, <b>pinned clock / timestamps / UUID / RNG</b>, <b>multi-agent route assertions</b>, and a productized workflow - CLI, four adapters, a PR trigger, and a pytest plugin. <a href="/#moat">See the open problems we solve</a>.</p>
       </div>
     </div>
 

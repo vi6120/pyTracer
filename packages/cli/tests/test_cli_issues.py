@@ -76,6 +76,37 @@ def test_sync_dry_run_calls_no_api(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert "would sync" in res.stdout and "fp1" in res.stdout
 
 
+def test_unfingerprinted_failure_marker_matches_search_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An assertion-only failure has no fingerprint; the body must embed the same
+    # marker the search uses (name:<scenario>), or a new issue opens every run (C1).
+    from pytracer_cli.github import fingerprint_marker
+
+    un_fp = {
+        "name": "flaky",
+        "passed": False,
+        "status": "ok",
+        "error_type": None,
+        "fingerprint": None,
+        "assertions": [{"name": "contains", "passed": False, "detail": "x not found"}],
+    }
+    results = _results(tmp_path, [un_fp])
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(main, "GitHubClient", lambda *a, **k: object())
+
+    def fake_sync(client: Any, *, fingerprint: str, title: str, body: str, labels: Any) -> SyncResult:
+        captured["fingerprint"] = fingerprint
+        captured["body"] = body
+        return SyncResult("created", 1, "https://github.example/1")
+
+    monkeypatch.setattr(main, "sync_issue", fake_sync)
+    res = runner.invoke(app, ["issues", "sync", str(results), "--repo", "o/n", "--token", "t"])
+    assert res.exit_code == 0
+    assert captured["fingerprint"] == "name:flaky"
+    assert fingerprint_marker("name:flaky") in captured["body"]
+
+
 def test_sync_requires_repo_and_token(tmp_path: Path) -> None:
     results = _results(tmp_path, [_FAILED])
     res = runner.invoke(app, ["issues", "sync", str(results)])

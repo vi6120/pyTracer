@@ -108,6 +108,17 @@ def issue_title(name: str) -> str:
     return f"Agent test failure: {name}"
 
 
+def dedup_key(name: str, fingerprint: str | None) -> str:
+    """The stable key used to BOTH embed the dedup marker and find the issue.
+
+    A failure fingerprint dedups by failure; when there is none (an assertion-only
+    failure has no fingerprint), fall back to the scenario name so recurrences
+    update one issue and distinct scenarios still get distinct issues. The marker
+    and the search must use this same key, or a new issue opens every run.
+    """
+    return fingerprint or f"name:{name}"
+
+
 def _render_issue(
     *,
     name: str,
@@ -137,7 +148,8 @@ def _render_issue(
     if fingerprint:
         lines.append(f"- **Fingerprint:** `{fingerprint}`")
     lines.append("")
-    lines.append(FINGERPRINT_MARKER.format(fp=fingerprint or "none"))
+    # Marker must match the search key (see dedup_key), or dedup fails.
+    lines.append(FINGERPRINT_MARKER.format(fp=dedup_key(name, fingerprint)))
     return "\n".join(lines) + "\n"
 
 

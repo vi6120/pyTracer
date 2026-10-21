@@ -22,7 +22,7 @@ from .assertions import (
 )
 from .classify import Outcome, classify
 from .diff import diff_results, diff_traces
-from .engine import MissingMockError, ReplayEngine, ReplayMode, ReplayResult
+from .engine import MissingMockError, ReplayedError, ReplayEngine, ReplayMode, ReplayResult
 from .fidelity import (
     CallKey,
     Chunk,
@@ -38,7 +38,7 @@ from .fidelity import (
 )
 from .fingerprint import failure_fingerprint, fingerprint
 from .hashing import canonical_json, input_hash
-from .mocks import MockSet
+from .mocks import MockSet, RecordedError
 from .sandbox import BlockedNetworkError, NetworkSandbox
 
 __all__ = [
@@ -58,7 +58,9 @@ __all__ = [
     "NondeterminismControls",
     "Outcome",
     "Predicate",
+    "RecordedError",
     "RecordedStream",
+    "ReplayedError",
     "ReplayEngine",
     "ReplayMode",
     "ReplayResult",

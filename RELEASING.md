@@ -57,13 +57,13 @@ Pending publishers let the first upload create the project, so you configure all
      --extra-index-url https://pypi.org/simple/ pytracer-sdk
    ```
 
-4. **Release to PyPI:** create a GitHub Release with a tag like `v0.1.1`. The
+4. **Release to PyPI:** create a GitHub Release with a tag like `v0.1.2`. The
    `publish.yml` workflow builds all packages and publishes them to PyPI.
 
 5. **Confirm:**
    ```bash
-   pip install pytracer-sdk==0.1.1
-   pip install pytracer-all==0.1.1
+   pip install pytracer-sdk==0.1.2
+   pip install pytracer-all==0.1.2
    ```
 
 ## Manual fallback

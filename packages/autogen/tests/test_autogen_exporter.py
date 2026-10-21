@@ -60,13 +60,39 @@ def test_error_status_is_mapped() -> None:
     assert span.error_type == "ValueError"
 
 
-def test_span_without_genai_attrs_is_unknown() -> None:
+def test_runtime_messaging_span_without_genai_attrs_is_skipped() -> None:
+    # AutoGen's internal messaging spans carry no GenAI attributes; they are noise
+    # and must not be recorded (A5: 44 "unknown" id-named spans per run).
     ot, sink, tracer = _setup()
     with ot.start_as_current_span("some.internal.op"):  # type: ignore[attr-defined]
         pass
     tracer.flush()
-    (span,) = sink.spans
-    assert span.kind is K.UNKNOWN
+    assert sink.spans == []
+
+
+def test_model_span_recognized_from_request_model_attr() -> None:
+    # A model call that arrives with only gen_ai.request.model (no operation name)
+    # is still classified as an LLM span, not dropped as unknown.
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("ChatCompletion") as span:  # type: ignore[attr-defined]
+        span.set_attribute("gen_ai.request.model", "gpt-5-mini")
+    tracer.flush()
+    (llm,) = [s for s in sink.spans if s.kind is K.LLM]
+    assert llm.attributes["gen_ai.request.model"] == "gpt-5-mini"
+
+
+def test_model_output_read_from_span_events() -> None:
+    # Newer GenAI instrumentation records prompt/response as span events, not
+    # attributes; the exporter must still capture them (A5: empty outputs).
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("chat gpt-4o") as span:  # type: ignore[attr-defined]
+        span.set_attribute("gen_ai.operation.name", "chat")
+        span.add_event("gen_ai.user.message", {"content": "how many words?"})
+        span.add_event("gen_ai.choice", {"content": "34876"})
+    tracer.flush()
+    (llm,) = [s for s in sink.spans if s.kind is K.LLM]
+    assert "how many words?" in str(llm.input)
+    assert "34876" in str(llm.output)
 
 
 def test_attributes_are_redacted() -> None:

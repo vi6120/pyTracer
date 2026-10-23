@@ -13,6 +13,7 @@ import json
 import shutil
 import tempfile
 from collections.abc import Mapping
+from importlib import metadata as importlib_metadata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,15 @@ from .executor import ExecResult, Executor
 from .source import SourceProvider
 
 _RESULT_ARTIFACT = "pytracer-out.json"
+
+
+def _cli_install_step() -> str:
+    """Pip step that provisions pytracer-cli, pinned to the running version if known."""
+    try:
+        version = importlib_metadata.version("pytracer-cli")
+    except importlib_metadata.PackageNotFoundError:
+        return "pip install -q pytracer-cli"
+    return f"pip install -q 'pytracer-cli=={version}'"
 
 
 @dataclass
@@ -78,6 +88,7 @@ class CrossBranchRunner:
         env_file: str | Path | None = None,
         env_dest: str = ".env",
         install: str = "pip install -e . -q",
+        provision_cli: bool = True,
     ) -> ReproduceResult:
         """Run a collection at ``ref`` with the frozen trace injected.
 
@@ -85,8 +96,10 @@ class CrossBranchRunner:
         then runs the collection emitting JSON results, which are parsed back.
         ``env_file`` carries the run's settings (e.g. a ``.env``) into the clean
         checkout so both refs reach the bug instead of failing on configuration.
-        Install output is not silenced, so a failure (such as a missing CLI) is
-        visible in ``stderr`` rather than hidden.
+        ``provision_cli`` (default) also installs ``pytracer-cli`` into the ref's
+        environment - pinned to the running version - so ``python -m pytracer_cli``
+        works even when the project under test does not depend on it. Install output
+        is not silenced, so a failure is visible in ``stderr``.
         """
         inject: dict[str, Path] = {}
         if frozen_trace is not None and trace_dest is not None:
@@ -95,10 +108,11 @@ class CrossBranchRunner:
             inject[env_dest] = Path(env_file)
         # `python -m` works whenever pytracer-cli is importable, even if the
         # project does not put the `pytracer` script on PATH.
-        command = (
-            f"{install} && python -m pytracer_cli run {collection_path} "
-            f"--json {_RESULT_ARTIFACT}"
-        )
+        steps = [install]
+        if provision_cli:
+            steps.append(_cli_install_step())
+        steps.append(f"python -m pytracer_cli run {collection_path} --json {_RESULT_ARTIFACT}")
+        command = " && ".join(steps)
         result = self.run_ref(ref, command, artifacts=[_RESULT_ARTIFACT], inject=inject)
         parsed = (
             json.loads(result.artifacts[_RESULT_ARTIFACT])

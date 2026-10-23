@@ -21,6 +21,13 @@ class Outcome(str, Enum):
     FIXED = "fixed"  # candidate no longer fails
     STILL_FAILING = "still_failing"  # candidate fails the same way (same fingerprint)
     DIVERGED = "diverged"  # candidate fails, but differently than the baseline
+    # A model input changed on the candidate (a prompt edit), which a frozen replay
+    # cannot judge: the recording no longer applies, so this is not a real verdict.
+    CANNOT_JUDGE = "cannot_judge"
+    # Neither ref matched its recordings (e.g. the run's env was not supplied, so
+    # every model call drifted): the baseline failure was never reproduced, so there
+    # is nothing to compare.
+    CANNOT_REPRODUCE = "cannot_reproduce"
 
 
 def classify(baseline: ReplayResult, candidate: ReplayResult) -> Outcome:

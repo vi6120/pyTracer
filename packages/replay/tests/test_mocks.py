@@ -111,17 +111,55 @@ def test_positional_over_run_is_a_miss() -> None:
     ) == (False, None, "miss")
 
 
-def test_positional_rejects_a_genuinely_different_input() -> None:
-    # Positional tolerates re-wording, but a totally unrelated input at that
-    # position must be a miss, not the recording there served silently (R12).
+def test_positional_rejects_a_different_id_but_allows_reworded_text() -> None:
+    # Positional tolerates re-wording of the text, but a different non-text value
+    # (a different book id) means a different call: a miss, not the recording there
+    # served silently. Matching compares values, not the JSON skeleton (R12/V4).
     mocks = MockSet()
-    mocks.add("lookup", {"book_id": 215, "field": "word_count"}, "34876")
-    mocks.add("lookup", {"book_id": 84, "field": "author"}, "Mary Shelley")
-    # A re-worded but related input (same shape, different value) still matches.
+    mocks.add("lookup", {"book_id": 215, "query": "why did buck adapt to life in the wild"}, "ans")
+    mocks.add("lookup", {"book_id": 84, "query": "who wrote this"}, "Mary Shelley")
+    # Same id, re-worded question: still matches.
     assert mocks.lookup(
-        "lookup", {"book_id": 999, "field": "word_count"}, positional_occurrence=0, positional=True
-    ) == (True, "34876", "positional")
-    # A genuinely different call does not get served position 0's recording.
+        "lookup",
+        {"book_id": 215, "query": "what made buck adjust to living in the wild"},
+        positional_occurrence=0,
+        positional=True,
+    ) == (True, "ans", "positional")
+    # A different book id is a different question: a miss, not position 0 served.
+    assert mocks.lookup(
+        "lookup",
+        {"book_id": 105, "query": "why did buck adapt to life in the wild"},
+        positional_occurrence=0,
+        positional=True,
+    ) == (False, None, "miss")
+    # A genuinely different call (different shape) is also a miss.
     assert mocks.lookup(
         "lookup", {"weather": "sunny", "city": "Paris"}, positional_occurrence=0, positional=True
+    ) == (False, None, "miss")
+
+
+def test_positional_matches_reworded_question_but_not_a_different_book() -> None:
+    # The three inputs from the pilot re-test (R12/V4), in the captured input shape
+    # {"args": [[book_ids], "question"], "kwargs": {...}}. Recording: Buck, book 215.
+    mocks = MockSet()
+    mocks.add(
+        "search",
+        {"args": [[215], "why did buck adapt to life in the wild"], "kwargs": {"k": 5}},
+        "buck-results",
+    )
+    # 1. A re-worded Buck question, same book: matches.
+    assert mocks.lookup(
+        "search",
+        {"args": [[215], "what made buck adjust to living in the wild"], "kwargs": {"k": 5}},
+        positional=True,
+    ) == (True, "buck-results", "positional")
+    # 2. The Persuasion question, different book (105 vs 215): a miss.
+    assert mocks.lookup(
+        "search",
+        {"args": [[105], "why did anne elliot break off her engagement"], "kwargs": {"k": 5}},
+        positional=True,
+    ) == (False, None, "miss")
+    # 3. A one-character query in book 1: a miss.
+    assert mocks.lookup(
+        "search", {"args": [[1], "x"], "kwargs": {"k": 5}}, positional=True
     ) == (False, None, "miss")

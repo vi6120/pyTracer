@@ -122,6 +122,30 @@ def test_reproduce_invokes_python_m_and_does_not_silence_install() -> None:
     assert ">/dev/null" not in captured["cmd"]  # install errors stay visible
 
 
+def test_reproduce_provisions_the_cli_by_default() -> None:
+    # The CLI is installed into the ref's env so `python -m pytracer_cli` works even
+    # when the project under test does not depend on it (X1); opt out with the flag.
+    captured: dict[str, str] = {}
+
+    class Source:
+        def checkout(self, ref: str, dest: Path) -> None:
+            dest.mkdir(parents=True, exist_ok=True)
+
+    class Executor:
+        def run(
+            self, workdir: Path, command: str, *, artifacts: list[str] | None = None
+        ) -> ExecResult:
+            captured["cmd"] = command
+            return ExecResult(0, "", "", artifacts={"pytracer-out.json": '{"scenarios":[]}'})
+
+    runner = CrossBranchRunner(Source(), Executor())
+    runner.reproduce("main", "tests/collection.yaml")
+    assert "pytracer-cli" in captured["cmd"]  # hyphen = the pip provisioning step
+
+    runner.reproduce("main", "tests/collection.yaml", provision_cli=False)
+    assert "pytracer-cli" not in captured["cmd"]  # only `python -m pytracer_cli` remains
+
+
 def test_reproduce_injects_env_file(tmp_path: Path) -> None:
     env = tmp_path / "prod.env"
     env.write_text("API_KEY=xyz\n", encoding="utf-8")

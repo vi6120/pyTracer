@@ -310,3 +310,33 @@ def test_engine_replays_a_recorded_stream_as_chunks() -> None:
     result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
     assert result.return_value == "hello"
     assert seen == ["h", "e", "l", "l", "o"]  # delivered chunk by chunk, in order
+
+
+def test_order_sensitive_keys_only_flags_differing_recordings() -> None:
+    mocks = MockSet()
+    mocks.add("fetch", 1, "A")
+    mocks.add("fetch", 1, "B")   # same input, differing -> order-sensitive
+    mocks.add("same", 2, "x")
+    mocks.add("same", 2, "x")    # same input, identical -> not order-sensitive
+    keys = mocks.order_sensitive_keys()
+    assert ("fetch", input_hash(1)) in keys
+    assert ("same", input_hash(2)) not in keys
+
+
+def test_ledger_reports_keys_touched_by_multiple_threads() -> None:
+    ledger = ConcurrencyLedger()
+    barrier = threading.Barrier(2)
+
+    def hit() -> None:
+        barrier.wait()
+        ledger.key_for("fetch", 1)
+
+    threads = [threading.Thread(target=hit) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    ledger.key_for("solo", 9)  # main thread only
+    multi = ledger.multi_thread_keys()
+    assert ("fetch", input_hash(1)) in multi
+    assert ("solo", input_hash(9)) not in multi

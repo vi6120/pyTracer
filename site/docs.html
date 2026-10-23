@@ -242,6 +242,7 @@ scenarios:
     writes: [charge_card]      # tools that mutate; a live call is logged as a write
     freeze_time: 1737331200    # pin time / datetime to this unix instant
     seed: 7                    # seed random and uuid4 for a reproducible run
+    evaluate_changed_prompts: false  # run a frozen model op live if its input changed
     assertions:
       - { type: no_errors }
       - { type: contains, needle: "refunded" }
@@ -253,7 +254,11 @@ scenarios:
     versa. <code>freeze_time</code> / <code>seed</code> pin the clock, timestamps, UUIDs
     and RNG so a live or partial replay reproduces beyond the mocked responses.
     <code>route</code>, <code>tools_used</code> and <code>step_count</code> assert the
-    path the agents took, not just the final output.</p>
+    path the agents took, not just the final output. <code>evaluate_changed_prompts</code>
+    (also <code>pytracer run --evaluate-changed-prompts</code>) handles a fix that edits a
+    prompt: when a frozen model op's input no longer matches the recording, it runs that
+    op live so the edit is actually evaluated, rather than reporting a diverge a frozen
+    replay cannot judge. It makes a live model call, so it drops the sandbox.</p>
     <p>A few behaviors live on the commands rather than the file:</p>
     <ul>
       <li><code>pytracer run ... --strict/--no-strict</code>, <code>--sandbox/--no-sandbox</code>

@@ -105,6 +105,8 @@ class SpanRecorder:
         if error is not None:
             span.status = SpanStatus.ERROR
             span.error_type = type(error).__name__ if isinstance(error, BaseException) else "Error"
+            if isinstance(error, BaseException):
+                span.error_module = type(error).__module__
             span.error_message = redactor.redact_text(str(error))
         elif span.status is SpanStatus.UNSET:
             span.status = SpanStatus.OK

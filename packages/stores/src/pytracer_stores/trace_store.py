@@ -58,6 +58,7 @@ _COLUMNS: tuple[str, ...] = (
     "cost_usd",
     "status",
     "error_type",
+    "error_module",
     "error_message",
     "attributes",
     "service_name",
@@ -90,6 +91,7 @@ def _spans_ddl(database: str, table: str) -> str:
         cost_usd        Nullable(Float64),
         status          LowCardinality(String),
         error_type      Nullable(String),
+        error_module    Nullable(String),
         error_message   Nullable(String),
         attributes      String DEFAULT '{{}}',
         service_name    LowCardinality(String),
@@ -137,8 +139,18 @@ class TraceStore:
 
     # --- schema -------------------------------------------------------------
     def migrate(self) -> None:
-        """Create the spans table if it does not already exist (idempotent)."""
+        """Create the spans table and add any column a prior version predates.
+
+        Both steps are idempotent. ``error_module`` was added after the first
+        release, so a table created before it is backfilled here instead of
+        needing a rebuild, keeping a gateway-captured failure's real exception
+        type on replay.
+        """
         self._client.command(_spans_ddl(self._config.database, self._table))
+        self._client.command(
+            f"ALTER TABLE {self.qualified_table} "
+            f"ADD COLUMN IF NOT EXISTS error_module Nullable(String) AFTER error_type"
+        )
 
     # --- writes -------------------------------------------------------------
     def insert(self, spans: Span | Iterable[Span], *, project: str = "default") -> int:
@@ -179,6 +191,7 @@ class TraceStore:
             span.cost_usd,
             span.status.value,
             span.error_type,
+            span.error_module,
             span.error_message,
             canonical_json(span.attributes),
             r.service_name,
@@ -313,6 +326,7 @@ class TraceStore:
             cost_usd=float(d["cost_usd"]) if d["cost_usd"] is not None else None,
             status=SpanStatus(d["status"]),
             error_type=d["error_type"],
+            error_module=d["error_module"],
             error_message=d["error_message"],
             attributes=json.loads(d["attributes"]) if d["attributes"] else {},
             resource=Resource(

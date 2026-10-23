@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import threading
 import time
+from pathlib import Path
 
 from pytracer_sdk import new_span_id, new_trace_id
 from pytracer_sdk.schema import Resource, Span, SpanKind, SpanStatus
@@ -16,6 +17,10 @@ from pytracer_stores.config import ClickHouseConfig
 NOW_NS = time.time_ns()
 DAY_NS = 86_400 * 1_000_000_000
 RES = Resource(service_name="test", branch="main", commit="abc123")
+
+
+class _PilotDbError(Exception):
+    """A non-builtin exception, module-level so replay can import it back."""
 
 
 def _span(
@@ -48,6 +53,79 @@ def test_insert_and_get_trace_roundtrip(trace_store: TraceStore) -> None:
     got = trace_store.get_trace(tid, project="p1")
     assert [s.name for s in got] == ["s0", "s1", "s2", "s3", "s4"]  # ordered by time
     assert all(s.resource.branch == "main" and s.resource.commit == "abc123" for s in got)
+
+
+def test_error_module_round_trips_for_replay(trace_store: TraceStore) -> None:
+    # A gateway-captured failure must keep the exception's defining module, so
+    # replay rebuilds the real type (e.g. neo4j.exceptions.ServiceUnavailable)
+    # instead of a generic ReplayedError (V2/R4).
+    tid = new_trace_id()
+    span = Span(
+        trace_id=tid,
+        span_id=new_span_id(),
+        name="db.query",
+        kind=SpanKind.TOOL,
+        status=SpanStatus.ERROR,
+        start_time_ns=NOW_NS,
+        end_time_ns=NOW_NS + 1_000_000,
+        error_type="ServiceUnavailable",
+        error_module="neo4j.exceptions",
+        error_message="unable to retrieve routing information",
+        resource=RES,
+    )
+    assert trace_store.insert(span, project="p1") == 1
+    (got,) = trace_store.get_trace(tid, project="p1")
+    assert got.error_module == "neo4j.exceptions"
+    assert got.error_type == "ServiceUnavailable"
+    assert got.error_message == "unable to retrieve routing information"
+
+
+def test_captured_failure_survives_gateway_store_record_and_replays_as_real_type(
+    trace_store: TraceStore, tmp_path: Path
+) -> None:
+    # The whole path V2/R4 asks for: capture -> gateway -> store -> record -> replay.
+    # A tool fails with a non-builtin exception; after a round trip through the
+    # gateway and ClickHouse and a record to JSONL, replay must reconstruct the
+    # real type so the agent's own `except` fires, not a generic ReplayedError.
+    import pytracer_sdk as pytracer
+    from pytracer_cli.traces import record_trace
+    from pytracer_gateway.ingest import validate_spans
+    from pytracer_replay import MockSet, ReplayEngine, ReplayMode
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="query")
+    def query(x: int) -> str:
+        raise _PilotDbError("db down")
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        try:
+            return str(query(1))
+        except _PilotDbError:
+            return "handled"
+
+    rec = ReplayEngine(ReplayMode.LIVE).replay(agent, MockSet())
+    assert rec.return_value == "handled"
+
+    # Capture -> gateway: stamp branch/commit (the store requires them) and ingest.
+    stamped = [s.model_copy(update={"resource": RES}) for s in rec.spans]
+    valid, errors = validate_spans([s.model_dump(mode="json", exclude_none=True) for s in stamped])
+    assert errors == []
+    assert len(valid) == len(stamped)
+
+    # Store -> read back from ClickHouse.
+    tid = valid[0].trace_id
+    trace_store.insert(valid, project="r4")
+    read_back = trace_store.get_trace(tid, project="r4")
+    assert any(s.error_module == f"{__name__}" and s.error_type == "_PilotDbError" for s in read_back)
+
+    # Record -> JSONL, then reload exactly as replay reads a recording.
+    record_trace(read_back, agent="m:agent", entry={}, out_dir=tmp_path)
+    jsonl = next((tmp_path / "traces").glob("*.jsonl"))
+    reloaded = [Span.from_json(line) for line in jsonl.read_text().splitlines() if line.strip()]
+
+    # Replay: the real exception is re-raised, so the agent's except path fires.
+    replayed = ReplayEngine(ReplayMode.FULL).replay(agent, MockSet.from_trace(reloaded))
+    assert replayed.return_value == "handled"
 
 
 def test_branch_and_commit_are_required(trace_store: TraceStore) -> None:

@@ -46,17 +46,54 @@ class RecordedError:
 DEFAULT_FUZZY_THRESHOLD = 0.6
 
 # Positional matching serves the Nth recording for the Nth call, tolerating a model
-# that re-words a tool's input each run. It still requires the input to be at least
-# loosely related to the recording at that position (this floor), so a genuinely
-# different call is reported as a miss rather than served the wrong recording. The
-# floor is below the fuzzy threshold on purpose: positional is meant to survive
-# heavier re-wording than fuzzy, but not a different question entirely.
-POSITIONAL_MATCH_FLOOR = 0.4
+# that re-words a tool's input each run. It compares argument values, not the JSON
+# skeleton: non-text values (ids, numbers) must match exactly, and the text values
+# must be at least this similar. So a re-worded question for the same id matches,
+# while a different id, or a genuinely different question, is a miss rather than the
+# wrong recording served silently. Calibrated on real inputs: observed re-wordings
+# score ~0.54-0.77, and a different question at the same shape ~0.39.
+POSITIONAL_MATCH_FLOOR = 0.45
 
 
 def _identifier(kind: SpanKind, name: str, tool_name: str | None) -> str:
     """Stable key for an op: tool name when present, else the span name."""
     return tool_name or name
+
+
+def _leaf_values(obj: Any, text: list[str], other: list[Any]) -> None:
+    """Collect a payload's leaf values, dropping the JSON skeleton (dict keys and
+    list nesting), so matching compares what was asked, not how it was wrapped."""
+    if isinstance(obj, dict):
+        for key in sorted(obj):
+            _leaf_values(obj[key], text, other)
+    elif isinstance(obj, (list, tuple)):
+        for item in obj:
+            _leaf_values(item, text, other)
+    elif isinstance(obj, str):
+        text.append(obj)
+    else:
+        other.append(obj)
+
+
+def _positional_similarity(input: Any, candidate: Any) -> float:
+    """Similarity of a call's input to a positional recording, over values only.
+
+    Non-text values (ids, numbers, booleans) must match exactly: a different one
+    means a different call (e.g. a different book id), so the score is 0. Text
+    values may drift between runs, scored by sequence similarity, so a re-worded
+    question for the same ids still matches.
+    """
+    in_text: list[str] = []
+    in_other: list[Any] = []
+    cand_text: list[str] = []
+    cand_other: list[Any] = []
+    _leaf_values(input, in_text, in_other)
+    _leaf_values(candidate, cand_text, cand_other)
+    if in_other != cand_other:
+        return 0.0
+    if not in_text and not cand_text:
+        return 1.0
+    return SequenceMatcher(None, "\n".join(in_text), "\n".join(cand_text)).ratio()
 
 
 @dataclass
@@ -136,10 +173,7 @@ class MockSet:
             idx = occurrence if positional_occurrence is None else positional_occurrence
             if idx < len(candidates):
                 candidate_input, candidate_output = candidates[idx]
-                ratio = SequenceMatcher(
-                    None, canonical_json(input), canonical_json(candidate_input)
-                ).ratio()
-                if ratio >= POSITIONAL_MATCH_FLOOR:
+                if _positional_similarity(input, candidate_input) >= POSITIONAL_MATCH_FLOOR:
                     return True, candidate_output, "positional"
             # No recording at this position, or the one there is for a very
             # different input: a miss, not the wrong recording served silently.

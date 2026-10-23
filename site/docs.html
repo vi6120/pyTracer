@@ -173,6 +173,22 @@ pytracer.configure(
     service_name="researcher",
     redactor=Redactor(rules=[*DEFAULT_RULES, RedactionRule("ssn", r"\b\d{3}-\d{2}-\d{4}\b")]),
 )</code></pre>
+    <p><strong>Rejected spans are surfaced, never silently dropped.</strong> A gateway can
+    return <code>202</code> and still reject individual spans (for example one missing
+    <code>branch</code>/<code>commit</code>). The transport keeps a running
+    <code>rejected_spans</code> count, logs a warning with the gateway's reason, and calls
+    an optional <code>on_rejection(count, errors)</code> callback, so CI can fail instead of
+    losing spans quietly. Capture stays fire-and-forget: a raising callback is logged, not
+    propagated.</p>
+    <pre><code>def alert(count, errors):
+    raise SystemExit(f"gateway rejected {count} span(s): {errors[0]}")
+
+transport = pytracer.HTTPTransport(
+    "https://gateway.pytracer.com", api_key="YOUR_PROJECT_KEY", on_rejection=alert,
+)
+pytracer.configure(transport, service_name="researcher", branch="main", commit="abc123")
+# ... run the agent ...
+print(transport.rejected_spans)  # 0 when every span was accepted</code></pre>
 
     <h2 id="capture">3. Turn a failure into a test</h2>
     <p>When a run fails, browse recent captured runs and scaffold a test from one,

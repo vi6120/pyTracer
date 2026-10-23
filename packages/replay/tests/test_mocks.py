@@ -109,3 +109,19 @@ def test_positional_over_run_is_a_miss() -> None:
     assert mocks.lookup(
         "search", {"q": "three"}, positional_occurrence=2, positional=True
     ) == (False, None, "miss")
+
+
+def test_positional_rejects_a_genuinely_different_input() -> None:
+    # Positional tolerates re-wording, but a totally unrelated input at that
+    # position must be a miss, not the recording there served silently (R12).
+    mocks = MockSet()
+    mocks.add("lookup", {"book_id": 215, "field": "word_count"}, "34876")
+    mocks.add("lookup", {"book_id": 84, "field": "author"}, "Mary Shelley")
+    # A re-worded but related input (same shape, different value) still matches.
+    assert mocks.lookup(
+        "lookup", {"book_id": 999, "field": "word_count"}, positional_occurrence=0, positional=True
+    ) == (True, "34876", "positional")
+    # A genuinely different call does not get served position 0's recording.
+    assert mocks.lookup(
+        "lookup", {"weather": "sunny", "city": "Paris"}, positional_occurrence=0, positional=True
+    ) == (False, None, "miss")

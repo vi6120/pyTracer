@@ -42,6 +42,14 @@ class RecordedError:
 # different response.
 DEFAULT_FUZZY_THRESHOLD = 0.6
 
+# Positional matching serves the Nth recording for the Nth call, tolerating a model
+# that re-words a tool's input each run. It still requires the input to be at least
+# loosely related to the recording at that position (this floor), so a genuinely
+# different call is reported as a miss rather than served the wrong recording. The
+# floor is below the fuzzy threshold on purpose: positional is meant to survive
+# heavier re-wording than fuzzy, but not a different question entirely.
+POSITIONAL_MATCH_FLOOR = 0.4
+
 
 def _identifier(kind: SpanKind, name: str, tool_name: str | None) -> str:
     """Stable key for an op: tool name when present, else the span name."""
@@ -104,11 +112,13 @@ class MockSet:
         real divergence (the agent called the op more often than it did when
         captured), and silently reusing a stale response would hide it. With
         ``positional`` on, fall back to this identifier's Nth recording by call
-        order regardless of input (for a live model that words a tool's input
-        differently each run), where N is ``positional_occurrence`` (the per
-        identifier call index) when given, else ``occurrence``; a positional
-        over-run is likewise a miss. With ``fuzzy`` on, fall back to the nearest
-        recording for this identifier by input similarity if it clears
+        order (for a live model that words a tool's input differently each run),
+        where N is ``positional_occurrence`` (the per identifier call index) when
+        given, else ``occurrence``. The positional recording is served only when
+        the input is at least loosely related to it (``POSITIONAL_MATCH_FLOOR``);
+        a genuinely different input, or an over-run past the recordings, is a miss,
+        not the wrong recording served silently. With ``fuzzy`` on, fall back to
+        the nearest recording for this identifier by input similarity if it clears
         ``threshold``. A non-exact match is reported so the caller can mark it.
         """
         seq = self._sequences.get((identifier, input_hash(input)))
@@ -120,7 +130,14 @@ class MockSet:
         if positional and candidates:
             idx = occurrence if positional_occurrence is None else positional_occurrence
             if idx < len(candidates):
-                return True, candidates[idx][1], "positional"
+                candidate_input, candidate_output = candidates[idx]
+                ratio = SequenceMatcher(
+                    None, canonical_json(input), canonical_json(candidate_input)
+                ).ratio()
+                if ratio >= POSITIONAL_MATCH_FLOOR:
+                    return True, candidate_output, "positional"
+            # No recording at this position, or the one there is for a very
+            # different input: a miss, not the wrong recording served silently.
             return False, None, "miss"
         if fuzzy and candidates:
             found, output = self._best_candidate(input, candidates, threshold)

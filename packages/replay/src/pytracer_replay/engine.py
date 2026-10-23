@@ -80,6 +80,10 @@ class ReplayResult:
     error_message: str | None = None
     # External (unmocked) tool calls that ran live during this replay.
     side_effects: SideEffectLog = field(default_factory=SideEffectLog)
+    # Identifiers of frozen model (LLM) ops whose input no longer matched any
+    # recording: the model input changed (e.g. a prompt edit), so the recorded
+    # response does not apply and the step cannot be judged by a frozen replay.
+    model_input_changes: list[str] = field(default_factory=list)
     # True when there were recordings to inject but the agent hit no @op seam, so
     # nothing could be replayed (e.g. a run captured via an adapter, which records
     # only; replay needs @op instrumentation). The run therefore executed live.
@@ -88,6 +92,11 @@ class ReplayResult:
     @property
     def failed(self) -> bool:
         return self.status is SpanStatus.ERROR
+
+    @property
+    def changed_models(self) -> list[str]:
+        """Distinct model ops whose input changed, in first-seen order."""
+        return list(dict.fromkeys(self.model_input_changes))
 
 
 class ReplayEngine:
@@ -104,6 +113,7 @@ class ReplayEngine:
         live_ops: Iterable[str] = (),
         frozen_ops: Iterable[str] = (),
         writes: Iterable[str] = (),
+        evaluate_changed_prompts: bool = False,
         controls: NondeterminismControls | None = None,
     ) -> None:
         self.mode = mode
@@ -127,6 +137,10 @@ class ReplayEngine:
         # live tool call is logged as an unclassified EXTERNAL_CALL, never as a
         # write, so read-only tools are not falsely flagged.
         self.writes = frozenset(writes)
+        # When on, a frozen model op whose input changed (a prompt edit) runs live
+        # instead of failing the scenario, so the change is actually evaluated. It
+        # makes a real model call, so the caller also drops the network sandbox.
+        self.evaluate_changed_prompts = evaluate_changed_prompts
         # When set, the clock is frozen and the RNG seeded around agent execution,
         # so a live (or partially live) replay is reproducible beyond the mocks.
         self.controls = controls
@@ -143,6 +157,8 @@ class ReplayEngine:
         sink = InMemoryTransport()
         side_effects = SideEffectLog()
         se_lock = threading.Lock()
+        # Frozen model ops whose input no longer matched a recording (a prompt edit).
+        model_input_changes: list[str] = []
         # Numbers each (identifier, input) call so concurrent/repeat calls resolve
         # to their recording in order; thread-safe for concurrent tool execution.
         ledger = ConcurrencyLedger()
@@ -185,6 +201,14 @@ class ReplayEngine:
                     if isinstance(output, RecordedStream):
                         return Intercept(list(output.replay()), stream=True, match=match)
                     return Intercept(output, match=match)
+                # Miss on a frozen op. A frozen model op that misses means the model
+                # input changed (a prompt edit): the recorded response does not
+                # apply, so note it - and, if asked, run it live to evaluate it.
+                if kind is SpanKind.LLM:
+                    with se_lock:
+                        model_input_changes.append(identifier)
+                    if self.evaluate_changed_prompts:
+                        return None  # fall through to a live model call
                 if self.strict:
                     raise MissingMockError(
                         f"no recording for {kind.value} {tool_name or name!r} "
@@ -251,5 +275,6 @@ class ReplayEngine:
             error_type=error_type,
             error_message=error_message,
             side_effects=side_effects,
+            model_input_changes=model_input_changes,
             uninstrumented=(len(mocks) > 0 and not seen_op["any"]),
         )

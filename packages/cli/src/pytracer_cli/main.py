@@ -329,8 +329,18 @@ def reproduce(
     env_dest: str = typer.Option(
         ".env", help="Repo-relative path to place --env-file at in each checkout."
     ),
+    evaluate_changed_prompts: bool = typer.Option(
+        False,
+        "--evaluate-changed-prompts",
+        help="Run a model op whose input changed live instead of failing the frozen "
+        "replay, so a fix that also edits a prompt can be evaluated.",
+    ),
 ) -> None:
-    """Reproduce a captured failure on another branch (fixed / still failing / diverged)."""
+    """Reproduce a captured failure on another branch.
+
+    Reports fixed / still failing / diverged, or an honest non-verdict: cannot
+    judge (a model input changed) or cannot reproduce (recordings did not match).
+    """
     try:
         from pytracer_runner import (
             CrossBranchRunner,
@@ -361,6 +371,7 @@ def reproduce(
             trace_dest=trace_dest,
             env_file=str(env_file) if env_file else None,
             env_dest=env_dest,
+            evaluate_changed_prompts=evaluate_changed_prompts,
         )
     except (RuntimeError, OSError) as exc:
         typer.echo(f"error: {exc}", err=True)
@@ -382,6 +393,7 @@ def reproduce(
                 render_comment(
                     candidate_ref=branch, baseline_ref=baseline, verdicts=verdicts,
                     changed_models=changed_models,
+                    evaluate_changed_prompts=evaluate_changed_prompts,
                 )
             )
         else:
@@ -403,13 +415,23 @@ def reproduce(
                     baseline_ref=baseline,
                     verdicts=verdicts,
                     changed_models=changed_models,
+                    evaluate_changed_prompts=evaluate_changed_prompts,
                 )
             except (urllib.error.HTTPError, urllib.error.URLError) as exc:
                 typer.echo(f"error: could not post the PR comment: {exc}", err=True)
                 raise typer.Exit(code=1) from exc
             typer.echo(f"posted verdict to {url}")
 
-    raise typer.Exit(code=0 if all_fixed(verdicts) else 1)
+    # Exit code is honest about the verdict: 0 a clean fix, 1 a real regression
+    # (still failing / diverged), 2 only inconclusive (cannot judge / reproduce).
+    values = {getattr(v, "value", v) for v in verdicts.values()}
+    if all_fixed(verdicts):
+        code = 0
+    elif values & {"still_failing", "diverged"}:
+        code = 1
+    else:
+        code = 2
+    raise typer.Exit(code=code)
 
 
 @keys_app.command("create")

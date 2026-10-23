@@ -8,13 +8,17 @@ the ingestion gateway over HTTP.
 from __future__ import annotations
 
 import json
+import logging
 import ssl
 import threading
 import urllib.error
 import urllib.request
-from typing import Protocol, runtime_checkable
+from collections.abc import Callable
+from typing import Any, Protocol, runtime_checkable
 
 from .schema import Span
+
+_log = logging.getLogger("pytracer_sdk")
 
 
 @runtime_checkable
@@ -76,12 +80,18 @@ class HTTPTransport:
         timeout: float = 5.0,
         verify: bool = True,
         ca_bundle: str | None = None,
+        on_rejection: Callable[[int, list[Any]], None] | None = None,
     ) -> None:
         # Accept either the base URL or the full endpoint.
         self.url = url if url.rstrip("/").endswith("/v1/spans") else url.rstrip("/") + "/v1/spans"
         self.api_key = api_key
         self.timeout = timeout
         self._ssl_context = _build_ssl_context(verify, ca_bundle)
+        # The gateway can accept a batch (202) yet still reject individual spans
+        # (e.g. missing branch/commit). Those are surfaced, not counted as stored:
+        # a running total, a logged warning, and an optional callback.
+        self.rejected_spans = 0
+        self._on_rejection = on_rejection
 
     def send(self, spans: list[Span]) -> None:
         if not spans:
@@ -100,8 +110,36 @@ class HTTPTransport:
             ) as resp:
                 if resp.status >= 300:
                     raise TransportError(f"gateway returned HTTP {resp.status}")
+                self._note_rejections(resp.read())
         except urllib.error.URLError as exc:
             raise TransportError(f"failed to reach gateway at {self.url}: {exc}") from exc
+
+    def _note_rejections(self, body: bytes) -> None:
+        """Surface any spans the gateway reported as rejected in a 2xx response.
+
+        A ``202`` can still carry ``{"rejected": N, "errors": [...]}``. Capture is
+        fire-and-forget, so this never raises: it logs a warning, adds to
+        ``rejected_spans``, and calls ``on_rejection`` if one was given.
+        """
+        try:
+            data = json.loads(body) if body else {}
+        except ValueError:
+            return
+        rejected = data.get("rejected") if isinstance(data, dict) else None
+        if not isinstance(rejected, int) or rejected <= 0:
+            return
+        self.rejected_spans += rejected
+        errors = data.get("errors") or []
+        _log.warning(
+            "pytracer gateway rejected %d span(s) (not stored)%s",
+            rejected,
+            f": {errors[0]}" if errors else "",
+        )
+        if self._on_rejection is not None:
+            try:
+                self._on_rejection(rejected, errors)
+            except Exception:  # noqa: BLE001 - a bad callback must not kill the flush worker
+                _log.exception("pytracer on_rejection callback raised")
 
 
 def _build_ssl_context(verify: bool, ca_bundle: str | None) -> ssl.SSLContext:

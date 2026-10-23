@@ -85,7 +85,11 @@ class Span(BaseModel):
     derived from the start/end timestamps and should not be set by hand.
     """
 
-    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+    # Unknown fields are ignored, not rejected: a gateway built on one release
+    # must still accept spans from a newer SDK that added a field, instead of
+    # failing the whole span. Rejecting them is what broke capture across a
+    # version skew (new SDK sending a field the deployed gateway predated).
+    model_config = ConfigDict(extra="ignore", validate_assignment=True)
 
     # --- identity -----------------------------------------------------------
     trace_id: str

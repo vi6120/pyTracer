@@ -84,6 +84,11 @@ class ReplayResult:
     # recording: the model input changed (e.g. a prompt edit), so the recorded
     # response does not apply and the step cannot be judged by a frozen replay.
     model_input_changes: list[str] = field(default_factory=list)
+    # Identifiers of ops called concurrently from different OS threads with the same
+    # input but differing recorded responses: arrival order cannot settle which
+    # recording each call should get, so the match may be swapped (surfaced, not
+    # silent). Sequential and single-threaded-async concurrency is not affected.
+    concurrency_ambiguities: list[str] = field(default_factory=list)
     # True when there were recordings to inject but the agent hit no @op seam, so
     # nothing could be replayed (e.g. a run captured via an adapter, which records
     # only; replay needs @op instrumentation). The run therefore executed live.
@@ -267,6 +272,12 @@ class ReplayEngine:
                 first_error = next(s for s in spans if s.status is SpanStatus.ERROR)
                 error_type = first_error.error_type
                 error_message = first_error.error_message
+        # A same-input key reached from more than one OS thread, whose recordings
+        # differ, could have had its matches swapped by arrival order; surface it.
+        order_sensitive = mocks.order_sensitive_keys()
+        concurrency_ambiguities = sorted(
+            {ident for (ident, ih) in ledger.multi_thread_keys() if (ident, ih) in order_sensitive}
+        )
         return ReplayResult(
             return_value=return_value,
             status=status,
@@ -276,5 +287,6 @@ class ReplayEngine:
             error_message=error_message,
             side_effects=side_effects,
             model_input_changes=model_input_changes,
+            concurrency_ambiguities=concurrency_ambiguities,
             uninstrumented=(len(mocks) > 0 and not seen_op["any"]),
         )

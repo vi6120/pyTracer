@@ -75,6 +75,27 @@ def test_no_errors() -> None:
     assert not NoErrors().check(_err()).passed
 
 
+def test_no_errors_scope_root_passes_a_handled_child_error_but_any_flags_it() -> None:
+    # The run is OK (agent recovered), but a child span carries a handled error (V3).
+    tool = Span(
+        trace_id=_TRACE,
+        span_id=new_span_id(),
+        name="query",
+        kind=SpanKind.TOOL,
+        status=SpanStatus.ERROR,
+        error_type="ServiceUnavailable",
+        start_time_ns=1,
+        end_time_ns=2,
+    )
+    result = ReplayResult(
+        return_value="fallback", status=SpanStatus.OK, mode=ReplayMode.FULL, spans=[tool]
+    )
+    assert NoErrors().check(result).passed  # scope="root" (default)
+    flagged = NoErrors(scope="any").check(result)
+    assert not flagged.passed
+    assert flagged.detail == "ServiceUnavailable"
+
+
 def test_predicate_and_raising_predicate() -> None:
     assert Predicate(lambda r: r.return_value == "y").check(_ok("y")).passed
 

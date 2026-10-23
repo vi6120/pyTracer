@@ -82,6 +82,9 @@ class ScenarioSpec(BaseModel):
     # ``random`` and ``uuid.uuid4``, so the run reproduces beyond the recording.
     freeze_time: float | None = None
     seed: int | None = None
+    # Run a frozen model op live when its input changed (a prompt edit) instead of
+    # failing, so the change is actually evaluated. Makes a live model call.
+    evaluate_changed_prompts: bool = False
     assertions: list[AssertionSpec] = Field(default_factory=list)
 
 

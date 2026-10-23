@@ -166,12 +166,17 @@ def run_scenario(
     *,
     strict: bool | None = None,
     sandbox: bool | None = None,
+    evaluate_changed_prompts: bool | None = None,
 ) -> ScenarioResult:
     """Replay one scenario and evaluate its assertions.
 
     ``strict`` / ``sandbox`` are optional run-wide overrides (from the CLI). When
     unset they fall back to the scenario's own fields, then to the mode default:
     both on in ``full`` mode, off in ``partial`` / ``live``.
+
+    ``evaluate_changed_prompts`` runs a frozen model op live when its input changed
+    (a prompt edit) instead of failing, so the change is actually evaluated; it
+    makes a live model call, so it also drops the network sandbox by default.
     """
     try:
         overlap = set(scenario.live) & set(scenario.freeze)
@@ -186,9 +191,13 @@ def run_scenario(
 
     full = scenario.mode is ReplayMode.FULL
     strict_eff = _effective(strict, scenario.strict, full)
+    evaluate_eff = _effective(
+        evaluate_changed_prompts, scenario.evaluate_changed_prompts, False
+    )
     # Ops listed in `live` are meant to run for real, so don't sandbox the network by
-    # default when any op is live, or the step under test would be blocked.
-    sandbox_default = full and not scenario.live
+    # default when any op is live, or when a changed prompt is evaluated live, or the
+    # step under test would be blocked.
+    sandbox_default = full and not scenario.live and not evaluate_eff
     sandbox_eff = _effective(sandbox, scenario.sandbox, sandbox_default)
     # Pin the clock / RNG only when the scenario asks, so most runs keep the real ones.
     controls = (
@@ -205,6 +214,7 @@ def run_scenario(
         live_ops=scenario.live,
         frozen_ops=scenario.freeze,
         writes=scenario.writes,
+        evaluate_changed_prompts=evaluate_eff,
         controls=controls,
     ).replay(lambda: agent(**scenario.entry), mocks)
     if result.uninstrumented:
@@ -238,17 +248,29 @@ def run_collection(
     *,
     strict: bool | None = None,
     sandbox: bool | None = None,
+    evaluate_changed_prompts: bool | None = None,
 ) -> CollectionResult:
     """Run every scenario in a collection and aggregate the results."""
     results = [
-        run_scenario(s, base_dir, strict=strict, sandbox=sandbox) for s in collection.scenarios
+        run_scenario(
+            s, base_dir, strict=strict, sandbox=sandbox,
+            evaluate_changed_prompts=evaluate_changed_prompts,
+        )
+        for s in collection.scenarios
     ]
     return CollectionResult(collection.name, results)
 
 
 def run_path(
-    path: str | Path, *, strict: bool | None = None, sandbox: bool | None = None
+    path: str | Path,
+    *,
+    strict: bool | None = None,
+    sandbox: bool | None = None,
+    evaluate_changed_prompts: bool | None = None,
 ) -> CollectionResult:
     """Load a collection file and run it end to end."""
     collection, base_dir = load_collection(path)
-    return run_collection(collection, base_dir, strict=strict, sandbox=sandbox)
+    return run_collection(
+        collection, base_dir, strict=strict, sandbox=sandbox,
+        evaluate_changed_prompts=evaluate_changed_prompts,
+    )

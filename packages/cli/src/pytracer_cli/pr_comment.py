@@ -34,8 +34,20 @@ def _value(outcome: Any) -> str:
     return getattr(outcome, "value", str(outcome))
 
 
-def render_comment(*, candidate_ref: str, baseline_ref: str, verdicts: dict[str, Any]) -> str:
-    """Render the verdicts as a Markdown PR comment carrying the dedup marker."""
+def render_comment(
+    *,
+    candidate_ref: str,
+    baseline_ref: str,
+    verdicts: dict[str, Any],
+    changed_models: dict[str, list[str]] | None = None,
+) -> str:
+    """Render the verdicts as a Markdown PR comment carrying the dedup marker.
+
+    ``changed_models`` maps a scenario to the model ops whose input changed on the
+    candidate (a prompt edit). Those cannot be judged by a frozen replay, so the
+    comment says so instead of claiming everything was held frozen.
+    """
+    changed = {n: m for n, m in (changed_models or {}).items() if m}
     counts: dict[str, int] = {}
     rows: list[str] = []
     for name in sorted(verdicts):
@@ -58,19 +70,39 @@ def render_comment(*, candidate_ref: str, baseline_ref: str, verdicts: dict[str,
         parts.append(f"{fixed} fixed")
         summary = "**" + ", ".join(parts) + " on this branch.**"
 
+    if changed:
+        intro = (
+            f"Reproduced the captured failure on `{candidate_ref}` (baseline "
+            f"`{baseline_ref}`) with the recorded responses frozen - except where a model "
+            f"input changed (a prompt edit), which a frozen replay cannot judge (see below)."
+        )
+    else:
+        intro = (
+            f"Reproduced the captured failure on `{candidate_ref}` (baseline "
+            f"`{baseline_ref}`), with the recorded model and tool responses held frozen "
+            f"so only the code differs."
+        )
+
     lines = [
         COMMENT_MARKER,
         "### pyTracer: try on this branch",
         "",
-        f"Reproduced the captured failure on `{candidate_ref}` (baseline "
-        f"`{baseline_ref}`), with the recorded model and tool responses held frozen "
-        f"so only the code differs.",
+        intro,
         "",
         "| Scenario | Outcome |",
         "| --- | --- |",
         *rows,
         "",
         summary,
+    ]
+    if changed:
+        lines += [
+            "",
+            "**Model inputs changed (a prompt edit) - re-run in partial mode, or with "
+            "`--evaluate-changed-prompts`, to evaluate them:**",
+            *(f"- `{name}`: {', '.join(changed[name])}" for name in sorted(changed)),
+        ]
+    lines += [
         "",
         "<sub>fixed = now passes &middot; still failing = same failure &middot; "
         "diverged = a new, different failure</sub>",
@@ -85,10 +117,12 @@ def post_reproduction_comment(
     candidate_ref: str,
     baseline_ref: str,
     verdicts: dict[str, Any],
+    changed_models: dict[str, list[str]] | None = None,
 ) -> str:
     """Upsert the verdict comment on PR ``number``; return the comment URL."""
     body = render_comment(
-        candidate_ref=candidate_ref, baseline_ref=baseline_ref, verdicts=verdicts
+        candidate_ref=candidate_ref, baseline_ref=baseline_ref, verdicts=verdicts,
+        changed_models=changed_models,
     )
     existing = client.find_comment_by_marker(number, COMMENT_MARKER)
     if existing is None:

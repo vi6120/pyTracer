@@ -87,6 +87,7 @@ class CrossBranchRunner:
         trace_dest: str | None = None,
         env_file: str | Path | None = None,
         env_dest: str = ".env",
+        evaluate_changed_prompts: bool = False,
         install: str = "pip install -e . -q",
         provision_cli: bool = True,
     ) -> ReproduceResult:
@@ -111,7 +112,10 @@ class CrossBranchRunner:
         steps = [install]
         if provision_cli:
             steps.append(_cli_install_step())
-        steps.append(f"python -m pytracer_cli run {collection_path} --json {_RESULT_ARTIFACT}")
+        run_cmd = f"python -m pytracer_cli run {collection_path} --json {_RESULT_ARTIFACT}"
+        if evaluate_changed_prompts:
+            run_cmd += " --evaluate-changed-prompts"
+        steps.append(run_cmd)
         command = " && ".join(steps)
         result = self.run_ref(ref, command, artifacts=[_RESULT_ARTIFACT], inject=inject)
         parsed = (
@@ -145,6 +149,17 @@ def classify_reproduction(
             verdicts[name] = Outcome.FIXED
             continue
         base = base_by_name.get(name)
+        # Neither ref matched its recordings (e.g. the run's env was not supplied,
+        # so every model call drifted): the baseline failure was never reproduced,
+        # so there is nothing to compare (X2/X5).
+        if base is not None and _unmatched(scenario) and _unmatched(base):
+            verdicts[name] = Outcome.CANNOT_REPRODUCE
+            continue
+        # A model input changed on the candidate (a prompt edit): a frozen replay
+        # cannot judge the fix, so this is not a diverge (X4).
+        if scenario.get("changed_models"):
+            verdicts[name] = Outcome.CANNOT_JUDGE
+            continue
         fingerprint = scenario.get("fingerprint")
         if (
             base is not None
@@ -156,3 +171,12 @@ def classify_reproduction(
         else:
             verdicts[name] = Outcome.DIVERGED
     return verdicts
+
+
+def _unmatched(scenario: Mapping[str, Any]) -> bool:
+    """True when a run did not match its recordings, so it never reproduced the
+    intended failure: a model input drifted (``changed_models``) or a frozen call
+    had no recording (``MissingMockError``)."""
+    if scenario.get("passed"):
+        return False
+    return bool(scenario.get("changed_models")) or scenario.get("error_type") == "MissingMockError"

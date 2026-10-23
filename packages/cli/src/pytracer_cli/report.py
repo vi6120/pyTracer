@@ -36,6 +36,7 @@ def to_json(result: CollectionResult) -> dict[str, Any]:
                 "passed": s.passed,
                 "status": s.replay.status.value,
                 "error_type": s.replay.error_type,
+                "error_message": s.replay.error_message,
                 "config_error": s.config_error,
                 "fingerprint": s.fingerprint,
                 "side_effects": s.replay.side_effects.summary(),
@@ -252,7 +253,9 @@ def _reason_from_json(s: dict[str, Any]) -> str:
     if s.get("config_error"):
         return f"config error: {s['config_error']}"
     if s.get("status") == "error":
-        return f"replay error: {s.get('error_type')}"
+        head = s.get("error_type") or "error"
+        detail = s.get("error_message")
+        return f"replay error: {head}: {detail}" if detail else f"replay error: {head}"
     failed = [a for a in s.get("assertions", []) if not a["passed"]]
     if failed:
         return "; ".join(

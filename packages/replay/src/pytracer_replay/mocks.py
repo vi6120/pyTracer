@@ -91,8 +91,6 @@ def _positional_similarity(input: Any, candidate: Any) -> float:
     _leaf_values(candidate, cand_text, cand_other)
     if in_other != cand_other:
         return 0.0
-    if not in_text and not cand_text:
-        return 1.0
     return SequenceMatcher(None, "\n".join(in_text), "\n".join(cand_text)).ratio()
 
 

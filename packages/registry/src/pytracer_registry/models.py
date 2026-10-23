@@ -33,6 +33,10 @@ class CollectionArtifact(BaseModel):
     framework: str | None = None  # e.g. "langgraph", "crewai" - for discovery
     use_case: str | None = None  # e.g. "rag", "tool-use" - for discovery
     scenarios: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # The recorded traces the scenarios replay against, keyed by their relative path
+    # (e.g. "traces/run.jsonl") -> JSONL content. Embedding them makes a shared
+    # collection self-contained and runnable, not just a set of scenario definitions.
+    traces: dict[str, str] = Field(default_factory=dict)
 
 
 class Version(BaseModel):

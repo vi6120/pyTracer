@@ -115,6 +115,10 @@ class ReplayResult:
     # nothing could be replayed (e.g. a run captured via an adapter, which records
     # only; replay needs @op instrumentation). The run therefore executed live.
     uninstrumented: bool = False
+    # True when this replay ran with --evaluate-changed-prompts, so a changed model
+    # op was run live rather than failing frozen. Lets a report explain the verdict
+    # without advising an option that is already on.
+    evaluated_changed_prompts: bool = False
 
     @property
     def failed(self) -> bool:
@@ -312,4 +316,5 @@ class ReplayEngine:
             model_input_changes=model_input_changes,
             concurrency_ambiguities=concurrency_ambiguities,
             uninstrumented=(len(mocks) > 0 and not seen_op["any"]),
+            evaluated_changed_prompts=self.evaluate_changed_prompts,
         )

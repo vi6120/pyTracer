@@ -19,6 +19,7 @@ from . import __version__
 from .github import GitHubClient, sync_issue
 from .keys import format_key_table, format_new_key
 from .report import (
+    changed_model_note,
     dedup_key,
     dumps_json,
     issue_body_from_json,
@@ -78,6 +79,9 @@ def _emit(result: CollectionResult) -> None:
             reason = scenario_reason(s)
             if reason:
                 typer.echo(typer.style(f"      {reason}", fg=typer.colors.RED))
+        note = changed_model_note(s)
+        if note:
+            typer.echo(typer.style(f"      {note}", fg=typer.colors.CYAN))
         # Non-exact mock matches (fuzzy / positional) are substitutions, not an
         # exact replay; name them so a drifted input is visible, not just on a span.
         substitutions: dict[str, int] = {}
@@ -125,10 +129,19 @@ def run(
         "--sandbox/--no-sandbox",
         help="Block outbound network during replay (default: on in full mode).",
     ),
+    evaluate_changed_prompts: bool | None = typer.Option(
+        None,
+        "--evaluate-changed-prompts/--no-evaluate-changed-prompts",
+        help="Run a frozen model op live when its input changed (a prompt edit), so "
+        "the change is evaluated instead of reported as diverged. Makes a live call.",
+    ),
 ) -> None:
     """Run a collection; exit non-zero if any scenario fails."""
     try:
-        result = run_path(collection, strict=strict, sandbox=sandbox)
+        result = run_path(
+            collection, strict=strict, sandbox=sandbox,
+            evaluate_changed_prompts=evaluate_changed_prompts,
+        )
     except (FileNotFoundError, ValueError) as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
@@ -287,7 +300,7 @@ def reproduce(
     executor = DockerExecutor() if isolation == "docker" else LocalExecutor()
     runner = CrossBranchRunner(GitSourceProvider(repo), executor)
     try:
-        _, _, verdicts = run_reproduction(
+        _, candidate, verdicts = run_reproduction(
             runner,
             collection_path=str(collection),
             baseline_ref=baseline,
@@ -307,9 +320,18 @@ def reproduce(
     if pr is not None:
         from .pr_comment import post_reproduction_comment, render_comment
 
+        # Model ops whose input changed on the candidate (a prompt edit): those
+        # verdicts are not a frozen-replay result, and the comment says so.
+        changed_models = {
+            s["name"]: s.get("changed_models", [])
+            for s in (getattr(candidate, "results", None) or {}).get("scenarios", [])
+        }
         if pr_dry_run:
             typer.echo(
-                render_comment(candidate_ref=branch, baseline_ref=baseline, verdicts=verdicts)
+                render_comment(
+                    candidate_ref=branch, baseline_ref=baseline, verdicts=verdicts,
+                    changed_models=changed_models,
+                )
             )
         else:
             slug = pr_repo or os.getenv("GITHUB_REPOSITORY")
@@ -329,6 +351,7 @@ def reproduce(
                     candidate_ref=branch,
                     baseline_ref=baseline,
                     verdicts=verdicts,
+                    changed_models=changed_models,
                 )
             except (urllib.error.HTTPError, urllib.error.URLError) as exc:
                 typer.echo(f"error: could not post the PR comment: {exc}", err=True)

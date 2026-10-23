@@ -5,6 +5,10 @@ from __future__ import annotations
 import random
 import threading
 import time
+# Bound by name at module import, to prove controlled() pins these too (R10).
+from datetime import datetime as _dt_byname
+from time import time as _time_byname
+from uuid import uuid4 as _uuid4_byname
 
 import pytest
 import pytracer_sdk as pytracer
@@ -117,6 +121,31 @@ def test_controlled_freezes_time_ns_and_datetime() -> None:
         assert datetime.datetime.now(datetime.timezone.utc).timestamp() == 1000.0
     assert time.time_ns is original_ns
     assert time.time_ns() != 1_000_000_000_000  # real clock restored
+
+
+def test_controlled_pins_symbols_imported_by_name() -> None:
+    # `from datetime import datetime` / `from time import time` / `from uuid import
+    # uuid4` are pinned too, not only the module-qualified forms (R10).
+    with controlled(NondeterminismControls(freeze_time=1000.0, seed=3)):
+        assert _time_byname() == 1000.0
+        assert _dt_byname.now().timestamp() == pytest.approx(1000.0, abs=1.0)  # noqa: DTZ005
+        first = str(_uuid4_byname())
+    with controlled(NondeterminismControls(freeze_time=1000.0, seed=3)):
+        assert str(_uuid4_byname()) == first  # same seed -> same id
+    assert _time_byname() != 1000.0  # real clock restored
+
+
+def test_controlled_datetime_swap_preserves_isinstance() -> None:
+    # datetime is swapped process-wide; a real datetime must still pass isinstance,
+    # or replacing the class would break type checks in the agent being replayed.
+    import datetime as dt
+
+    real = dt.datetime(2020, 1, 1)  # noqa: DTZ001
+    with controlled(NondeterminismControls(freeze_time=1000.0)):
+        assert isinstance(real, dt.datetime)
+        assert isinstance(dt.datetime.now(), dt.datetime)  # noqa: DTZ005
+        assert issubclass(dt.datetime, dt.datetime)
+    assert isinstance(real, dt.datetime)  # still fine after restore
 
 
 def test_controlled_makes_uuid4_deterministic_and_restores() -> None:

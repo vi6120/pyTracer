@@ -50,6 +50,15 @@ def test_format_summary_table() -> None:
     assert "abc123def456"[:12] in table
 
 
+def test_format_summary_table_shows_the_full_branch() -> None:
+    # A long branch name must appear in full, not cut to 12 chars (G4).
+    rows = [
+        _Summary(trace_id="t" * 32, root_agent="a", branch="feature/fix-the-refund-bug",
+                 span_count=1, failed=False, started_at=datetime(2026, 1, 2, tzinfo=timezone.utc)),
+    ]
+    assert "feature/fix-the-refund-bug" in format_summary_table(rows)
+
+
 def test_format_trace_tree_nesting() -> None:
     tid = new_trace_id()
     root = _span(tid, "agent", SpanKind.AGENT, span_id=new_span_id(), t=0)

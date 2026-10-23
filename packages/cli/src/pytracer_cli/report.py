@@ -52,15 +52,27 @@ def to_json(result: CollectionResult) -> dict[str, Any]:
     }
 
 
-def _scenario_reason(s: ScenarioResult) -> str:
+def scenario_reason(s: ScenarioResult) -> str:
+    """One-line explanation of why a scenario failed (empty if it passed).
+
+    For a replay error the message is included, not just the type, so a strict
+    miss shows which call had no recording (the ``MissingMockError`` text) rather
+    than a bare ``MissingMockError``.
+    """
     if s.config_error:
         return f"config error: {s.config_error}"
     if s.replay.failed:
-        return f"replay error: {s.replay.error_type}"
+        head = s.replay.error_type or "error"
+        detail = s.replay.error_message
+        return f"replay error: {head}: {detail}" if detail else f"replay error: {head}"
     failed = [a for a in s.assertions if not a.passed]
     if failed:
         return "; ".join(f"{a.name} ({a.detail})" if a.detail else a.name for a in failed)
     return ""
+
+
+# Backwards-compatible alias (the name was private before it was surfaced in the CLI).
+_scenario_reason = scenario_reason
 
 
 def to_markdown(result: CollectionResult) -> str:

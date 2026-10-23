@@ -23,6 +23,7 @@ from .report import (
     dumps_json,
     issue_body_from_json,
     issue_title,
+    scenario_reason,
     to_junit,
     to_markdown,
 )
@@ -73,6 +74,10 @@ def _emit(result: CollectionResult) -> None:
     for s in result.scenarios:
         mark = "PASS" if s.passed else "FAIL"
         typer.echo(f"  [{mark}] {s.name}")
+        if not s.passed:
+            reason = scenario_reason(s)
+            if reason:
+                typer.echo(typer.style(f"      {reason}", fg=typer.colors.RED))
         log = s.replay.side_effects
         if len(log):
             kinds = ", ".join(f"{v}×{k}" for k, v in sorted(log.summary().items()))

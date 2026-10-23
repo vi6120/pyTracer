@@ -43,6 +43,15 @@ def test_run_exit_one_on_failure(tmp_path: Path) -> None:
     assert result.exit_code == 1
 
 
+def test_run_prints_the_failure_reason(tmp_path: Path) -> None:
+    # A FAIL line must be followed by why it failed, not just [FAIL] (R3): here the
+    # assertion that did not hold is named in the terminal output.
+    collection = _collection(tmp_path, "not-present")
+    result = runner.invoke(app, ["run", str(collection)])
+    assert "[FAIL] s1" in result.stdout
+    assert "contains" in result.stdout
+
+
 def test_run_writes_artifacts(tmp_path: Path) -> None:
     collection = _collection(tmp_path, "summary")
     json_out = tmp_path / "out.json"

@@ -7,14 +7,19 @@ what the security baseline relies on.
 
 from __future__ import annotations
 
+import json
 import ssl
 import subprocess
 import sys
 import textwrap
+import urllib.request
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from pytracer_sdk import new_span_id, new_trace_id
+from pytracer_sdk.schema import Span, SpanStatus
 from pytracer_sdk.transport import HTTPTransport, _build_ssl_context
 
 
@@ -45,6 +50,53 @@ def test_spans_are_delivered_on_normal_exit_without_flush(tmp_path: Path) -> Non
     subprocess.run([sys.executable, "-c", script, str(out)], check=True, timeout=30)
     delivered = [line for line in out.read_text(encoding="utf-8").splitlines() if line.strip()]
     assert len(delivered) == 1
+
+
+def test_wire_payload_drops_unset_optionals_but_keeps_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # V1: the new SDK must not trip a gateway on an older release by sending a
+    # field it predates. A span with no error ships without error_module at all;
+    # a failed span still carries its real exception module so replay rebuilds it.
+    captured: dict[str, Any] = {}
+
+    class _Resp:
+        status = 202
+
+        def __enter__(self) -> _Resp:
+            return self
+
+        def __exit__(self, *exc: object) -> bool:
+            return False
+
+        def read(self) -> bytes:
+            return b""
+
+    def _fake_urlopen(request: Any, *args: Any, **kwargs: Any) -> _Resp:
+        captured["body"] = json.loads(request.data.decode("utf-8"))
+        return _Resp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    ok = Span(trace_id=new_trace_id(), span_id=new_span_id(), name="ok", start_time_ns=1)
+    HTTPTransport("https://gw.example", "k").send([ok])
+    sent = captured["body"]["spans"][0]
+    assert "error_module" not in sent
+    assert "error_type" not in sent
+
+    failed = Span(
+        trace_id=new_trace_id(),
+        span_id=new_span_id(),
+        name="boom",
+        start_time_ns=1,
+        status=SpanStatus.ERROR,
+        error_type="ServiceUnavailable",
+        error_module="neo4j.exceptions",
+        error_message="db down",
+    )
+    HTTPTransport("https://gw.example", "k").send([failed])
+    sent = captured["body"]["spans"][0]
+    assert sent["error_module"] == "neo4j.exceptions"
 
 
 def test_rejections_in_a_202_are_surfaced(caplog: pytest.LogCaptureFixture) -> None:

@@ -16,3 +16,10 @@ GET  /healthz       liveness
 GET  /readyz        readiness (ingest worker running)
 GET  /v1/stats      ingest counters
 ```
+
+## Compatibility
+
+The gateway ignores span fields it does not recognise instead of rejecting the
+span, so a newer SDK that adds an optional field still ingests against an older
+gateway. When upgrading a release that adds a span field, upgrade the gateway
+before the SDKs that send to it, so the field is understood wherever it lands.

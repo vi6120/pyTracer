@@ -41,6 +41,7 @@
         <li><a href="#ship">2. Ship spans to a gateway</a></li>
         <li><a href="#capture">3. Turn a failure into a test</a></li>
         <li><a href="#run">4. Run a collection</a></li>
+        <li><a href="#options">Scenario options reference</a></li>
         <li><a href="#ci">5. Gate branches in CI</a></li>
         <li><a href="#pytest">Run collections in pytest</a></li>
         <li><a href="#reproduce">6. Reproduce on any branch</a></li>
@@ -224,6 +225,49 @@ scenarios:
     framework adapter records spans but adds no interception point, so there is nothing
     to inject and the scenario runs live and fails loudly until you add <code>@op</code>
     to the functions that call your models and tools.</p>
+
+    <h2 id="options">Scenario options reference</h2>
+    <p>A scenario is data, so every behavior below is a field in the collection YAML:</p>
+    <pre><code>scenarios:
+  - name: refund-policy
+    agent: myapp.agents:run
+    entry: { task: "process the refund" }
+    trace: traces/refund.jsonl
+    mode: full                 # full | partial | live
+    fuzzy: true                # fall back to the nearest recording on input drift
+    strict: true               # fail on an unrecorded call (default: on in full)
+    sandbox: true              # block the network during replay (default: on in full)
+    live:   [send_email]       # run these ops live, freeze the rest of the run
+    freeze: [charge_card]      # serve these from the recording, run the rest per mode
+    writes: [charge_card]      # tools that mutate; a live call is logged as a write
+    freeze_time: 1737331200    # pin time / datetime to this unix instant
+    seed: 7                    # seed random and uuid4 for a reproducible run
+    assertions:
+      - { type: no_errors }
+      - { type: contains, needle: "refunded" }
+      - { type: route, expected: [planner, billing] }   # agents visited, in order
+      - { type: tools_used, expected: [charge_card], exact: false }
+      - { type: step_count, expected: 3, kind: tool }    # count spans of one kind</code></pre>
+    <p><code>live</code> and <code>freeze</code> are the <strong>selective, per-step
+    freeze</strong>: freeze a whole recorded run except the one step under test, or vice
+    versa. <code>freeze_time</code> / <code>seed</code> pin the clock, timestamps, UUIDs
+    and RNG so a live or partial replay reproduces beyond the mocked responses.
+    <code>route</code>, <code>tools_used</code> and <code>step_count</code> assert the
+    path the agents took, not just the final output.</p>
+    <p>A few behaviors live on the commands rather than the file:</p>
+    <ul>
+      <li><code>pytracer run ... --strict/--no-strict</code>, <code>--sandbox/--no-sandbox</code>
+      override those fields for a whole run; <code>--json</code> / <code>--junit</code> /
+      <code>--comment</code> write machine, CI and PR-comment reports.</li>
+      <li><code>pytracer record --from-file trace.jsonl --agent ...</code> scaffolds a
+      collection from a locally captured trace, with no gateway or store.</li>
+      <li><code>pytracer reproduce --branch &lt;ref&gt; --baseline &lt;ref&gt; --env-file .env</code>
+      passes environment variables (API keys, endpoints) the agent needs into the
+      isolated per-branch run, so a real fix is not reported still-failing for want of
+      a key.</li>
+      <li>The gateway re-queues dead-lettered spans via <code>POST /v1/dead-letters/requeue</code>,
+      so a storage blip does not lose accepted spans.</li>
+    </ul>
 
     <h2 id="ci">5. Gate branches in CI</h2>
     <p>Add the GitHub Action (see

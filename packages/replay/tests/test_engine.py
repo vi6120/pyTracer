@@ -300,6 +300,34 @@ def test_recorded_non_builtin_failure_is_catchable_by_its_real_type() -> None:
     assert res.return_value == "handled"  # the real DbUnavailable was re-raised
 
 
+def test_a_handled_tool_error_leaves_the_run_passing() -> None:
+    # V3: the agent catches a tool failure and returns a fallback, so the run's
+    # verdict is OK (the app survived the outage). The child error is still on its
+    # span, left to a scope="any" assertion if a test wants to flag it.
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="db")
+    def db() -> str:
+        raise DbUnavailable("db down")
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        try:
+            return db()
+        except DbUnavailable:
+            return "fallback"
+
+    rec = _record(agent)
+    assert rec.return_value == "fallback"  # type: ignore[attr-defined]
+    assert not rec.failed  # type: ignore[attr-defined]  # the handled error does not fail the run
+    assert any(  # ...but the child error is still recorded, not hidden
+        s.status is SpanStatus.ERROR and s.tool_name == "db"
+        for s in rec.spans  # type: ignore[attr-defined]
+    )
+
+    res = ReplayEngine(ReplayMode.FULL).replay(agent, MockSet.from_trace(rec.spans))  # type: ignore[attr-defined]
+    assert res.return_value == "fallback"
+    assert not res.failed
+
+
 def test_uninstrumented_replay_is_flagged() -> None:
     # Recordings exist, but the agent makes no @op calls (stands in for an
     # adapter-captured run): nothing is injected and the result is flagged.

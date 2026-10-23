@@ -33,8 +33,9 @@ def parse_entry(items: list[str] | None) -> dict[str, Any]:
 def format_summary_table(rows: list[Any]) -> str:
     """Render trace summaries as a fixed-width table."""
     # Print the full 32-char trace id so `traces show` / `record` accept what is
-    # shown here (a truncated id is rejected by those commands).
-    header = f"{'TRACE':<32} {'AGENT':<16} {'SPANS':>5} {'STATUS':<6} {'BRANCH':<12} STARTED"
+    # shown here (a truncated id is rejected by those commands); show the full
+    # branch too (a 12-char cut hid which branch a run came from).
+    header = f"{'TRACE':<32} {'AGENT':<16} {'SPANS':>5} {'STATUS':<6} {'BRANCH':<20} STARTED"
     lines = [header]
     for r in rows:
         status = "FAIL" if r.failed else "ok"
@@ -45,7 +46,7 @@ def format_summary_table(rows: list[Any]) -> str:
         )
         lines.append(
             f"{r.trace_id:<32} {(r.root_agent or '-')[:16]:<16} "
-            f"{r.span_count:>5} {status:<6} {(r.branch or '-')[:12]:<12} {started}"
+            f"{r.span_count:>5} {status:<6} {(r.branch or '-'):<20} {started}"
         )
     return "\n".join(lines)
 

@@ -17,10 +17,33 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import BaseModel, ConfigDict, ValidationError, create_model
+from pydantic_core import PydanticUndefined
 
 from pytracer_sdk import new_span_id, new_trace_id
 from pytracer_sdk.schema import Span, SpanStatus
 from pytracer_sdk.transport import HTTPTransport, _build_ssl_context
+
+
+def _previous_gateway_span_model() -> type[BaseModel]:
+    """A stand-in for the released 0.1.2 gateway's span contract.
+
+    Rebuilt from the current ``Span`` minus ``error_module`` (the field this line
+    added) and with ``extra="forbid"``, which is what the deployed gateway used
+    to reject every span carrying the new field.
+    """
+    fields: dict[str, Any] = {}
+    for name, info in Span.model_fields.items():
+        if name == "error_module":
+            continue
+        if info.default_factory is not None:
+            default: Any = info.default_factory()  # type: ignore[call-arg]
+        elif info.default is not PydanticUndefined:
+            default = info.default
+        else:
+            default = ...
+        fields[name] = (info.annotation, default)
+    return create_model("PreviousGatewaySpan", __config__=ConfigDict(extra="forbid"), **fields)
 
 
 def test_spans_are_delivered_on_normal_exit_without_flush(tmp_path: Path) -> None:
@@ -97,6 +120,35 @@ def test_wire_payload_drops_unset_optionals_but_keeps_errors(
     HTTPTransport("https://gw.example", "k").send([failed])
     sent = captured["body"]["spans"][0]
     assert sent["error_module"] == "neo4j.exceptions"
+
+
+def test_new_sdk_payload_against_a_previous_gateway_release() -> None:
+    # V1 regression (new SDK -> previous gateway release). The 0.1.2 gateway
+    # forbids unknown fields and predates error_module, so:
+    #   - a no-error span, which now omits error_module, is accepted;
+    #   - a failed span still carries error_module and is rejected, which is why
+    #     the gateway must be upgraded before the SDKs that send to it.
+    previous = _previous_gateway_span_model()
+
+    ok = Span(trace_id=new_trace_id(), span_id=new_span_id(), name="ok", start_time_ns=1)
+    ok_wire = ok.model_dump(mode="json", exclude_none=True)
+    assert "error_module" not in ok_wire
+    previous.model_validate(ok_wire)  # accepted: no field the old gateway did not know
+
+    failed = Span(
+        trace_id=new_trace_id(),
+        span_id=new_span_id(),
+        name="boom",
+        start_time_ns=1,
+        status=SpanStatus.ERROR,
+        error_type="ServiceUnavailable",
+        error_module="neo4j.exceptions",
+        error_message="db down",
+    )
+    failed_wire = failed.model_dump(mode="json", exclude_none=True)
+    assert failed_wire["error_module"] == "neo4j.exceptions"
+    with pytest.raises(ValidationError):
+        previous.model_validate(failed_wire)  # upgrade the gateway first
 
 
 def test_rejections_in_a_202_are_surfaced(caplog: pytest.LogCaptureFixture) -> None:

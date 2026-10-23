@@ -90,13 +90,17 @@ def changed_model_note(s: ScenarioResult) -> str:
     if not changed:
         return ""
     names = ", ".join(changed)
-    if s.replay.error_type == "MissingMockError":
+    if not s.replay.evaluated_changed_prompts:
         return (
             f"a model input changed ({names}); the recorded response no longer applies, "
             f"so a frozen replay cannot judge it - re-run in partial mode, or with "
             f"--evaluate-changed-prompts, to evaluate the change"
         )
-    return f"a model input changed ({names}); it was run live to evaluate the change"
+    return (
+        f"a model input changed ({names}); it was run live to evaluate the change. The "
+        f"verdict only holds if nothing after the changed call also changed; a later step "
+        f"not in the recording still cannot be judged"
+    )
 
 
 def to_markdown(result: CollectionResult) -> str:

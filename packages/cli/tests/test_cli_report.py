@@ -48,6 +48,22 @@ def test_changed_model_note_and_json_explain_a_prompt_edit() -> None:
     assert "Model inputs changed" in to_markdown(result)
 
 
+def test_changed_model_note_when_evaluated_live_states_the_limit_not_the_advice() -> None:
+    # X4: with --evaluate-changed-prompts on, the note says it ran live and states the
+    # limitation, and does not advise turning on an option that is already on.
+    r = ReplayResult(
+        return_value=None,
+        status=SpanStatus.ERROR,
+        mode=ReplayMode.FULL,
+        model_input_changes=["call_model"],
+        evaluated_changed_prompts=True,
+    )
+    note = changed_model_note(ScenarioResult("prompt-edit", False, r, []))
+    assert "run live" in note
+    assert "only holds if nothing after" in note
+    assert "re-run" not in note  # no advice to turn on a flag already on
+
+
 def test_markdown_summary() -> None:
     result = CollectionResult("suite", [_ok_scenario(), _failed_scenario()])
     md = to_markdown(result)

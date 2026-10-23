@@ -272,6 +272,11 @@ scenarios:
       a key.</li>
       <li>The gateway re-queues dead-lettered spans via <code>POST /v1/dead-letters/requeue</code>,
       so a storage blip does not lose accepted spans.</li>
+      <li><code>pytracer registry export collection.yaml bundle.json</code> packs a
+      collection <em>and its recorded traces</em> into one self-contained artifact;
+      <code>pytracer registry import bundle.json out/</code> materializes it back into a
+      runnable directory, so a shared collection runs without the traces it points at
+      going missing.</li>
     </ul>
 
     <h2 id="ci">5. Gate branches in CI</h2>

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import datetime as _datetime
 import random
+import sys
 import threading
 import time
 import uuid
@@ -164,46 +165,63 @@ class NondeterminismControls:
 def controlled(controls: NondeterminismControls) -> Iterator[None]:
     """Pin the clock, the calendar, UUIDs and the RNG for the block, then restore.
 
-    With ``freeze_time`` set, freezes the ``time`` module clocks
-    (``time``/``time_ns``/``monotonic``/``monotonic_ns``/``perf_counter``/
-    ``perf_counter_ns``) and ``datetime.datetime.now``/``utcnow`` to that instant.
-    With ``seed`` set, seeds the stdlib ``random`` module and makes ``uuid.uuid4``
-    draw from a seeded stream so ids repeat run to run. Restoration is guaranteed
-    on exit.
+    With ``freeze_time`` set, freezes ``time.time`` / ``time.time_ns`` /
+    ``time.monotonic`` / ``perf_counter`` and ``datetime.datetime.now`` / ``utcnow``
+    to that instant. With ``seed`` set, seeds the stdlib ``random`` module and makes
+    ``uuid.uuid4`` draw from a seeded stream so ids repeat run to run.
 
-    These patch the process-global modules while active, so run them only around a
-    replay. The patch reaches code that looks the symbol up on its module at call
-    time (``time.time()``, ``datetime.datetime.now()``, ``uuid.uuid4()``); code
-    that bound a name at import (``from datetime import datetime``) keeps the real
-    one, and third-party clocks/RNGs (numpy, ``os.urandom``) are out of scope.
+    The wall-clock symbols (``time.time``, ``time.time_ns``, ``datetime.datetime``,
+    ``uuid.uuid4``) are replaced wherever they are bound, so a module that did
+    ``from datetime import datetime`` is pinned too, not only ``datetime.datetime``
+    accessed through the module. ``datetime`` is swapped for a subclass whose
+    ``isinstance`` / ``issubclass`` still answer against the real class, so pinning
+    it process-wide does not break type checks. Restoration is guaranteed on exit.
+
+    Run this only around a replay: it freezes the process clock while active, so
+    code that waits on real time to advance will not. Third-party clocks and RNGs
+    (numpy, ``os.urandom``) are out of scope.
     """
     restore: list[tuple[Any, str, Any]] = []
 
-    def patch(target: Any, name: str, fresh: Any) -> None:
-        if hasattr(target, name):
-            restore.append((target, name, getattr(target, name)))
-            setattr(target, name, fresh)
+    def set_attr(target: Any, name: str, fresh: Any) -> None:
+        restore.append((target, name, getattr(target, name)))
+        setattr(target, name, fresh)
+
+    def fixed(value: Any) -> Callable[[], Any]:
+        return lambda: value
+
+    # (original, replacement) for symbols callers also bind by name; replaced on
+    # their home module and in every other module global that holds them.
+    deep_pairs: list[tuple[Any, Any]] = []
 
     if controls.seed is not None:
         random.seed(controls.seed)
         # A separate stream so draining uuids does not perturb the agent's own RNG.
         uuid_rng = random.Random(controls.seed)
-        patch(uuid, "uuid4", lambda: uuid.UUID(int=uuid_rng.getrandbits(128), version=4))
+
+        def fake_uuid4() -> uuid.UUID:
+            return uuid.UUID(int=uuid_rng.getrandbits(128), version=4)
+
+        deep_pairs.append((uuid.uuid4, fake_uuid4))
+
     if controls.freeze_time is not None:
         frozen = controls.freeze_time
         frozen_ns = int(frozen * 1_000_000_000)
-        patch(time, "time", lambda: frozen)
-        patch(time, "time_ns", lambda: frozen_ns)
-        patch(time, "monotonic", lambda: 0.0)
-        patch(time, "monotonic_ns", lambda: 0)
-        patch(time, "perf_counter", lambda: 0.0)
-        patch(time, "perf_counter_ns", lambda: 0)
-
         frozen_aware = _datetime.datetime.fromtimestamp(frozen, tz=_datetime.timezone.utc)
         # Naive local wall-clock for that instant, matching what real now() returns.
         frozen_local = _datetime.datetime.fromtimestamp(frozen)  # noqa: DTZ006
+        real_datetime = _datetime.datetime
 
-        class _FrozenDateTime(_datetime.datetime):
+        class _FrozenMeta(type):
+            # Keep isinstance/issubclass answering against the real datetime, so
+            # swapping the class in every module does not break type checks.
+            def __instancecheck__(cls, obj: Any) -> bool:
+                return isinstance(obj, real_datetime)
+
+            def __subclasscheck__(cls, sub: type) -> bool:
+                return issubclass(sub, real_datetime)
+
+        class _FrozenDateTime(_datetime.datetime, metaclass=_FrozenMeta):
             # Overrides return the frozen instant; the base datetime return type is
             # intentional (the pinned value is a plain datetime, not this subclass).
             @classmethod
@@ -215,12 +233,41 @@ def controlled(controls: NondeterminismControls) -> Iterator[None]:
             def utcnow(cls) -> _datetime.datetime:  # type: ignore[override]
                 return frozen_aware.replace(tzinfo=None)
 
-        patch(_datetime, "datetime", _FrozenDateTime)
+        deep_pairs.append((time.time, fixed(frozen)))
+        deep_pairs.append((time.time_ns, fixed(frozen_ns)))
+        deep_pairs.append((_datetime.datetime, _FrozenDateTime))
+        # monotonic / perf_counter: pin on the time module only. They are rarely
+        # imported by name, and deep-patching them could freeze timing internals
+        # elsewhere in the process.
+        set_attr(time, "monotonic", fixed(0.0))
+        set_attr(time, "monotonic_ns", fixed(0))
+        set_attr(time, "perf_counter", fixed(0.0))
+        set_attr(time, "perf_counter_ns", fixed(0))
+
+    if deep_pairs:
+        by_id = {id(orig): (orig, repl) for orig, repl in deep_pairs}
+        for module in list(sys.modules.values()):
+            if module is None:
+                continue
+            try:
+                members = list(vars(module).items())
+            except Exception:  # noqa: BLE001 - some modules expose no writable dict
+                continue
+            for name, value in members:
+                pair = by_id.get(id(value))
+                if pair is not None and value is pair[0]:
+                    try:
+                        set_attr(module, name, pair[1])
+                    except Exception:  # noqa: BLE001 - read-only attributes
+                        restore.pop()  # set_attr recorded before setattr raised
     try:
         yield
     finally:
         for target, name, original in reversed(restore):
-            setattr(target, name, original)
+            try:
+                setattr(target, name, original)
+            except Exception:  # noqa: BLE001
+                pass
 
 
 @dataclass

@@ -82,6 +82,14 @@ def _emit(result: CollectionResult) -> None:
         note = changed_model_note(s)
         if note:
             typer.echo(typer.style(f"      {note}", fg=typer.colors.CYAN))
+        if s.replay.concurrency_ambiguities:
+            names = ", ".join(s.replay.concurrency_ambiguities)
+            typer.echo(
+                typer.style(
+                    f"      concurrent same-input calls may be out of order: {names}",
+                    fg=typer.colors.YELLOW,
+                )
+            )
         # Non-exact mock matches (fuzzy / positional) are substitutions, not an
         # exact replay; name them so a drifted input is visible, not just on a span.
         substitutions: dict[str, int] = {}

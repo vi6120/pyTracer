@@ -75,15 +75,19 @@ def test_invalid_ids_are_rejected() -> None:
         _span(span_id="deadbeef")  # too short
 
 
-def test_unknown_fields_are_forbidden() -> None:
-    with pytest.raises(ValueError):
-        Span(
-            trace_id=new_trace_id(),
-            span_id=new_span_id(),
-            name="x",
-            start_time_ns=1,
-            surprise="boom",  # type: ignore[call-arg]
-        )
+def test_unknown_fields_are_ignored() -> None:
+    # Forward compatibility: a span carrying a field this release does not know
+    # (e.g. one a newer SDK added) is accepted and the unknown field dropped,
+    # rather than failing validation. Rejecting it broke capture on a version skew.
+    span = Span(
+        trace_id=new_trace_id(),
+        span_id=new_span_id(),
+        name="x",
+        start_time_ns=1,
+        surprise="boom",  # type: ignore[call-arg]
+    )
+    assert not hasattr(span, "surprise")
+    assert "surprise" not in span.model_dump()
 
 
 _VALID_OTLP_KINDS = {

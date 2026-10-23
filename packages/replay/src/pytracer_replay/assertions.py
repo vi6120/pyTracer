@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from pytracer_sdk.schema import SpanKind
+from pytracer_sdk.schema import SpanKind, SpanStatus
 
 from .engine import ReplayResult
 
@@ -48,12 +48,25 @@ def all_passed(results: list[AssertionResult]) -> bool:
 
 @dataclass
 class NoErrors:
-    """Passes when the replay completed without any error."""
+    """Passes when the replay completed without an error.
 
+    ``scope="root"`` (the default) judges the run itself, so a tool error the agent
+    caught and recovered from still passes, matching the run verdict. ``scope="any"``
+    is stricter: it also fails on a handled error in any child span.
+    """
+
+    scope: str = "root"
     name: str = "no_errors"
 
     def check(self, result: ReplayResult) -> AssertionResult:
-        return AssertionResult(self.name, not result.failed, result.error_type or "")
+        errored = result.failed
+        detail = result.error_type or ""
+        if self.scope == "any":
+            child = next((s for s in result.spans if s.status is SpanStatus.ERROR), None)
+            if child is not None:
+                errored = True
+                detail = child.error_type or "error"
+        return AssertionResult(self.name, not errored, detail)
 
 
 @dataclass

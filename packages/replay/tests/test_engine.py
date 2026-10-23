@@ -15,6 +15,11 @@ def _record(agent: object) -> object:
     return ReplayEngine(ReplayMode.LIVE).replay(agent, MockSet())  # type: ignore[arg-type]
 
 
+class DbUnavailable(Exception):
+    """A non-builtin exception (module-level so it is importable), to test that
+    replay reconstructs the real type and the agent's own except fires (R4)."""
+
+
 def test_full_replay_injects_recorded_and_skips_live_body() -> None:
     calls = {"n": 0}
 
@@ -271,6 +276,28 @@ def test_recorded_failure_is_catchable_by_its_builtin_type() -> None:
     assert res.return_value == "handled"
     assert res.status is rec.status  # type: ignore[attr-defined]
     assert res.error_type == rec.error_type  # type: ignore[attr-defined]
+
+
+def test_recorded_non_builtin_failure_is_catchable_by_its_real_type() -> None:
+    # A non-builtin exception (e.g. a driver's error) is reconstructed from its
+    # module on replay, so the agent's `except ThatError` path fires (R4).
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="query")
+    def query(x: int) -> str:
+        raise DbUnavailable("db down")
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        try:
+            return str(query(1))
+        except DbUnavailable:
+            return "handled"
+
+    rec = _record(agent)
+    assert rec.return_value == "handled"  # type: ignore[attr-defined]
+    mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+
+    res = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert res.return_value == "handled"  # the real DbUnavailable was re-raised
 
 
 def test_uninstrumented_replay_is_flagged() -> None:

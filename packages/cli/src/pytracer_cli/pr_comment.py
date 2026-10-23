@@ -21,6 +21,8 @@ _LABELS = {
     "fixed": ":white_check_mark: fixed",
     "still_failing": ":x: still failing",
     "diverged": ":warning: diverged",
+    "cannot_judge": ":grey_question: cannot judge (a model input changed)",
+    "cannot_reproduce": ":grey_question: cannot reproduce (recordings did not match)",
 }
 
 
@@ -40,12 +42,15 @@ def render_comment(
     baseline_ref: str,
     verdicts: dict[str, Any],
     changed_models: dict[str, list[str]] | None = None,
+    evaluate_changed_prompts: bool = False,
 ) -> str:
     """Render the verdicts as a Markdown PR comment carrying the dedup marker.
 
     ``changed_models`` maps a scenario to the model ops whose input changed on the
     candidate (a prompt edit). Those cannot be judged by a frozen replay, so the
     comment says so instead of claiming everything was held frozen.
+    ``evaluate_changed_prompts`` reflects whether the run already evaluated those
+    live, so the note does not advise turning on an option that is already on.
     """
     changed = {n: m for n, m in (changed_models or {}).items() if m}
     counts: dict[str, int] = {}
@@ -67,6 +72,10 @@ def render_comment(
             parts.append(f"{counts['still_failing']} still failing")
         if counts.get("diverged"):
             parts.append(f"{counts['diverged']} diverged")
+        if counts.get("cannot_reproduce"):
+            parts.append(f"{counts['cannot_reproduce']} cannot reproduce")
+        if counts.get("cannot_judge"):
+            parts.append(f"{counts['cannot_judge']} cannot judge")
         parts.append(f"{fixed} fixed")
         summary = "**" + ", ".join(parts) + " on this branch.**"
 
@@ -96,11 +105,27 @@ def render_comment(
         summary,
     ]
     if changed:
+        if evaluate_changed_prompts:
+            heading = (
+                "**Model inputs changed (a prompt edit) and were evaluated live. The "
+                "verdict only holds when nothing after the changed call also changed; "
+                "a step past it that was not in the recording still cannot be judged:**"
+            )
+        else:
+            heading = (
+                "**Model inputs changed (a prompt edit) - re-run with "
+                "`--evaluate-changed-prompts` to evaluate them live:**"
+            )
         lines += [
             "",
-            "**Model inputs changed (a prompt edit) - re-run in partial mode, or with "
-            "`--evaluate-changed-prompts`, to evaluate them:**",
+            heading,
             *(f"- `{name}`: {', '.join(changed[name])}" for name in sorted(changed)),
+        ]
+    if any(_value(v) == "cannot_reproduce" for v in verdicts.values()):
+        lines += [
+            "",
+            "**Could not reproduce the baseline failure (the recordings did not match, "
+            "so every call drifted). Re-run with `--env-file` so both refs reach the bug.**",
         ]
     lines += [
         "",
@@ -118,11 +143,12 @@ def post_reproduction_comment(
     baseline_ref: str,
     verdicts: dict[str, Any],
     changed_models: dict[str, list[str]] | None = None,
+    evaluate_changed_prompts: bool = False,
 ) -> str:
     """Upsert the verdict comment on PR ``number``; return the comment URL."""
     body = render_comment(
         candidate_ref=candidate_ref, baseline_ref=baseline_ref, verdicts=verdicts,
-        changed_models=changed_models,
+        changed_models=changed_models, evaluate_changed_prompts=evaluate_changed_prompts,
     )
     existing = client.find_comment_by_marker(number, COMMENT_MARKER)
     if existing is None:

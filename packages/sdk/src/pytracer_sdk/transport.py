@@ -96,7 +96,13 @@ class HTTPTransport:
     def send(self, spans: list[Span]) -> None:
         if not spans:
             return
-        payload = json.dumps({"spans": [s.model_dump(mode="json") for s in spans]}).encode("utf-8")
+        # Drop fields left at their default (None) from the wire payload, so a
+        # gateway on an older release that predates an optional field is not
+        # tripped by it arriving as null. A span with no error therefore ships
+        # without error_module at all.
+        payload = json.dumps(
+            {"spans": [s.model_dump(mode="json", exclude_none=True) for s in spans]}
+        ).encode("utf-8")
         request = urllib.request.Request(
             self.url,
             data=payload,

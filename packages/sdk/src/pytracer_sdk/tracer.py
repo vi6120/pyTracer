@@ -128,6 +128,7 @@ class ActiveSpan:
     def set_error(self, exc: BaseException) -> None:
         self._span.status = SpanStatus.ERROR
         self._span.error_type = type(exc).__name__
+        self._span.error_module = type(exc).__module__
         self._span.error_message = self._tracer.redactor.redact_text(str(exc))
 
     # --- finalize -----------------------------------------------------------

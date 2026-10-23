@@ -45,6 +45,9 @@ class AssertionSpec(BaseModel):
     # (agent / llm / tool / reasoning / handoff) to count one kind of span.
     exact: bool = False
     kind: str | None = None
+    # `no_errors` uses `scope`: "root" (default) judges the run; "any" also fails
+    # on a handled error in a child span.
+    scope: str = "root"
 
 
 class ScenarioSpec(BaseModel):

@@ -28,6 +28,7 @@ from .report import (
     to_junit,
     to_markdown,
 )
+from .registry import bundle_collection, materialize_collection, read_bundle, write_bundle
 from .runner import CollectionResult, run_path
 from .traces import format_summary_table, format_trace_tree, parse_entry, record_trace
 
@@ -38,6 +39,8 @@ keys_app = typer.Typer(add_completion=False, help="Manage gateway API keys.")
 app.add_typer(keys_app, name="keys")
 issues_app = typer.Typer(add_completion=False, help="Open or update GitHub issues for failures.")
 app.add_typer(issues_app, name="issues")
+registry_app = typer.Typer(add_completion=False, help="Bundle and unbundle shareable collections.")
+app.add_typer(registry_app, name="registry")
 
 
 def _open_trace_store() -> Any:
@@ -170,6 +173,37 @@ def run(
         comment_out.write_text(to_markdown(result), encoding="utf-8")
 
     raise typer.Exit(code=0 if result.passed else 1)
+
+
+@registry_app.command("export")
+def registry_export(
+    collection: Path = typer.Argument(..., help="Path to a collection YAML/JSON file."),
+    out: Path = typer.Argument(..., help="Path to write the self-contained bundle (JSON)."),
+) -> None:
+    """Bundle a collection and its recorded traces into one shareable artifact."""
+    try:
+        bundle = bundle_collection(collection)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    write_bundle(bundle, out)
+    typer.echo(f"wrote {out} ({len(bundle['scenarios'])} scenario(s), {len(bundle['traces'])} trace(s))")
+
+
+@registry_app.command("import")
+def registry_import(
+    bundle: Path = typer.Argument(..., help="Path to a bundle artifact (JSON)."),
+    out_dir: Path = typer.Argument(..., help="Directory to materialize the runnable collection into."),
+) -> None:
+    """Materialize a shared bundle into a runnable collection directory."""
+    try:
+        data = read_bundle(bundle)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    collection_path = materialize_collection(data, out_dir)
+    typer.echo(f"wrote {collection_path}")
+    typer.echo(f"run it with: pytracer run {collection_path}")
 
 
 @traces_app.command("list")

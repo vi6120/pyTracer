@@ -117,7 +117,9 @@ def build_assertion(spec: AssertionSpec) -> Assertion:
     """Map a declarative assertion spec to a replay assertion object."""
     name = spec.name
     if spec.type == "no_errors":
-        return NoErrors(name=name or "no_errors")
+        if spec.scope not in ("root", "any"):
+            raise ScenarioError("'no_errors' scope must be 'root' or 'any'")
+        return NoErrors(scope=spec.scope, name=name or "no_errors")
     if spec.type == "exact_match":
         return ExactMatch(spec.expected, name=name or "exact_match")
     if spec.type == "contains":

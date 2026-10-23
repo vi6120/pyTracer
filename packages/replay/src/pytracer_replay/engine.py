@@ -9,6 +9,7 @@ run is deterministic. Three modes control what is mocked.
 from __future__ import annotations
 
 import builtins
+import importlib
 import threading
 from collections.abc import Callable, Iterable
 from contextlib import AbstractContextManager, nullcontext
@@ -54,16 +55,37 @@ class ReplayedError(Exception):
     type is not a builtin and so cannot be reconstructed exactly."""
 
 
+def _resolve_exception_type(module: str | None, name: str) -> type[BaseException] | None:
+    """Find the real exception class named ``name`` from ``module`` (or builtins)."""
+    builtin = getattr(builtins, name, None)
+    if isinstance(builtin, type) and issubclass(builtin, BaseException):
+        return builtin
+    if module and module != "builtins":
+        try:
+            mod = importlib.import_module(module)
+        except Exception:  # noqa: BLE001 - the module may not be importable at replay
+            return None
+        cls = getattr(mod, name, None)
+        if isinstance(cls, type) and issubclass(cls, BaseException):
+            return cls
+    return None
+
+
 def _rebuild_exception(rec: RecordedError) -> BaseException:
     """Reconstruct a recorded failure as a live exception to re-raise on replay.
 
-    Builtin exception types are re-created exactly (so the agent's ``except`` for
-    that type still fires); anything else becomes a :class:`ReplayedError` that
-    carries the original type name and message.
+    The real exception type is re-created when it can be found - a builtin, or a
+    class imported from its recorded module (e.g. ``neo4j.exceptions.
+    ServiceUnavailable``) - so the agent's own ``except`` for that type still fires.
+    When the type cannot be resolved or constructed from the message alone, it
+    falls back to a :class:`ReplayedError` carrying the original name and message.
     """
-    exc_cls = getattr(builtins, rec.error_type, None)
-    if isinstance(exc_cls, type) and issubclass(exc_cls, Exception):
-        return exc_cls(rec.error_message or "")
+    exc_cls = _resolve_exception_type(rec.error_module, rec.error_type)
+    if exc_cls is not None:
+        try:
+            return exc_cls(rec.error_message or "")
+        except Exception:  # noqa: BLE001 - some exceptions need other constructor args
+            pass
     label = f"{rec.error_type}: {rec.error_message}" if rec.error_message else rec.error_type
     return ReplayedError(label)
 

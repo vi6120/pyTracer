@@ -47,6 +47,31 @@ def test_spans_are_delivered_on_normal_exit_without_flush(tmp_path: Path) -> Non
     assert len(delivered) == 1
 
 
+def test_rejections_in_a_202_are_surfaced(caplog: pytest.LogCaptureFixture) -> None:
+    # A 202 that still rejected spans must be reported, not counted as fully stored
+    # (G1/G5): a running total, a logged warning, and the on_rejection callback.
+    seen: list[tuple[int, list]] = []
+    t = HTTPTransport("https://gw.example", "k", on_rejection=lambda n, errs: seen.append((n, errs)))
+    with caplog.at_level("WARNING", logger="pytracer_sdk"):
+        t._note_rejections(b'{"accepted": 3, "rejected": 2, "errors": ["missing branch/commit"]}')
+    assert t.rejected_spans == 2
+    assert seen == [(2, ["missing branch/commit"])]
+    assert "rejected 2 span(s)" in caplog.text
+
+
+def test_a_clean_202_reports_no_rejections() -> None:
+    t = HTTPTransport("https://gw.example", "k")
+    t._note_rejections(b'{"accepted": 5, "rejected": 0}')
+    assert t.rejected_spans == 0
+
+
+def test_note_rejections_tolerates_empty_or_bad_body() -> None:
+    t = HTTPTransport("https://gw.example", "k")
+    t._note_rejections(b"")
+    t._note_rejections(b"not json")
+    assert t.rejected_spans == 0
+
+
 def test_base_url_gets_the_endpoint_path() -> None:
     assert HTTPTransport("https://gw.example", "k").url == "https://gw.example/v1/spans"
     assert HTTPTransport("https://gw.example/", "k").url == "https://gw.example/v1/spans"

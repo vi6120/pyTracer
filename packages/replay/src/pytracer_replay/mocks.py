@@ -36,6 +36,9 @@ class RecordedError:
 
     error_type: str
     error_message: str | None = None
+    # The exception type's defining module, so replay can import and reconstruct the
+    # real class (not just a stand-in) and the agent's own ``except`` fires.
+    error_module: str | None = None
 
 # When several recordings share an identifier, a fuzzy candidate must be at least
 # this similar to the requested input to be used, so replay never injects a wildly
@@ -81,7 +84,9 @@ class MockSet:
                 # A span that failed is recorded as an error to re-raise on replay,
                 # not as its (empty) output served as a success.
                 recorded: Any = (
-                    RecordedError(span.error_type or "Exception", span.error_message)
+                    RecordedError(
+                        span.error_type or "Exception", span.error_message, span.error_module
+                    )
                     if span.status is SpanStatus.ERROR
                     else span.output
                 )

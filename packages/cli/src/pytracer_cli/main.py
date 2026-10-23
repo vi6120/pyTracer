@@ -102,7 +102,16 @@ def _emit(result: CollectionResult) -> None:
             typer.echo(f"      non-exact matches: {kinds}")
         log = s.replay.side_effects
         if len(log):
-            kinds = ", ".join(f"{v}×{k}" for k, v in sorted(log.summary().items()))
+            # Name the tools behind each kind, not just the counts, so a live call
+            # during replay says which tool ran (R13).
+            counts: dict[str, int] = {}
+            tools: dict[str, set[str]] = {}
+            for e in log.effects:
+                counts[e.kind.value] = counts.get(e.kind.value, 0) + 1
+                tools.setdefault(e.kind.value, set()).add(e.target)
+            kinds = ", ".join(
+                f"{counts[k]}×{k} ({', '.join(sorted(tools[k]))})" for k in sorted(counts)
+            )
             typer.echo(f"      live side effects: {kinds}")
             repeated = log.non_idempotent()
             if repeated:

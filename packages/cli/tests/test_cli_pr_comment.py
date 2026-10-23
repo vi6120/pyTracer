@@ -117,6 +117,29 @@ def test_render_mixed_outcomes() -> None:
     assert "All" not in body.split("| Scenario")[0]  # no all-fixed summary
 
 
+def test_render_notes_changed_model_inputs() -> None:
+    # When a model input changed, the comment stops claiming everything was held
+    # frozen and names the scenarios that cannot be judged by a frozen replay (X4).
+    body = render_comment(
+        candidate_ref="fix",
+        baseline_ref="main",
+        verdicts={"a": Outcome.DIVERGED},
+        changed_models={"a": ["call_model"]},
+    )
+    assert "Model inputs changed" in body
+    assert "call_model" in body
+    assert "held frozen" not in body  # the unconditional claim is gone when inputs changed
+
+
+def test_render_without_changes_keeps_the_frozen_wording() -> None:
+    body = render_comment(
+        candidate_ref="fix", baseline_ref="main", verdicts={"a": Outcome.FIXED},
+        changed_models={"a": []},
+    )
+    assert "held frozen" in body
+    assert "Model inputs changed" not in body
+
+
 # --- upsert orchestration ---------------------------------------------------
 
 

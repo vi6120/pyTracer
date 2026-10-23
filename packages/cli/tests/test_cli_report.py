@@ -13,6 +13,7 @@ from pytracer_cli import (
     to_junit,
     to_markdown,
 )
+from pytracer_cli.report import changed_model_note
 
 
 def _ok_scenario() -> ScenarioResult:
@@ -27,6 +28,24 @@ def _failed_scenario() -> ScenarioResult:
     return ScenarioResult(
         "broken", False, r, [AssertionResult("no_errors", False, "KeyError")], fingerprint="abc123"
     )
+
+
+def _changed_model_scenario() -> ScenarioResult:
+    r = ReplayResult(
+        return_value=None, status=SpanStatus.ERROR, mode=ReplayMode.FULL,
+        error_type="MissingMockError", model_input_changes=["call_model"],
+    )
+    return ScenarioResult("prompt-edit", False, r, [])
+
+
+def test_changed_model_note_and_json_explain_a_prompt_edit() -> None:
+    # A failure driven by a changed model input is explained, not a bare diverge (X4).
+    s = _changed_model_scenario()
+    note = changed_model_note(s)
+    assert "call_model" in note and "partial mode" in note
+    result = CollectionResult("suite", [s])
+    assert to_json(result)["scenarios"][0]["changed_models"] == ["call_model"]
+    assert "Model inputs changed" in to_markdown(result)
 
 
 def test_markdown_summary() -> None:

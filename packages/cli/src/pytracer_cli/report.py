@@ -43,6 +43,7 @@ def to_json(result: CollectionResult) -> dict[str, Any]:
                     {"target": e.target, "kind": e.kind.value}
                     for e in s.replay.side_effects.non_idempotent()
                 ],
+                "changed_models": s.replay.changed_models,
                 "assertions": [
                     {"name": a.name, "passed": a.passed, "detail": a.detail} for a in s.assertions
                 ],
@@ -75,6 +76,27 @@ def scenario_reason(s: ScenarioResult) -> str:
 _scenario_reason = scenario_reason
 
 
+def changed_model_note(s: ScenarioResult) -> str:
+    """Explain a verdict driven by a changed model input (a prompt edit), or ''.
+
+    When a frozen model op's input no longer matches a recording, a full-mode
+    replay cannot judge the step: the recorded response does not answer the new
+    prompt. Say so, so a real fix that edits a prompt is not read as a plain
+    'diverged' with no explanation.
+    """
+    changed = s.replay.changed_models
+    if not changed:
+        return ""
+    names = ", ".join(changed)
+    if s.replay.error_type == "MissingMockError":
+        return (
+            f"a model input changed ({names}); the recorded response no longer applies, "
+            f"so a frozen replay cannot judge it - re-run in partial mode, or with "
+            f"--evaluate-changed-prompts, to evaluate the change"
+        )
+    return f"a model input changed ({names}); it was run live to evaluate the change"
+
+
 def to_markdown(result: CollectionResult) -> str:
     """Render a PR-comment summary: header, counts, and a per-scenario table."""
     c = result.counts
@@ -92,8 +114,17 @@ def to_markdown(result: CollectionResult) -> str:
         mark = _PASS if s.passed else _FAIL
         detail = _scenario_reason(s).replace("|", "\\|") or "-"
         lines.append(f"| `{s.name}` | {mark} | {detail} |")
+    lines += _changed_model_lines(result)
     lines += _side_effect_lines(result)
     return "\n".join(lines) + "\n"
+
+
+def _changed_model_lines(result: CollectionResult) -> list[str]:
+    """A footer noting scenarios whose verdict was driven by a changed model input."""
+    notes = [f"- `{s.name}`: {changed_model_note(s)}" for s in result.scenarios if changed_model_note(s)]
+    if not notes:
+        return []
+    return ["", "**Model inputs changed (e.g. a prompt edit):**", *notes]
 
 
 def _side_effect_lines(result: CollectionResult) -> list[str]:

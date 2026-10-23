@@ -13,7 +13,7 @@ from pytracer_cli import (
     to_junit,
     to_markdown,
 )
-from pytracer_cli.report import changed_model_note
+from pytracer_cli.report import changed_model_note, issue_body_from_json
 
 
 def _ok_scenario() -> ScenarioResult:
@@ -62,6 +62,25 @@ def test_json_shape() -> None:
     assert payload["counts"] == {"total": 2, "passed": 1, "failed": 1}
     assert payload["passed"] is False
     assert payload["scenarios"][1]["fingerprint"] == "abc123"
+
+
+def test_json_and_issue_body_carry_the_replay_error_message() -> None:
+    # R3: the --json report, and the issue body built from it, must carry the full
+    # replay reason so issues sync / CI can see which call had no recording.
+    msg = "no recording for llm 'llm.complete' (occurrence 0): its input did not match"
+    r = ReplayResult(
+        return_value=None,
+        status=SpanStatus.ERROR,
+        mode=ReplayMode.FULL,
+        error_type="MissingMockError",
+        error_message=msg,
+    )
+    sj = to_json(CollectionResult("suite", [ScenarioResult("miss", False, r, [])]))["scenarios"][0]
+    assert sj["error_type"] == "MissingMockError"
+    assert sj["error_message"] == msg
+    body = issue_body_from_json(sj, branch="b", commit="c")
+    assert "llm.complete" in body  # the "which call" detail reaches the issue
+    assert "MissingMockError" in body
 
 
 def test_junit_reports_failures() -> None:

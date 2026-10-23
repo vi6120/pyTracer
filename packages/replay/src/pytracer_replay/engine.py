@@ -288,12 +288,13 @@ class ReplayEngine:
             pytracer.set_tracer(previous)
 
         spans = sorted(sink.spans, key=lambda s: s.start_time_ns)
-        if any(s.status is SpanStatus.ERROR for s in spans):
-            status = SpanStatus.ERROR
-            if error_type is None:
-                first_error = next(s for s in spans if s.status is SpanStatus.ERROR)
-                error_type = first_error.error_type
-                error_message = first_error.error_message
+        # The run's verdict is the agent's own outcome (the value it returned or the
+        # exception it raised, captured above), not the status of child spans. A tool
+        # error the agent caught and recovered from leaves the run OK, so a scenario
+        # like "the app survives a database outage" can pass. An unhandled child error
+        # still fails the run, because it propagates out of agent() into the except
+        # above. A handled child error that should still fail is left to the
+        # assertions (no_errors with scope="any").
         # A same-input key reached from more than one OS thread, whose recordings
         # differ, could have had its matches swapped by arrival order; surface it.
         order_sensitive = mocks.order_sensitive_keys()

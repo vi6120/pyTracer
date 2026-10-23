@@ -65,6 +65,23 @@ def test_emit_notes_non_exact_matches(capsys: pytest.CaptureFixture[str]) -> Non
     assert "non-exact matches: 1×positional" in capsys.readouterr().out
 
 
+def test_emit_names_the_tools_behind_live_side_effects(capsys: pytest.CaptureFixture[str]) -> None:
+    # The side-effect line names the tool that ran live, not just the count (R13).
+    from pytracer_sdk import SpanStatus
+    from pytracer_replay import ReplayMode, ReplayResult, SideEffectKind, SideEffectLog
+
+    from pytracer_cli.main import _emit
+    from pytracer_cli.runner import CollectionResult, ScenarioResult
+
+    log = SideEffectLog()
+    log.record("search", SideEffectKind.EXTERNAL_CALL, {"q": "x"})
+    replay = ReplayResult(
+        return_value="x", status=SpanStatus.OK, mode=ReplayMode.FULL, side_effects=log
+    )
+    _emit(CollectionResult("suite", [ScenarioResult("s1", True, replay, [])]))
+    assert "live side effects: 1×external_call (search)" in capsys.readouterr().out
+
+
 def test_run_prints_the_failure_reason(tmp_path: Path) -> None:
     # A FAIL line must be followed by why it failed, not just [FAIL] (R3): here the
     # assertion that did not hold is named in the terminal output.

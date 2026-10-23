@@ -291,3 +291,44 @@ def test_uninstrumented_replay_is_flagged() -> None:
 
     ok = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
     assert ok.uninstrumented is False
+
+
+# --- X4: a changed model input (a prompt edit) ---------------------------------
+
+def _changed_prompt_agent() -> object:
+    @pytracer.op(kind=SpanKind.LLM)
+    def call_model(prompt: str) -> str:
+        return f"live:{prompt}"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        return call_model("a NEW prompt not in the recording")
+
+    return agent
+
+
+def _mocks_with_old_prompt() -> MockSet:
+    mocks = MockSet()
+    mocks.add("call_model", "the OLD recorded prompt", "recorded answer")
+    return mocks
+
+
+def test_full_mode_strict_fails_on_a_changed_model_input_and_records_it() -> None:
+    # A frozen model whose input changed can't be judged: strict fails, and the op
+    # is recorded as a changed model input so the verdict can be explained (X4).
+    result = ReplayEngine(ReplayMode.FULL, strict=True).replay(
+        _changed_prompt_agent(), _mocks_with_old_prompt()
+    )
+    assert result.failed
+    assert result.error_type == "MissingMockError"
+    assert "call_model" in result.changed_models
+
+
+def test_evaluate_changed_prompts_runs_the_model_live_instead_of_failing() -> None:
+    # With the opt-in flag, the changed model op runs live so the edit is evaluated.
+    result = ReplayEngine(
+        ReplayMode.FULL, strict=True, evaluate_changed_prompts=True
+    ).replay(_changed_prompt_agent(), _mocks_with_old_prompt())
+    assert result.return_value == "live:a NEW prompt not in the recording"
+    assert "call_model" in result.changed_models
+    assert not result.failed

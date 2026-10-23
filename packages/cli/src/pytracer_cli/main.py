@@ -78,6 +78,16 @@ def _emit(result: CollectionResult) -> None:
             reason = scenario_reason(s)
             if reason:
                 typer.echo(typer.style(f"      {reason}", fg=typer.colors.RED))
+        # Non-exact mock matches (fuzzy / positional) are substitutions, not an
+        # exact replay; name them so a drifted input is visible, not just on a span.
+        substitutions: dict[str, int] = {}
+        for span in s.replay.spans:
+            match = span.attributes.get("pytracer.mock_match")
+            if isinstance(match, str) and match not in ("", "exact"):
+                substitutions[match] = substitutions.get(match, 0) + 1
+        if substitutions:
+            kinds = ", ".join(f"{v}×{k}" for k, v in sorted(substitutions.items()))
+            typer.echo(f"      non-exact matches: {kinds}")
         log = s.replay.side_effects
         if len(log):
             kinds = ", ".join(f"{v}×{k}" for k, v in sorted(log.summary().items()))

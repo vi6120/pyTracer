@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import cli_sample_agent
+import pytest
 from cli_testkit import record_trace, write_collection
 from typer.testing import CliRunner
 
@@ -41,6 +42,27 @@ def test_run_exit_one_on_failure(tmp_path: Path) -> None:
     collection = _collection(tmp_path, "not-present")
     result = runner.invoke(app, ["run", str(collection)])
     assert result.exit_code == 1
+
+
+def test_emit_notes_non_exact_matches(capsys: pytest.CaptureFixture[str]) -> None:
+    # A fuzzy/positional substitution is surfaced in the run output, not left only
+    # on a span attribute (R12).
+    from pytracer_sdk import SpanStatus, new_span_id, new_trace_id
+    from pytracer_sdk.schema import Span, SpanKind
+    from pytracer_replay import ReplayMode, ReplayResult
+
+    from pytracer_cli.main import _emit
+    from pytracer_cli.runner import CollectionResult, ScenarioResult
+
+    span = Span(
+        trace_id=new_trace_id(), span_id=new_span_id(), name="search", kind=SpanKind.TOOL,
+        start_time_ns=1, attributes={"pytracer.mock_match": "positional"},
+    )
+    replay = ReplayResult(
+        return_value="x", status=SpanStatus.OK, mode=ReplayMode.FULL, spans=[span]
+    )
+    _emit(CollectionResult("suite", [ScenarioResult("s1", True, replay, [])]))
+    assert "non-exact matches: 1×positional" in capsys.readouterr().out
 
 
 def test_run_prints_the_failure_reason(tmp_path: Path) -> None:

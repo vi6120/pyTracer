@@ -140,6 +140,30 @@ def test_render_without_changes_keeps_the_frozen_wording() -> None:
     assert "Model inputs changed" not in body
 
 
+def test_render_cannot_reproduce_hints_env_file() -> None:
+    # X2/X5: a cannot-reproduce verdict explains the setup cause instead of a verdict.
+    body = render_comment(
+        candidate_ref="fix", baseline_ref="main", verdicts={"a": Outcome.CANNOT_REPRODUCE}
+    )
+    assert "cannot reproduce" in body
+    assert "--env-file" in body
+
+
+def test_render_advice_switches_when_evaluate_is_on() -> None:
+    # X4: do not advise turning on --evaluate-changed-prompts when it is already on.
+    off = render_comment(
+        candidate_ref="fix", baseline_ref="main", verdicts={"a": Outcome.CANNOT_JUDGE},
+        changed_models={"a": ["call_model"]},
+    )
+    assert "re-run with `--evaluate-changed-prompts`" in off
+    on = render_comment(
+        candidate_ref="fix", baseline_ref="main", verdicts={"a": Outcome.CANNOT_JUDGE},
+        changed_models={"a": ["call_model"]}, evaluate_changed_prompts=True,
+    )
+    assert "evaluated live" in on
+    assert "re-run with `--evaluate-changed-prompts`" not in on
+
+
 # --- upsert orchestration ---------------------------------------------------
 
 

@@ -50,6 +50,31 @@ def test_insert_and_get_trace_roundtrip(trace_store: TraceStore) -> None:
     assert all(s.resource.branch == "main" and s.resource.commit == "abc123" for s in got)
 
 
+def test_error_module_round_trips_for_replay(trace_store: TraceStore) -> None:
+    # A gateway-captured failure must keep the exception's defining module, so
+    # replay rebuilds the real type (e.g. neo4j.exceptions.ServiceUnavailable)
+    # instead of a generic ReplayedError (V2/R4).
+    tid = new_trace_id()
+    span = Span(
+        trace_id=tid,
+        span_id=new_span_id(),
+        name="db.query",
+        kind=SpanKind.TOOL,
+        status=SpanStatus.ERROR,
+        start_time_ns=NOW_NS,
+        end_time_ns=NOW_NS + 1_000_000,
+        error_type="ServiceUnavailable",
+        error_module="neo4j.exceptions",
+        error_message="unable to retrieve routing information",
+        resource=RES,
+    )
+    assert trace_store.insert(span, project="p1") == 1
+    (got,) = trace_store.get_trace(tid, project="p1")
+    assert got.error_module == "neo4j.exceptions"
+    assert got.error_type == "ServiceUnavailable"
+    assert got.error_message == "unable to retrieve routing information"
+
+
 def test_branch_and_commit_are_required(trace_store: TraceStore) -> None:
     bad = _span(resource=Resource(service_name="x", branch=None, commit=None))
     try:

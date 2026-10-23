@@ -165,5 +165,17 @@ class MockSet:
             return True, best_output
         return False, None
 
+    def order_sensitive_keys(self) -> set[tuple[str, str]]:
+        """(identifier, input_hash) keys with more than one distinct recorded output.
+
+        When several recordings for the same (identifier, input) differ, the order
+        they are consumed matters (so concurrent same-input calls can be swapped);
+        when the recordings are identical, order is irrelevant.
+        """
+        return {
+            key for key, outputs in self._sequences.items()
+            if len({repr(o) for o in outputs}) > 1
+        }
+
     def __len__(self) -> int:
         return len(self._sequences)

@@ -112,6 +112,9 @@ class Span(BaseModel):
     # --- status -------------------------------------------------------------
     status: SpanStatus = SpanStatus.UNSET
     error_type: str | None = None
+    # The exception type's defining module, so replay can reconstruct the real
+    # class (e.g. neo4j.exceptions.ServiceUnavailable) and the agent's except fires.
+    error_module: str | None = None
     error_message: str | None = None
 
     # --- context ------------------------------------------------------------

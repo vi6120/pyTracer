@@ -309,7 +309,11 @@ pytest -v
     <p>It checks out each ref in its own isolated workspace, replays, and prints a
     per-scenario verdict of <strong>fixed</strong>, <strong>still failing</strong>,
     or <strong>diverged</strong> (a new, different failure), exiting non-zero unless
-    every scenario is fixed.</p>
+    every scenario is fixed. Each workspace installs the project under test and
+    pyTracer itself, so your project does <strong>not</strong> need to depend on
+    <code>pytracer-cli</code>. If the agent needs secrets or endpoints to run, pass
+    them with <code>--env-file .env</code> so the replay reaches the bug instead of
+    failing on configuration (and a real fix is not reported still-failing).</p>
     <p>A runnable, self-contained example of exactly this is in
     <a href="https://github.com/vi6120/pyTracer/tree/main/examples/reproduce-demo">examples/reproduce-demo</a>:
     one command builds a buggy branch and a fix branch and reproduces the captured

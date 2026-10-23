@@ -44,6 +44,7 @@ def to_json(result: CollectionResult) -> dict[str, Any]:
                     for e in s.replay.side_effects.non_idempotent()
                 ],
                 "changed_models": s.replay.changed_models,
+                "concurrency_ambiguities": s.replay.concurrency_ambiguities,
                 "assertions": [
                     {"name": a.name, "passed": a.passed, "detail": a.detail} for a in s.assertions
                 ],

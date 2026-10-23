@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytracer_sdk as pytracer
 from pytracer_sdk import SpanKind, SpanStatus
 
@@ -332,3 +334,85 @@ def test_evaluate_changed_prompts_runs_the_model_live_instead_of_failing() -> No
     assert result.return_value == "live:a NEW prompt not in the recording"
     assert "call_model" in result.changed_models
     assert not result.failed
+
+# --- R7: concurrent same-input ordering ---------------------------------------
+
+def _differing_recordings() -> tuple[Any, MockSet]:
+    """A fetch op and mocks where fetch(1) has two DIFFERENT recorded responses."""
+    n = {"i": 0}
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="fetch")
+    def fetch(x: int) -> str:
+        n["i"] += 1
+        return f"r{n['i']}"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="cap")
+    def capture() -> str:
+        return fetch(1) + fetch(1)  # same input, two differing recordings
+
+    mocks = MockSet.from_trace(_record(capture).spans)  # type: ignore[attr-defined]
+    return fetch, mocks
+
+
+def test_sequential_same_input_calls_are_not_flagged() -> None:
+    # Sequential (and single-threaded async) calls arrive in issue order, so they
+    # replay in order; no ambiguity (A).
+    fetch, mocks = _differing_recordings()
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        return fetch(1) + fetch(1)
+
+    result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert result.return_value == "r1r2"  # served in order, not live
+    assert result.concurrency_ambiguities == []
+
+
+def test_concurrent_same_input_differing_recordings_are_flagged() -> None:
+    # Same input on two OS threads with differing recordings cannot be ordered from
+    # arrival; the ambiguity is surfaced, not silently swapped (B).
+    import threading
+
+    fetch, mocks = _differing_recordings()
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        out: list[str] = []
+        threads = [threading.Thread(target=lambda: out.append(fetch(1))) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        return ",".join(sorted(out))
+
+    result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert result.return_value == "r1,r2"  # both served from the recording (not live)
+    assert "fetch" in result.concurrency_ambiguities
+
+
+def test_concurrent_same_input_identical_recordings_not_flagged() -> None:
+    # Identical recordings make order irrelevant, so concurrency is not flagged (A).
+    import threading
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="fetch")
+    def fetch(x: int) -> str:
+        return "same"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="cap")
+    def capture() -> str:
+        return fetch(1) + fetch(1)
+
+    mocks = MockSet.from_trace(_record(capture).spans)  # type: ignore[attr-defined]
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        out: list[str] = []
+        threads = [threading.Thread(target=lambda: out.append(fetch(1))) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        return ",".join(out)
+
+    result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert result.concurrency_ambiguities == []

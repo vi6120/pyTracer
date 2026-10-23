@@ -5,8 +5,10 @@ a run reproduces exactly. These helpers harden it for the cases that still drift
 
   - **Streaming** - re-emit a recorded model response chunk by chunk, optionally
     with its captured timing (``RecordedStream``).
-  - **Concurrency** - give each op call a stable ``CallKey`` so concurrent tool
-    calls resolve to the right recording regardless of arrival order
+  - **Concurrency** - give each op call a ``CallKey`` so repeat and concurrent
+    tool calls resolve to their recordings in issue order (sequential and async
+    execution); same-input calls racing on different OS threads cannot be ordered
+    from arrival alone and are flagged instead of silently swapped
     (``ConcurrencyLedger``).
   - **Nondeterminism controls** - pin the clock and seed the RNG around agent
     execution, and collapse idempotent retries (``controlled``, ``RetryDeduper``).
@@ -112,29 +114,44 @@ class ConcurrencyLedger:
     """Thread-safe per-call occurrence numbering, assigned in arrival order.
 
     Each call to ``(identifier, input)`` gets the next occurrence index, so repeat
-    calls resolve to their recordings in sequence. This is correct for sequential
-    repeats, and for concurrent calls whose inputs differ (each keys to its own
-    recording regardless of arrival order).
+    calls resolve to their recordings in sequence. Arrival order equals the order
+    the agent issued the calls for **sequential** code and for **single-threaded
+    async** (an ``asyncio`` event loop runs the interceptor in creation order), so
+    those replay in order correctly. Concurrent calls whose inputs differ also
+    resolve correctly, each to its own recording.
 
-    It does NOT disambiguate concurrent calls that share the same input: those are
-    numbered by the order they happen to arrive, which need not match the recording
-    order, so if their recorded responses differ the two can be swapped. That case
-    cannot be resolved from arrival order alone; it needs a caller-supplied ordering
-    key, which replay does not yet capture. When the shared-input responses are
-    identical (the common case) the swap is harmless.
+    The one case arrival order cannot settle is calls that run on **different OS
+    threads** and share the same input: the threads reach the interceptor in a
+    race-determined order, so if their recorded responses differ the two can be
+    swapped. That needs a caller-supplied ordering key replay does not capture; when
+    the shared-input responses are identical (the common case) order is irrelevant.
+    :meth:`ambiguous_keys` reports exactly this case so it is surfaced, not silent.
     """
 
     _counts: dict[tuple[str, str], int] = field(default_factory=dict)
     _identifier_counts: dict[str, int] = field(default_factory=dict)
+    # Threads that requested each key, to tell single-threaded (sequential/async,
+    # deterministic) access apart from multi-threaded (race-ordered) access.
+    _threads: dict[tuple[str, str], set[int]] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def key_for(self, identifier: str, inp: object) -> CallKey:
         """Return the stable key for the next call of ``identifier`` with ``inp``."""
         ih = input_hash(inp)
+        # Identify the thread by its live object, not threading.get_ident(): the OS
+        # thread id is reused once a short thread exits, which would make two
+        # genuinely different threads look like one.
+        thread_id = id(threading.current_thread())
         with self._lock:
             n = self._counts.get((identifier, ih), 0)
             self._counts[(identifier, ih)] = n + 1
+            self._threads.setdefault((identifier, ih), set()).add(thread_id)
         return CallKey(identifier=identifier, input_hash=ih, occurrence=n)
+
+    def multi_thread_keys(self) -> set[tuple[str, str]]:
+        """Keys requested from more than one OS thread (race-ordered arrival)."""
+        with self._lock:
+            return {key for key, threads in self._threads.items() if len(threads) > 1}
 
     def positional_for(self, identifier: str) -> int:
         """Return the next call index for ``identifier``, ignoring the input.

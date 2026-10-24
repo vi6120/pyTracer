@@ -20,7 +20,7 @@ import functools
 import inspect
 from typing import Any
 
-from .buffer import DEFAULT_FLUSH_TIMEOUT, SpanBuffer
+from .buffer import DEFAULT_FLUSH_TIMEOUT, DropCallback, SpanBuffer
 from .ids import new_span_id, new_trace_id
 from .recorder import SpanRecorder
 from .redaction import DEFAULT_RULES, RedactionRule, Redactor
@@ -31,6 +31,7 @@ from .transport import HTTPTransport, InMemoryTransport, Transport, TransportErr
 __all__ = [
     "DEFAULT_RULES",
     "ActiveSpan",
+    "DropCallback",
     "HTTPTransport",
     "InMemoryTransport",
     "Intercept",
@@ -71,8 +72,13 @@ def configure(
     commit: str | None = None,
     environment: str | None = None,
     redactor: Redactor | None = None,
+    on_drop: DropCallback | None = None,
 ) -> Tracer:
-    """Create (or replace) the module-level default tracer and return it."""
+    """Create (or replace) the module-level default tracer and return it.
+
+    ``on_drop(reason, count, error)`` is called whenever spans are lost before
+    reaching the transport's destination (see :class:`SpanBuffer`).
+    """
     global _default_tracer
     resource = Resource(
         service_name=service_name or "unknown-agent",
@@ -84,6 +90,7 @@ def configure(
         transport or InMemoryTransport(),
         resource=resource,
         redactor=redactor,
+        on_drop=on_drop,
     )
     return _default_tracer
 

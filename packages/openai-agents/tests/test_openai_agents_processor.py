@@ -79,6 +79,33 @@ def test_agent_and_function_mapping_and_linkage() -> None:
     assert spans["search"].output == "results"
 
 
+def test_structural_spans_are_folded_into_their_parent() -> None:
+    # The SDK's structural "task"/"turn" spans are folded, so no "unknown" span is
+    # emitted and the real tool call nests under the run instead (P4).
+    proc, sink, tracer = _setup()
+    trace = _FakeTrace("trace_1", "run")
+
+    class _Structural:
+        type = "turn"
+
+    turn = _FakeSpan("s_turn", "trace_1", _Structural())
+    fn = _FakeSpan(
+        "s_fn", "trace_1", FunctionSpanData(name="search", input=None, output="r"),
+        parent_id="s_turn",
+    )
+    proc.on_trace_start(trace)  # type: ignore[arg-type]
+    proc.on_span_start(turn)  # type: ignore[arg-type]
+    proc.on_span_start(fn)  # type: ignore[arg-type]
+    proc.on_span_end(fn)  # type: ignore[arg-type]
+    proc.on_span_end(turn)  # type: ignore[arg-type]
+    proc.on_trace_end(trace)  # type: ignore[arg-type]
+    tracer.flush()
+    by_name = {s.name: s for s in sink.spans}
+    assert "turn" not in by_name  # the structural span was folded, not emitted
+    assert all(s.kind is not K.UNKNOWN for s in sink.spans)  # no unknown spans remain
+    assert by_name["search"].parent_span_id == by_name["run"].span_id  # re-parented to the run
+
+
 def test_generation_span_captures_model_and_tokens() -> None:
     proc, sink, tracer = _setup()
     gen = _FakeSpan(

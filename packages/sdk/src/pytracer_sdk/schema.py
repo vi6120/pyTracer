@@ -12,8 +12,9 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
+from .codec import decode_value, encode_value
 from .ids import is_valid_span_id, is_valid_trace_id
 
 NANOS_PER_MILLI = 1_000_000
@@ -124,6 +125,20 @@ class Span(BaseModel):
     # --- context ------------------------------------------------------------
     attributes: dict[str, Any] = Field(default_factory=dict)
     resource: Resource = Field(default_factory=Resource)
+
+    # --- payload types ------------------------------------------------------
+    # Inputs and outputs keep their real Python types through every JSON path
+    # (recordings, the gateway wire, its queue): values JSON cannot carry, such as
+    # Decimal or datetime, are tagged on the way out and restored on the way in,
+    # so a replay hands the agent the same types it got live.
+    @field_serializer("input", "output", when_used="json")
+    def _encode_payload(self, value: Any) -> Any:
+        return encode_value(value)
+
+    @field_validator("input", "output", mode="before")
+    @classmethod
+    def _decode_payload(cls, value: Any) -> Any:
+        return decode_value(value)
 
     # --- validation ---------------------------------------------------------
     @field_validator("trace_id")

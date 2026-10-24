@@ -106,10 +106,13 @@ class PyTracerSpanExporter(SpanExporter):
     """Maps finished OpenTelemetry spans to pyTracer spans."""
 
     def __init__(self, tracer: Tracer | None = None) -> None:
-        self._tracer = tracer or get_tracer()
+        # Resolve the tracer lazily at export time, not here, so an exporter built
+        # before pytracer.configure(...) still records into the configured tracer.
+        self._explicit_tracer = tracer
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
-        redactor = self._tracer.redactor
+        tracer = self._explicit_tracer or get_tracer()
+        redactor = tracer.redactor
         for span in spans:
             context = span.get_span_context()
             if context is None:
@@ -150,9 +153,9 @@ class PyTracerSpanExporter(SpanExporter):
                 status=status,
                 error_type=str(error_type) if error_type is not None else None,
                 attributes={"framework": "autogen", **safe_attrs},
-                resource=self._tracer.resource,
+                resource=tracer.resource,
             )
-            self._tracer.buffer.record(Span.model_validate(pytracer_span.model_dump()))
+            tracer.buffer.record(Span.model_validate(pytracer_span.model_dump()))
         return SpanExportResult.SUCCESS
 
     def shutdown(self) -> None:
@@ -165,10 +168,25 @@ class PyTracerSpanExporter(SpanExporter):
 def pytracer_tracer_provider(tracer: Tracer | None = None) -> TracerProvider:
     """Build an OpenTelemetry TracerProvider that records into pyTracer.
 
-    Pass the result to AutoGen's runtime (``SingleThreadedAgentRuntime(
-    tracer_provider=...)``) or register it globally so AutoGen's spans are
-    captured as pyTracer spans.
+    Register it globally with :func:`install` (recommended) so AutoGen's GenAI
+    model and tool spans are captured. Passing it only to the runtime
+    (``SingleThreadedAgentRuntime(tracer_provider=...)``) sees just the runtime's
+    internal messaging spans, which this exporter drops as noise.
     """
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(PyTracerSpanExporter(tracer)))
+    return provider
+
+
+def install(tracer: Tracer | None = None) -> TracerProvider:
+    """Register a pyTracer TracerProvider as the global OpenTelemetry provider.
+
+    AutoGen emits its GenAI model and tool spans through the *global* provider, so
+    register globally (before building the runtime) to capture them. Returns the
+    provider. Call once per process, before any span is emitted.
+    """
+    from opentelemetry import trace as otel_trace
+
+    provider = pytracer_tracer_provider(tracer)
+    otel_trace.set_tracer_provider(provider)
     return provider

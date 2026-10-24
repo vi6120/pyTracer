@@ -10,6 +10,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -22,6 +23,8 @@ from .config import GatewayConfig, load_api_keys
 from .ingest import IngestPipeline, TraceStoreWriter, Writer, validate_spans
 from .metrics import install_metrics
 from .ratelimit import TokenBucketLimiter
+
+_log = logging.getLogger("pytracer_gateway")
 
 
 def create_app(
@@ -43,6 +46,14 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        # Log the resolved config so an operator can confirm the deploy settings
+        # actually reached the container (e.g. the managed key store is active).
+        _log.info(
+            "pytracer gateway starting: auth=%s rate_limit_per_sec=%s queue_maxsize=%s",
+            type(resolver).__name__,
+            cfg.rate_limit_per_sec,
+            cfg.queue_maxsize,
+        )
         await pipeline.start()
         try:
             yield

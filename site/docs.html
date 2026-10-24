@@ -189,6 +189,13 @@ transport = pytracer.HTTPTransport(
 pytracer.configure(transport, service_name="researcher", branch="main", commit="abc123")
 # ... run the agent ...
 print(transport.rejected_spans)  # 0 when every span was accepted</code></pre>
+    <p><strong>Upgrade order.</strong> When a release adds a span field, upgrade the
+    gateway before the SDKs that send to it (the hosted gateway first). A gateway on
+    the newer release ignores fields it does not recognise, so a newer SDK stays
+    compatible; a gateway on an older release would otherwise reject a failed span
+    carrying a field it predates. (A newer SDK against an older gateway resends such a
+    span without the unknown field so it still lands, but the field is only stored once
+    the gateway is upgraded.)</p>
 
     <h2 id="capture">3. Turn a failure into a test</h2>
     <p>When a run fails, browse recent captured runs and scaffold a test from one,
@@ -275,6 +282,15 @@ scenarios:
     prompt: when a frozen model op's input no longer matches the recording, it runs that
     op live so the edit is actually evaluated, rather than reporting a diverge a frozen
     replay cannot judge. It makes a live model call, so it drops the sandbox.</p>
+    <p><strong>Positional matching</strong> (<code>partial</code> mode) tolerates a model
+    that re-words a tool's input each run: when an input does not match a recording
+    exactly, the Nth call is served the Nth recording for that op, by call order. It
+    compares argument <em>values</em>, not the surrounding JSON, so a re-worded question
+    still matches but a different id or a genuinely different question is a miss (never
+    the wrong recording served silently). <code>no_errors</code> takes a
+    <code>scope</code>: <code>root</code> (default) passes a run whose agent caught a tool
+    error and recovered; <code>scope: any</code> also fails on a handled error in any
+    child span.</p>
     <p>A few behaviors live on the commands rather than the file:</p>
     <ul>
       <li><code>pytracer run ... --strict/--no-strict</code>, <code>--sandbox/--no-sandbox</code>
@@ -335,6 +351,15 @@ pytest -v
     <code>pytracer-cli</code>. If the agent needs secrets or endpoints to run, pass
     them with <code>--env-file .env</code> so the replay reaches the bug instead of
     failing on configuration (and a real fix is not reported still-failing).</p>
+    <p><strong>Inconclusive verdicts.</strong> When a frozen replay cannot settle a
+    scenario, <code>reproduce</code> says so instead of guessing: <strong>cannot
+    judge</strong> (a model input changed, e.g. a prompt edit, so the recording no
+    longer applies) or <strong>cannot reproduce</strong> (neither ref matched its
+    recordings, usually a missing <code>--env-file</code>). Both exit with code
+    <code>2</code>, distinct from <code>1</code> (a real regression) and <code>0</code>
+    (all fixed). For a prompt edit, add <code>pytracer reproduce
+    --evaluate-changed-prompts</code> to run the changed model call live and evaluate
+    it; that verdict holds only if nothing after the changed call also changed.</p>
     <p>A runnable, self-contained example of exactly this is in
     <a href="https://github.com/vi6120/pyTracer/tree/main/examples/reproduce-demo">examples/reproduce-demo</a>:
     one command builds a buggy branch and a fix branch and reproduces the captured
@@ -361,7 +386,10 @@ pip install pytracer-autogen          # AutoGen</code></pre>
     <code>add_trace_processor</code> instead leaves OpenAI's own exporter in place, so
     runs would also upload to OpenAI when a key is set. Adapters capture only:
     replaying a captured run still needs <code>@op</code>, and an adapter-only run is
-    flagged rather than replayed live.</p>
+    flagged rather than replayed live. A framework's model call has no <code>@op</code>
+    seam, so putting <code>@op</code> on your tools does not make that model call
+    replayable; full-mode replay also blocks the network, loopback included, so a
+    replay cannot reach a local model server.</p>
 
     <h2 id="selfhost">Self-hosting the gateway</h2>
     <p>The gateway plus its stores run as a Docker stack. A single-instance setup

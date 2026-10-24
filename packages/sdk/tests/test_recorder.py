@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pytracer_sdk import Resource, SpanKind, SpanRecorder, SpanStatus, Tracer
+from pytracer_sdk.tracer import SpanContext, _current
 from pytracer_sdk.transport import InMemoryTransport
 
 
@@ -41,6 +42,41 @@ def test_unknown_end_is_ignored() -> None:
     rec.end("never-started", output="x")  # must not raise
     tracer.flush()
     assert sink.spans == []
+
+
+def test_framework_root_nests_under_an_active_pytracer_span() -> None:
+    # P5: when a pyTracer span is active in this context (e.g. one framework handing
+    # off to another, or an @op around the call), a framework root nests under it
+    # instead of starting its own trace.
+    rec, sink, tracer = _recorder()
+    ambient = SpanContext(trace_id="a" * 32, span_id="b" * 16)
+    token = _current.set(ambient)
+    try:
+        rec.start("fw_root", name="agent", kind=SpanKind.AGENT)
+        rec.end("fw_root", output="done")
+    finally:
+        _current.reset(token)
+    tracer.flush()
+    (span,) = sink.spans
+    assert span.trace_id == "a" * 32  # joined the ambient trace
+    assert span.parent_span_id == "b" * 16  # nested under the ambient span
+
+
+def test_two_framework_roots_under_one_ambient_span_share_a_trace() -> None:
+    # P5: one request through two frameworks is one trace, not two.
+    rec, sink, tracer = _recorder()
+    ambient = SpanContext(trace_id="c" * 32, span_id="d" * 16)
+    token = _current.set(ambient)
+    try:
+        rec.start("fw1", name="langgraph", kind=SpanKind.AGENT)
+        rec.end("fw1")
+        rec.start("fw2", name="crewai", kind=SpanKind.AGENT)
+        rec.end("fw2")
+    finally:
+        _current.reset(token)
+    tracer.flush()
+    assert {s.trace_id for s in sink.spans} == {"c" * 32}  # one trace
+    assert all(s.parent_span_id == "d" * 16 for s in sink.spans)
 
 
 def test_error_marks_span_failed() -> None:

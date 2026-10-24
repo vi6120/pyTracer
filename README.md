@@ -110,6 +110,17 @@ pytracer.configure(
 Capture is fire-and-forget: it never blocks your agent, and if the gateway is
 unreachable the agent keeps running.
 
+With a framework adapter, each framework run starts its own trace. To keep a
+request that spans several runs (or several frameworks) in one trace, wrap it in a
+pyTracer span; the LangGraph, CrewAI and OpenAI Agents adapters nest under it
+(AutoGen does not):
+
+```python
+with pytracer.start_span("answer-question"):
+    plan = graph.invoke(inputs, config={"callbacks": [handler]})   # LangGraph
+    result = crew.kickoff(inputs={"plan": plan})                   # CrewAI
+```
+
 ### 2. Turn a captured failure into a test
 
 When a run fails, browse recent captured runs and scaffold a test from one, no

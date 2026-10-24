@@ -203,6 +203,54 @@ def test_resends_without_a_field_an_older_gateway_rejects(monkeypatch: pytest.Mo
     assert transport.rejected_spans == 0  # the resend landed, nothing permanently rejected
 
 
+def test_retries_the_backpressured_tail_on_429(monkeypatch: pytest.MonkeyPatch) -> None:
+    # L1: on a 429 (queue full) the SDK waits and resends only the spans that did
+    # not land (the gateway stored a prefix), instead of dropping the whole batch.
+    import email.message
+    import io
+    import time as _time
+
+    monkeypatch.setattr(_time, "sleep", lambda *_: None)
+    sent: list[dict[str, Any]] = []
+    calls = {"n": 0}
+
+    class _Ok:
+        status = 202
+
+        def __enter__(self) -> _Ok:
+            return self
+
+        def __exit__(self, *exc: object) -> bool:
+            return False
+
+        def read(self) -> bytes:
+            return b'{"accepted": 1, "rejected": 0}'
+
+    def _http_429() -> urllib.error.HTTPError:
+        hdrs = email.message.Message()
+        hdrs["Retry-After"] = "1"
+        return urllib.error.HTTPError(
+            "https://gw/v1/spans", 429, "busy", hdrs, io.BytesIO(b'{"accepted": 1, "backpressured": 1}')
+        )
+
+    def _fake_urlopen(request: Any, *args: Any, **kwargs: Any) -> _Ok:
+        sent.append(json.loads(request.data.decode("utf-8")))
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise _http_429()
+        return _Ok()
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    span_a = Span(trace_id=new_trace_id(), span_id=new_span_id(), name="a", start_time_ns=1)
+    span_b = Span(trace_id=new_trace_id(), span_id=new_span_id(), name="b", start_time_ns=2)
+    HTTPTransport("https://gw.example", "k").send([span_a, span_b])
+
+    assert calls["n"] == 2  # original attempt, then one retry
+    assert len(sent[0]["spans"]) == 2  # first tried both
+    assert [s["name"] for s in sent[1]["spans"]] == ["b"]  # retry sent only the backpressured tail
+
+
 def test_rejections_in_a_202_are_surfaced(caplog: pytest.LogCaptureFixture) -> None:
     # A 202 that still rejected spans must be reported, not counted as fully stored
     # (G1/G5): a running total, a logged warning, and the on_rejection callback.

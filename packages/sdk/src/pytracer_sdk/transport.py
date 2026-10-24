@@ -96,12 +96,19 @@ class HTTPTransport:
     def send(self, spans: list[Span]) -> None:
         if not spans:
             return
-        # Drop fields left at their default (None) from the wire payload, so a
-        # gateway on an older release that predates an optional field is not
-        # tripped by it arriving as null. A span with no error therefore ships
-        # without error_module at all.
+        self._post(spans, drop_fields=frozenset())
+
+    def _post(self, spans: list[Span], *, drop_fields: frozenset[str]) -> None:
+        # Drop fields left at their default (None) from the wire payload, plus any
+        # the gateway rejected as unknown (``drop_fields``, see below), so a gateway
+        # on an older release is not tripped by a field it predates.
         payload = json.dumps(
-            {"spans": [s.model_dump(mode="json", exclude_none=True) for s in spans]}
+            {
+                "spans": [
+                    s.model_dump(mode="json", exclude_none=True, exclude=set(drop_fields) or None)
+                    for s in spans
+                ]
+            }
         ).encode("utf-8")
         request = urllib.request.Request(
             self.url,
@@ -116,9 +123,24 @@ class HTTPTransport:
             ) as resp:
                 if resp.status >= 300:
                     raise TransportError(f"gateway returned HTTP {resp.status}")
-                self._note_rejections(resp.read())
+                body = resp.read()
         except urllib.error.URLError as exc:
             raise TransportError(f"failed to reach gateway at {self.url}: {exc}") from exc
+        # A gateway on an older release rejects a span carrying a field it predates
+        # (e.g. error_module on a failed span). Resend the batch once without those
+        # fields so the span still lands instead of being dropped; the older gateway
+        # could not store the field anyway. A newer gateway ignores unknown fields,
+        # so this never triggers against one.
+        unknown = _unknown_fields(body) if not drop_fields else frozenset()
+        if unknown:
+            _log.warning(
+                "pytracer gateway (older release) rejected unknown field(s) %s; "
+                "resending the batch without them",
+                sorted(unknown),
+            )
+            self._post(spans, drop_fields=unknown)
+            return
+        self._note_rejections(body)
 
     def _note_rejections(self, body: bytes) -> None:
         """Surface any spans the gateway reported as rejected in a 2xx response.
@@ -146,6 +168,24 @@ class HTTPTransport:
                 self._on_rejection(rejected, errors)
             except Exception:  # noqa: BLE001 - a bad callback must not kill the flush worker
                 _log.exception("pytracer on_rejection callback raised")
+
+
+def _unknown_fields(body: bytes) -> frozenset[str]:
+    """Span field names an older gateway rejected as unknown (``extra_forbidden``)
+    in a 202 body, so the batch can be resent without them."""
+    try:
+        data = json.loads(body) if body else {}
+    except ValueError:
+        return frozenset()
+    if not isinstance(data, dict):
+        return frozenset()
+    fields: set[str] = set()
+    for err in data.get("errors") or []:
+        if isinstance(err, dict) and err.get("type") == "extra_forbidden":
+            loc = err.get("loc") or []
+            if loc:
+                fields.add(str(loc[-1]))
+    return frozenset(fields)
 
 
 def _build_ssl_context(verify: bool, ca_bundle: str | None) -> ssl.SSLContext:

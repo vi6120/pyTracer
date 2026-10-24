@@ -25,3 +25,62 @@ jobs:
           # is full); the scan's exit code is what gates the build.
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
           # Uses the repo's .gitleaks.toml config automatically.
+
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install all packages (editable)
+        run: |
+          python -m pip install --upgrade pip
+          editable=""
+          for d in packages/*/; do editable="$editable -e $d"; done
+          python -m pip install $editable
+
+      - name: Audit third-party dependencies
+        run: |
+          python -m pip install pip-audit
+          # --skip-editable: audit the resolved third-party dependency closure,
+          # not the local workspace packages (which are not published for lookup).
+          #
+          # The --ignore-vuln entries are unfixable upstream advisories in
+          # chromadb, a deep transitive dependency pulled in by crewai (for the
+          # CrewAI adapter); none has a fix version yet. The gate still fails on
+          # any other or newly fixable vulnerability. Remove an id once chromadb
+          # ships a fix and the pin is bumped.
+          pip-audit --skip-editable \
+            --ignore-vuln PYSEC-2026-311 \
+            --ignore-vuln PYSEC-2026-3813 \
+            --ignore-vuln PYSEC-2026-3814 \
+            --ignore-vuln PYSEC-2026-3815
+
+  container-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The gateway Dockerfile builds from the repository root so the sibling
+      # packages are in the build context.
+      - name: Build the gateway image
+        run: docker build -f packages/gateway/Dockerfile -t pytracer-gateway:ci .
+
+      # Run Trivy from its official image (the setup-trivy action's binary
+      # installer is unreliable on the runner). It scans the locally built
+      # image through the mounted Docker socket. Table output keeps findings
+      # readable in the log and --exit-code 1 gates the build; --ignore-unfixed
+      # skips base-image CVEs with no fix available. GITHUB_TOKEN authenticates
+      # the vulnerability-database pull so it is not rate-limited.
+      - name: Scan the image with Trivy
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+            aquasec/trivy:0.65.0 image \
+            --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 \
+            pytracer-gateway:ci

@@ -21,6 +21,18 @@ app.invoke(inputs, config={"callbacks": [handler]})   # spans captured for this 
 tool spans, and LangGraph nodes become agent spans, all linked into one trace by
 the run tree.
 
+## One trace per request
+
+Each run starts its own trace. To keep a request that makes several runs, or
+also uses another framework, in one trace, wrap it in a pyTracer span; the run
+nests under the span that is open when it starts:
+
+```python
+with pytracer.start_span("answer-question"):
+    app.invoke(inputs, config={"callbacks": [handler]})
+    ...  # further runs, other adapters, or @op calls join the same trace
+```
+
 ## Replay
 
 This adapter **captures** runs. Replaying a captured run currently requires `@op`

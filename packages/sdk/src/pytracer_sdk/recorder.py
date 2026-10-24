@@ -21,7 +21,7 @@ from typing import Any
 
 from .ids import new_span_id, new_trace_id
 from .schema import Span, SpanKind, SpanStatus
-from .tracer import Tracer
+from .tracer import Tracer, _current
 
 
 class SpanRecorder:
@@ -47,14 +47,22 @@ class SpanRecorder:
         """Begin a span for a framework run.
 
         Trace and parent linkage come from ``parent_run_id``: if its span is
-        open, this span joins that trace as a child; otherwise it starts a new
+        open, this span joins that trace as a child. Otherwise, if a pyTracer span
+        is active in this context (an ``@op`` or ``pytracer.start_span`` around the
+        call, e.g. one framework handing off to another), the span nests under it,
+        so one request is one trace across frameworks. Failing both, it starts a new
         trace as a root. A duplicate ``run_id`` overwrites the earlier open span.
         """
         redactor = self._tracer.redactor
         with self._lock:
             parent = self._open.get(parent_run_id) if parent_run_id is not None else None
-            trace_id = parent.trace_id if parent is not None else new_trace_id()
-            parent_span_id = parent.span_id if parent is not None else None
+            if parent is not None:
+                trace_id = parent.trace_id
+                parent_span_id: str | None = parent.span_id
+            else:
+                ambient = _current.get()
+                trace_id = ambient.trace_id if ambient is not None else new_trace_id()
+                parent_span_id = ambient.span_id if ambient is not None else None
             span = Span(
                 trace_id=trace_id,
                 span_id=new_span_id(),

@@ -6,13 +6,14 @@ needed, only opentelemetry-sdk, a runtime dependency) and assert the mapping.
 
 from __future__ import annotations
 
+import pytest
 import pytracer_sdk as pytracer
 from opentelemetry.trace import Status, StatusCode
 from pytracer_sdk import SpanKind as K
 from pytracer_sdk import SpanStatus
 from pytracer_sdk.transport import InMemoryTransport
 
-from pytracer_autogen import pytracer_tracer_provider
+from pytracer_autogen import install, pytracer_tracer_provider
 
 
 def _setup() -> tuple[object, InMemoryTransport, pytracer.Tracer]:
@@ -105,3 +106,32 @@ def test_attributes_are_redacted() -> None:
     (span,) = sink.spans
     assert secret not in str(span.input)
     assert secret not in str(span.attributes)
+
+
+def test_exporter_built_before_configure_uses_the_configured_tracer() -> None:
+    # P8: the tracer is resolved at export time, so an exporter built before
+    # pytracer.configure(...) still records into the configured transport.
+    ot = pytracer_tracer_provider().get_tracer("test")  # built with no explicit tracer
+    sink = InMemoryTransport()
+    previous = pytracer.get_tracer()
+    pytracer.configure(sink, service_name="ag", branch="main", commit="c0")
+    try:
+        with ot.start_as_current_span("chat gpt-4o") as span:  # type: ignore[attr-defined]
+            span.set_attribute("gen_ai.operation.name", "chat")
+        pytracer.get_tracer().flush()
+    finally:
+        pytracer.set_tracer(previous)
+    assert any(s.kind is K.LLM for s in sink.spans)
+
+
+def test_install_registers_the_provider_globally(monkeypatch: pytest.MonkeyPatch) -> None:
+    # P1/P2: install() registers pyTracer on the global OTel provider, where
+    # AutoGen's GenAI spans go (passing a provider only to the runtime misses them).
+    from opentelemetry import trace as otel_trace
+
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        otel_trace, "set_tracer_provider", lambda provider: captured.__setitem__("provider", provider)
+    )
+    provider = install()
+    assert captured["provider"] is provider

@@ -132,8 +132,14 @@ def create_app(
             payload["errors"] = errors[: cfg.max_errors_in_response]
 
         if backpressured > 0:
-            # Some spans did not fit; ask the client to retry the remainder.
-            return JSONResponse(payload, status_code=status.HTTP_429_TOO_MANY_REQUESTS)
+            # Some spans did not fit; ask the client to retry the remainder. The
+            # Retry-After tells the SDK how long to wait, and the accepted count
+            # lets it resend only the backpressured tail, not the stored prefix.
+            return JSONResponse(
+                payload,
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": "1"},
+            )
         return JSONResponse(payload, status_code=status.HTTP_202_ACCEPTED)
 
     # Prometheus scrape endpoint (no-op stub unless the [metrics] extra is present).

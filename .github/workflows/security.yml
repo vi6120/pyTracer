@@ -25,3 +25,56 @@ jobs:
           # is full); the scan's exit code is what gates the build.
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
           # Uses the repo's .gitleaks.toml config automatically.
+
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install all packages (editable)
+        run: |
+          python -m pip install --upgrade pip
+          editable=""
+          for d in packages/*/; do editable="$editable -e $d"; done
+          python -m pip install $editable
+
+      - name: Audit third-party dependencies
+        run: |
+          python -m pip install pip-audit
+          # --skip-editable: audit the resolved third-party dependency closure,
+          # not the local workspace packages (which are not published for lookup).
+          pip-audit --skip-editable
+
+  container-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # upload the SARIF report to the Security tab
+    steps:
+      - uses: actions/checkout@v4
+
+      # The gateway Dockerfile builds from the repository root so the sibling
+      # packages are in the build context.
+      - name: Build the gateway image
+        run: docker build -f packages/gateway/Dockerfile -t pytracer-gateway:ci .
+
+      - name: Scan the image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: pytracer-gateway:ci
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true  # don't fail on base-image CVEs with no fix available
+          exit-code: "1"
+
+      - name: Upload Trivy results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif

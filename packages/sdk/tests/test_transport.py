@@ -151,6 +151,58 @@ def test_new_sdk_payload_against_a_previous_gateway_release() -> None:
         previous.model_validate(failed_wire)  # upgrade the gateway first
 
 
+def test_resends_without_a_field_an_older_gateway_rejects(monkeypatch: pytest.MonkeyPatch) -> None:
+    # V1: a failed span carries error_module; an older gateway rejects it as an
+    # unknown field. The SDK resends the batch without that field so the span still
+    # lands (with its error type), and it is not counted as permanently rejected.
+    sent: list[dict[str, Any]] = []
+
+    class _Resp:
+        status = 202
+
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self._payload = payload
+
+        def __enter__(self) -> _Resp:
+            return self
+
+        def __exit__(self, *exc: object) -> bool:
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps(self._payload).encode("utf-8")
+
+    responses = [
+        {"accepted": 0, "rejected": 1, "errors": [{"type": "extra_forbidden", "loc": ["error_module"]}]},
+        {"accepted": 1, "rejected": 0},
+    ]
+
+    def _fake_urlopen(request: Any, *args: Any, **kwargs: Any) -> _Resp:
+        sent.append(json.loads(request.data.decode("utf-8")))
+        return _Resp(responses[len(sent) - 1])
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    failed = Span(
+        trace_id=new_trace_id(),
+        span_id=new_span_id(),
+        name="boom",
+        start_time_ns=1,
+        status=SpanStatus.ERROR,
+        error_type="KeyError",
+        error_module="builtins",
+        error_message="missing",
+    )
+    transport = HTTPTransport("https://gw.example", "k")
+    transport.send([failed])
+
+    assert len(sent) == 2  # original attempt plus one resend
+    assert "error_module" in sent[0]["spans"][0]  # first attempt carried the field
+    assert "error_module" not in sent[1]["spans"][0]  # resend dropped it
+    assert sent[1]["spans"][0]["error_type"] == "KeyError"  # but kept the error itself
+    assert transport.rejected_spans == 0  # the resend landed, nothing permanently rejected
+
+
 def test_rejections_in_a_202_are_surfaced(caplog: pytest.LogCaptureFixture) -> None:
     # A 202 that still rejected spans must be reported, not counted as fully stored
     # (G1/G5): a running total, a logged warning, and the on_rejection callback.

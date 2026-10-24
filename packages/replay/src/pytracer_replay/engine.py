@@ -277,7 +277,11 @@ class ReplayEngine:
         )
         try:
             if self.sandbox:
-                with NetworkSandbox(self.network_allow), run_ctx:
+                # Block loopback too, not just remote hosts: a framework's model
+                # call (no @op seam) would otherwise reach a local model server
+                # (Ollama, vLLM, LM Studio) during replay. A loopback host that is
+                # genuinely needed can still be added to network_allow.
+                with NetworkSandbox(self.network_allow, allow_loopback=False), run_ctx:
                     return_value = agent()
             else:
                 with run_ctx:

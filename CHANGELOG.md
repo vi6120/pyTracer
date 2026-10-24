@@ -1,0 +1,68 @@
+# Changelog
+
+## 0.1.3
+
+First release after the pilot re-tests. All 12 packages move to 0.1.3 together.
+
+**Upgrade order: upgrade the gateway before the SDKs that send to it (the hosted
+gateway first).** A gateway on 0.1.3 ignores span fields it does not recognise, so
+a 0.1.3 SDK stays compatible with it. A gateway still on 0.1.2 rejects a failed
+span that carries `error_module`; a 0.1.3 SDK resends such a span without the
+field so it still lands, but the field is stored only once the gateway is on
+0.1.3.
+
+### Fixed
+
+- **SDK / gateway wire compatibility (V1).** A failed span is no longer dropped
+  against an older gateway: the SDK resends the batch without a field the gateway
+  rejects as unknown, and a 0.1.3 gateway ignores unknown fields.
+- **Trace store keeps `error_module` (V2 / R4).** A failure captured through the
+  gateway replays with its real exception type instead of a generic error; an
+  idempotent column backfill upgrades an existing table.
+- **Positional replay matching (R12 / V4).** Matching compares argument values,
+  not the JSON skeleton, so a different id or a genuinely different question is a
+  miss, never the wrong recording served silently.
+- **Run verdict by the agent's outcome (V3).** A tool error the agent caught and
+  recovered from no longer fails the replay; `no_errors` gains a `scope` (`root`
+  default, `any` to also flag a handled child error).
+- **Failure reason in `--json` (R3).** The report carries `error_message`, so
+  `issues sync` and CI can see which call failed.
+- **Honest `reproduce` verdicts (X4, X2 / X5).** `cannot_judge` (a model input
+  changed) and `cannot_reproduce` (recordings did not match) exit with code `2`;
+  `reproduce` gains `--evaluate-changed-prompts`.
+- **Backpressure is not lossy (L1).** The queue-full `429` carries `Retry-After`
+  and the SDK retries the backpressured spans instead of dropping the batch.
+- **Deploy settings take effect (D1).** The compose file forwards the managed-key,
+  rate-limit and queue-size settings, and the gateway logs the active auth backend
+  at startup.
+- **Full-mode replay blocks loopback (P6).** A framework model call cannot reach a
+  local model server during replay; add a loopback host to the allowlist to permit
+  it.
+- **Framework adapters.** AutoGen captures via global registration with `install()`
+  and resolves its tracer lazily (P1 / P2 / P8); CrewAI nests model and tool calls
+  under the open agent (P3); the OpenAI Agents adapter folds structural task/turn
+  spans (P4); an adapter's framework root nests under an active pyTracer span, so a
+  multi-framework request is one trace (P5).
+
+### Documentation
+
+- `HTTPTransport.rejected_spans` and the `on_rejection` callback are documented
+  (G1 / G5).
+- The docs page covers positional matching, the `cannot_judge` / `cannot_reproduce`
+  verdicts and exit code 2, `reproduce --evaluate-changed-prompts`, `no_errors`
+  `scope`, and the gateway-first upgrade order.
+- The deploy guide documents reaching the published stack's stores from the CLI,
+  which publish no ports (D2).
+
+### Known limitations
+
+- A model call captured only through a framework adapter cannot be replayed through
+  `@op` on tools; replaying an adapter-only run is flagged, not run live (A1,
+  roadmap).
+- Some GenAI-instrumented libraries send model output to the OpenTelemetry logs
+  API, which the AutoGen exporter does not read, so those outputs are not captured
+  (P7).
+
+## 0.1.2
+
+Initial public release (12 packages on PyPI).

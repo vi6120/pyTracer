@@ -74,6 +74,14 @@ services:
       # gateway restart instead of living only in process memory.
       PYTRACER_GATEWAY_QUEUE_BACKEND: ${PYTRACER_GATEWAY_QUEUE_BACKEND:-redis}
       PYTRACER_REDIS_URL: redis://redis:6379/0
+      # Managed keys, per-key rate limiting and queue size reach the container only
+      # if forwarded here. Defaults match the gateway's own, so behaviour is unchanged
+      # until set. Set AUTH_BACKEND=postgres for the managed key store (see the README).
+      PYTRACER_GATEWAY_AUTH_BACKEND: ${PYTRACER_GATEWAY_AUTH_BACKEND:-static}
+      PYTRACER_GATEWAY_AUTH_CACHE_TTL: ${PYTRACER_GATEWAY_AUTH_CACHE_TTL:-30}
+      PYTRACER_GATEWAY_RATE_LIMIT_PER_SEC: ${PYTRACER_GATEWAY_RATE_LIMIT_PER_SEC:-0}
+      PYTRACER_GATEWAY_RATE_LIMIT_BURST: ${PYTRACER_GATEWAY_RATE_LIMIT_BURST:-0}
+      PYTRACER_GATEWAY_QUEUE_MAXSIZE: ${PYTRACER_GATEWAY_QUEUE_MAXSIZE:-10000}
     ports:
       # Defaults to publishing on all interfaces for local use. On a public host
       # set PYTRACER_GATEWAY_PUBLISH=127.0.0.1:8080:8080 so only the TLS proxy is

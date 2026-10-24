@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, TypeVar
 
-from .buffer import DEFAULT_FLUSH_TIMEOUT, SpanBuffer
+from .buffer import DEFAULT_FLUSH_TIMEOUT, DropCallback, SpanBuffer
 from .ids import new_span_id, new_trace_id
 from .redaction import Redactor
 from .schema import Resource, Span, SpanKind, SpanStatus
@@ -162,10 +162,12 @@ class Tracer:
         redactor: Redactor | None = None,
         buffer: SpanBuffer | None = None,
         interceptor: Interceptor | None = None,
+        on_drop: DropCallback | None = None,
     ) -> None:
         self.resource = resource or Resource()
         self.redactor = redactor or Redactor()
-        self.buffer = buffer or SpanBuffer(transport)
+        # on_drop applies to the buffer built here; a caller-supplied buffer keeps its own.
+        self.buffer = buffer or SpanBuffer(transport, on_drop=on_drop)
         # When set, consulted before every op to optionally inject a recorded
         # output (used by the replay engine). Settable at runtime.
         self.interceptor = interceptor

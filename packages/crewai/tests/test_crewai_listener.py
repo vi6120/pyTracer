@@ -43,6 +43,23 @@ def test_tool_under_agent_linkage() -> None:
     assert spans["search"].output == "results"
 
 
+def test_event_with_an_unopened_parent_nests_under_the_current_agent() -> None:
+    # CrewAI 1.15 can set parent_event_id to an intermediate event the listener
+    # never opened as a span; such a call must nest under the open agent, not start
+    # a new root trace (P3).
+    lis, sink, tracer = _setup()
+    lis.on_agent_start(None, _E(event_id="a1", agent_role="writer"))
+    lis.on_tool_start(
+        None,
+        _E(event_id="t1", parent_event_id="intermediate-not-a-span", tool_name="lookup", tool_args={}),
+    )
+    lis.on_tool_end(None, _E(started_event_id="t1", output="ok"))
+    lis.on_agent_end(None, _E(started_event_id="a1", output="done"))
+    tracer.flush()
+    spans = {s.name: s for s in sink.spans}
+    assert spans["lookup"].parent_span_id == spans["writer"].span_id  # nested, not a root
+
+
 def test_llm_tokens() -> None:
     lis, sink, tracer = _setup()
     lis.on_llm_start(None, _E(event_id="l1", model="gpt-4o", messages=[{"role": "user", "content": "hi"}]))

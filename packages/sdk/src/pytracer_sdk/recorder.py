@@ -118,3 +118,9 @@ class SpanRecorder:
         """Number of spans started but not yet ended (useful for diagnostics)."""
         with self._lock:
             return len(self._open)
+
+    def is_open(self, run_id: str) -> bool:
+        """True when ``run_id`` names a started span that has not ended, so a
+        caller can tell whether a reported parent id can actually be nested under."""
+        with self._lock:
+            return run_id in self._open

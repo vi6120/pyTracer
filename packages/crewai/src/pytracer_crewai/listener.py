@@ -142,7 +142,12 @@ class PyTracerEventListener(BaseEventListener):
         fallback_parent: str | None = None,
     ) -> None:
         parent = getattr(event, "parent_event_id", None)
-        parent_id = str(parent) if parent else fallback_parent
+        parent_id = str(parent) if parent else None
+        # CrewAI can point parent_event_id at an intermediate event we never opened
+        # as a span (seen in 1.15), which would start a new root trace. Nest under
+        # the innermost open agent instead whenever the reported parent is not open.
+        if parent_id is None or not self._recorder.is_open(parent_id):
+            parent_id = fallback_parent
         self._recorder.start(
             str(event.event_id),
             name=name,

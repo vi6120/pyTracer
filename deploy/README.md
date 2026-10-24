@@ -155,6 +155,39 @@ way, point the SDK at the `https://` endpoint (see
   data.
 - **Restart**: the gateway restarts automatically (`restart: unless-stopped`).
 
+## Sizing the queue
+
+`PYTRACER_GATEWAY_QUEUE_MAXSIZE` (default `10000`) caps how many spans wait
+between the request path and the storage writer: the in-process queue's length
+with the `memory` backend, or the Redis stream's live backlog with `redis`. When
+it is full the gateway answers `429` with `Retry-After: 1` and stores none of the
+overflow; the SDK waits and resends only the overflow, up to 3 retries. A span
+still not accepted after that is counted in the sender's `send_errors`, logged,
+and passed to its `on_drop` callback (see the SDK README), so nothing is lost
+silently, but it is lost. Size the queue so a normal burst fits:
+
+- **Queue size ≥ peak spans per second × the longest storage stall to absorb.**
+  For example, 2,000 spans/s through a 10 s ClickHouse pause needs about 20,000.
+- **Memory.** Each queued span costs roughly its JSON size plus about 2 KB of
+  overhead in the gateway (`memory` backend) or about its JSON size in Redis.
+  A tool span with ~100 bytes of input and output is about 0.8 KB of JSON; with
+  2 KB each way, about 4.5 KB. So 20,000 queued spans of the larger kind need
+  about 130 MB in the gateway process, or about 90 MB in Redis (plus Redis's own
+  per-entry overhead). Large model prompts and responses dominate: estimate from
+  your own span sizes.
+- **Watch it.** With the `[metrics]` extra, `pytracer_spans_backpressured_total`
+  counts spans turned away by a full queue, and
+  `pytracer_spans_accepted_total` versus `pytracer_spans_written_total` shows
+  whether the writer keeps up. Backpressure during a short spike is the queue doing
+  its job; steady backpressure means the writer is the bottleneck, and a larger
+  queue only delays the loss.
+
+When the writer is the bottleneck, add gateway instances (next section), each of
+which runs its own writer on the shared stream, rather than growing the queue.
+On the sending side, the SDK has its own in-process queue (100,000 spans by
+default); its overflow is reported the same way, as `dropped` and through
+`on_drop`.
+
 ## Scaling
 
 The gateway is stateless, so the first scaling step is running several gateway

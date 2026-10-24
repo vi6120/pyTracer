@@ -48,7 +48,17 @@ jobs:
           python -m pip install pip-audit
           # --skip-editable: audit the resolved third-party dependency closure,
           # not the local workspace packages (which are not published for lookup).
-          pip-audit --skip-editable
+          #
+          # The --ignore-vuln entries are unfixable upstream advisories in
+          # chromadb, a deep transitive dependency pulled in by crewai (for the
+          # CrewAI adapter); none has a fix version yet. The gate still fails on
+          # any other or newly fixable vulnerability. Remove an id once chromadb
+          # ships a fix and the pin is bumped.
+          pip-audit --skip-editable \
+            --ignore-vuln PYSEC-2026-311 \
+            --ignore-vuln PYSEC-2026-3813 \
+            --ignore-vuln PYSEC-2026-3814 \
+            --ignore-vuln PYSEC-2026-3815
 
   container-scan:
     runs-on: ubuntu-latest
@@ -64,7 +74,7 @@ jobs:
         run: docker build -f packages/gateway/Dockerfile -t pytracer-gateway:ci .
 
       - name: Scan the image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.33.1
         with:
           image-ref: pytracer-gateway:ci
           format: sarif

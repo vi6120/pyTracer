@@ -70,18 +70,17 @@ jobs:
       - name: Build the gateway image
         run: docker build -f packages/gateway/Dockerfile -t pytracer-gateway:ci .
 
-      # Table output so any finding is readable in the job log, and exit-code 1
-      # gates the build. ignore-unfixed skips base-image CVEs that have no fix
-      # available yet (SARIF output and exit-code gating cannot share one step).
+      # Run Trivy from its official image (the setup-trivy action's binary
+      # installer is unreliable on the runner). It scans the locally built
+      # image through the mounted Docker socket. Table output keeps findings
+      # readable in the log and --exit-code 1 gates the build; --ignore-unfixed
+      # skips base-image CVEs with no fix available. GITHUB_TOKEN authenticates
+      # the vulnerability-database pull so it is not rate-limited.
       - name: Scan the image with Trivy
-        uses: aquasecurity/trivy-action@v0.33.1
-        env:
-          # Authenticate the Trivy binary and DB downloads so they are not
-          # rate-limited by the unauthenticated GitHub API / registry.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          image-ref: pytracer-gateway:ci
-          format: table
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: "1"
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+            aquasec/trivy:0.65.0 image \
+            --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 \
+            pytracer-gateway:ci

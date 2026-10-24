@@ -83,13 +83,28 @@ def run_reproduction(
 
 
 def format_verdicts(verdicts: dict[str, Any]) -> str:
-    """Render per-scenario cross-branch outcomes as a table."""
+    """Render per-scenario cross-branch outcomes as a table, with a hint for the
+    inconclusive outcomes so they are not read as a plain pass or fail."""
     if not verdicts:
         return "no scenarios"
     lines = [f"{'SCENARIO':<28} OUTCOME"]
+    values: set[str] = set()
     for name in sorted(verdicts):
-        outcome = verdicts[name]
-        lines.append(f"{name[:28]:<28} {getattr(outcome, 'value', outcome)}")
+        value = str(getattr(verdicts[name], "value", verdicts[name]))
+        values.add(value)
+        lines.append(f"{name[:28]:<28} {value}")
+    if "cannot_reproduce" in values:
+        lines.append("")
+        lines.append(
+            "cannot_reproduce: neither ref matched its recordings; re-run with "
+            "--env-file so both reach the bug."
+        )
+    if "cannot_judge" in values:
+        lines.append("")
+        lines.append(
+            "cannot_judge: a model input changed, which a frozen replay cannot "
+            "judge; try reproduce --evaluate-changed-prompts."
+        )
     return "\n".join(lines)
 
 

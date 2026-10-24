@@ -18,6 +18,7 @@ from typing import Any
 
 import clickhouse_connect
 from clickhouse_connect.driver.client import Client
+from pytracer_sdk.codec import encode_value
 from pytracer_sdk.schema import Resource, Span, SpanKind, SpanStatus
 
 from .config import ClickHouseConfig
@@ -182,8 +183,11 @@ class TraceStore:
             span.kind.value,
             span.agent_name,
             span.tool_name,
-            canonical_json(span.input) if span.input is not None else None,
-            canonical_json(span.output) if span.output is not None else None,
+            # Tag non-JSON values (Decimal, datetime, ...) so a span read back from
+            # the store replays with the same types it was captured with; the
+            # Span schema restores them when the row is rebuilt.
+            canonical_json(encode_value(span.input)) if span.input is not None else None,
+            canonical_json(encode_value(span.output)) if span.output is not None else None,
             span.start_time_ns,
             span.end_time_ns,
             span.latency_ms,

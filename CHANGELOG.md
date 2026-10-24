@@ -41,8 +41,10 @@ field so it still lands, but the field is stored only once the gateway is on
 - **Framework adapters.** AutoGen captures via global registration with `install()`
   and resolves its tracer lazily (P1 / P2 / P8); CrewAI nests model and tool calls
   under the open agent (P3); the OpenAI Agents adapter folds structural task/turn
-  spans (P4); an adapter's framework root nests under an active pyTracer span, so a
-  multi-framework request is one trace (P5).
+  spans (P4); the LangGraph, CrewAI and OpenAI Agents adapters nest a framework run
+  under an active pyTracer span, so wrapping a multi-framework request in
+  `pytracer.start_span(...)` (or an `@op`) makes it one trace; without that wrapper
+  each framework run is still its own trace, and AutoGen does not nest (P5).
 
 ### Documentation
 

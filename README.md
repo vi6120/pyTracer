@@ -65,6 +65,17 @@ instrumentation (the replay engine intercepts `@op` calls); replay through the
 adapters is on the roadmap. Twelve packages in all, published on PyPI; the full
 list is on the [docs site](https://pytracer.com/docs#packages).
 
+An adapter captures only what its framework reports:
+
+| | LangGraph | OpenAI Agents | CrewAI | AutoGen |
+|---|---|---|---|---|
+| Agent spans | Yes | Yes | Yes | Yes |
+| Model calls (model, tokens, output) | Yes | Yes | Yes | Not emitted by AutoGen 0.7.x; with a GenAI-instrumented model client, model and tokens but no output |
+| Tool calls with their output | Yes | Yes | Yes | Tool span only; AutoGen 0.7.x reports no result |
+| One trace per framework run | Yes | Yes | Yes | No, a team run arrives as several traces |
+| Nests under an enclosing `pytracer.start_span(...)` | Yes | Yes | Yes | No |
+| Replay through the adapter | Not yet | Not yet | Not yet | Not yet |
+
 Backing services (ClickHouse, PostgreSQL, and Redis for the durable ingest
 queue) run via [docker-compose.yml](docker-compose.yml).
 

@@ -140,3 +140,9 @@ def test_format_verdicts() -> None:
     assert "fixed" in table
     assert "diverged" in table
     assert "SCENARIO" in table
+
+
+def test_format_verdicts_hints_the_inconclusive_outcomes() -> None:
+    table = format_verdicts({"a": Outcome.CANNOT_REPRODUCE, "b": Outcome.CANNOT_JUDGE})
+    assert "cannot_reproduce" in table and "--env-file" in table
+    assert "cannot_judge" in table and "--evaluate-changed-prompts" in table

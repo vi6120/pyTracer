@@ -164,6 +164,21 @@ def test_render_advice_switches_when_evaluate_is_on() -> None:
     assert "re-run with `--evaluate-changed-prompts`" not in on
 
 
+def test_cannot_reproduce_does_not_show_the_prompt_edit_advice() -> None:
+    # A cannot_reproduce scenario drifted on a settings problem, not a prompt edit,
+    # so the evaluate-changed-prompts advice is suppressed even when changed_models
+    # is set; the --env-file hint is what shows instead.
+    body = render_comment(
+        candidate_ref="fix",
+        baseline_ref="main",
+        verdicts={"a": Outcome.CANNOT_REPRODUCE},
+        changed_models={"a": ["call_model"]},
+    )
+    assert "evaluate-changed-prompts" not in body
+    assert "Model inputs changed" not in body
+    assert "--env-file" in body
+
+
 # --- upsert orchestration ---------------------------------------------------
 
 

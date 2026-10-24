@@ -345,6 +345,7 @@ def reproduce(
         from pytracer_runner import (
             CrossBranchRunner,
             DockerExecutor,
+            Executor,
             GitSourceProvider,
             LocalExecutor,
             classify_reproduction,
@@ -358,7 +359,11 @@ def reproduce(
 
     from .reproduce import all_fixed, format_verdicts, run_reproduction
 
-    executor = DockerExecutor() if isolation == "docker" else LocalExecutor()
+    executor: Executor
+    if isolation == "docker":
+        executor = DockerExecutor()
+    else:
+        executor = LocalExecutor()
     runner = CrossBranchRunner(GitSourceProvider(repo), executor)
     try:
         _, candidate, verdicts = run_reproduction(

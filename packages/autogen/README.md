@@ -1,9 +1,22 @@
 # pytracer-autogen
 
-pyTracer adapter for AutoGen (0.4+). AutoGen instruments agents, tool calls, and
-model calls with OpenTelemetry using the GenAI semantic conventions. This adapter
-plugs a pyTracer exporter into an OpenTelemetry tracer provider, so those spans are
-captured as pyTracer spans with no `@op` in the agent code.
+pyTracer adapter for AutoGen (0.4+). AutoGen emits OpenTelemetry spans using the
+GenAI semantic conventions; this adapter plugs a pyTracer exporter into an
+OpenTelemetry tracer provider, so the spans AutoGen emits are captured as pyTracer
+spans with no `@op` in the agent code. pyTracer records what AutoGen reports, and
+AutoGen reports less than the other frameworks:
+
+| | Captured |
+|---|---|
+| Agent spans, with the agent's name | Yes |
+| Tool calls | Yes, as tool spans. AutoGen 0.7.x does not report the tool's result, so the output is empty |
+| Model calls | Not from AutoGen 0.7.x, which emits no model-call span. With a GenAI-instrumented model client (for example `opentelemetry-instrumentation-openai-v2`), each call is captured with its model and token counts, but not its output, because that library sends content to the OpenTelemetry logs API |
+| One trace per team run | No. AutoGen gives each agent its own OpenTelemetry trace, so a team run arrives as several traces |
+| Nesting under an enclosing `pytracer.start_span(...)` | No. Spans keep AutoGen's own trace ids |
+| Replay | Not through the adapter (see [Replay](#replay)) |
+
+If you need full model and tool payloads or one trace per run today, add `@op` to
+the model client wrapper and the tools; those spans are complete and replayable.
 
 AutoGen emits its GenAI model and tool spans through the **global** OpenTelemetry
 provider, so register pyTracer globally with `install()` before building the

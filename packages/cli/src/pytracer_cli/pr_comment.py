@@ -52,7 +52,14 @@ def render_comment(
     ``evaluate_changed_prompts`` reflects whether the run already evaluated those
     live, so the note does not advise turning on an option that is already on.
     """
-    changed = {n: m for n, m in (changed_models or {}).items() if m}
+    # A cannot_reproduce scenario drifted on a settings problem, not a prompt edit,
+    # so it must not get the "re-run with --evaluate-changed-prompts" advice, which
+    # would only make more live calls with the wrong settings.
+    changed = {
+        n: m
+        for n, m in (changed_models or {}).items()
+        if m and _value(verdicts.get(n)) != "cannot_reproduce"
+    }
     counts: dict[str, int] = {}
     rows: list[str] = []
     for name in sorted(verdicts):
@@ -130,7 +137,8 @@ def render_comment(
     lines += [
         "",
         "<sub>fixed = now passes &middot; still failing = same failure &middot; "
-        "diverged = a new, different failure</sub>",
+        "diverged = a new, different failure &middot; cannot judge = a model input changed "
+        "&middot; cannot reproduce = recordings did not match</sub>",
     ]
     return "\n".join(lines)
 

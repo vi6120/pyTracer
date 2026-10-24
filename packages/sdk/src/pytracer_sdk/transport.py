@@ -11,6 +11,7 @@ import json
 import logging
 import ssl
 import threading
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -93,12 +94,18 @@ class HTTPTransport:
         self.rejected_spans = 0
         self._on_rejection = on_rejection
 
+    # Backpressure/unavailability retries: resend the spans that did not land,
+    # after the server's Retry-After or a capped backoff, so a spike doesn't drop
+    # them silently.
+    _MAX_RETRIES = 3
+    _BACKOFF_CAP = 5.0
+
     def send(self, spans: list[Span]) -> None:
         if not spans:
             return
         self._post(spans, drop_fields=frozenset())
 
-    def _post(self, spans: list[Span], *, drop_fields: frozenset[str]) -> None:
+    def _post(self, spans: list[Span], *, drop_fields: frozenset[str], attempt: int = 0) -> None:
         # Drop fields left at their default (None) from the wire payload, plus any
         # the gateway rejected as unknown (``drop_fields``, see below), so a gateway
         # on an older release is not tripped by a field it predates.
@@ -124,6 +131,19 @@ class HTTPTransport:
                 if resp.status >= 300:
                     raise TransportError(f"gateway returned HTTP {resp.status}")
                 body = resp.read()
+        except urllib.error.HTTPError as exc:
+            # Backpressure (429, queue full) or temporary unavailability (503):
+            # the gateway stored a prefix and asked us to retry the rest. Resend
+            # only the backpressured tail (never the stored prefix) after the
+            # server's Retry-After or a capped backoff, so a spike is not dropped.
+            if exc.code in (429, 503) and attempt < self._MAX_RETRIES:
+                accepted = _accepted_count(exc)
+                delay = _retry_delay(exc, attempt, self._BACKOFF_CAP)
+                remaining = spans[accepted:] if 0 < accepted < len(spans) else spans
+                time.sleep(delay)
+                self._post(remaining, drop_fields=drop_fields, attempt=attempt + 1)
+                return
+            raise TransportError(f"gateway returned HTTP {exc.code}") from exc
         except urllib.error.URLError as exc:
             raise TransportError(f"failed to reach gateway at {self.url}: {exc}") from exc
         # A gateway on an older release rejects a span carrying a field it predates
@@ -168,6 +188,29 @@ class HTTPTransport:
                 self._on_rejection(rejected, errors)
             except Exception:  # noqa: BLE001 - a bad callback must not kill the flush worker
                 _log.exception("pytracer on_rejection callback raised")
+
+
+def _accepted_count(exc: urllib.error.HTTPError) -> int:
+    """How many spans the gateway stored before backpressuring, from a 429 body,
+    so only the rest is resent. 0 (resend all) if the body can't be read."""
+    try:
+        data = json.loads(exc.read() or b"{}")
+    except (ValueError, OSError):
+        return 0
+    n = data.get("accepted") if isinstance(data, dict) else None
+    return n if isinstance(n, int) and n >= 0 else 0
+
+
+def _retry_delay(exc: urllib.error.HTTPError, attempt: int, cap: float) -> float:
+    """Seconds to wait before retrying: the server's ``Retry-After`` if present,
+    else a capped exponential backoff."""
+    retry_after = exc.headers.get("Retry-After") if exc.headers else None
+    if retry_after:
+        try:
+            return min(float(retry_after), cap)
+        except ValueError:
+            pass
+    return min(cap, 0.1 * (2**attempt))
 
 
 def _unknown_fields(body: bytes) -> frozenset[str]:

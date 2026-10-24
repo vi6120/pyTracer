@@ -77,15 +77,26 @@ PYTRACER_GATEWAY_AUTH_BACKEND=postgres \
   docker compose -f deploy/docker-compose.yml up -d --build
 ```
 
-Then create and revoke keys with the CLI (it needs the store client:
-`pip install pytracer-cli[stores]`, and the same `PYTRACER_POSTGRES_*` settings the
-gateway uses):
+Then create and revoke keys with the CLI. The stores publish **no ports** (see the
+security notes), so from your host `postgres`/`clickhouse` do not resolve and the
+CLI cannot reach them. Run it **on the stack's network** instead, in a one-off
+container, with the same `PYTRACER_POSTGRES_*` settings the gateway uses (the
+compose project's network is `deploy_default`):
 
 ```bash
-pytracer keys create web-agent --name ci   # prints the secret ONCE
-pytracer keys list                         # never shows secrets
-pytracer keys revoke <key_id>              # stops it authenticating
+docker run --rm -it --network deploy_default \
+  -e PYTRACER_POSTGRES_HOST=postgres \
+  -e PYTRACER_POSTGRES_PASSWORD="$PYTRACER_POSTGRES_PASSWORD" \
+  python:3.12-slim sh -c \
+  "pip install -q 'pytracer-cli[stores]' && pytracer keys create web-agent --name ci"
+# keys list / keys revoke <key_id> work the same way
 ```
+
+The same applies to browsing traces (`pytracer traces list` / `record`) against the
+deployed trace store: run the CLI on `deploy_default` with the `PYTRACER_CLICKHOUSE_*`
+settings, or open an SSH tunnel to the stores. Pin the CLI to the gateway's version
+so its store schema matches. (A future option is read endpoints on the gateway so
+the CLI needs no direct store access.)
 
 Keys are stored hashed (SHA-256), never in plaintext: the full key is shown only
 at creation. A revoked key stops working within `PYTRACER_GATEWAY_AUTH_CACHE_TTL`

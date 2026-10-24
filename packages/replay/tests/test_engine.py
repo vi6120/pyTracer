@@ -68,7 +68,7 @@ def test_fuzzy_match_injects_recorded_output_on_drifted_input() -> None:
     state["q"] = "summarize the quarterly earnings summary"
 
     # Exact match misses the drifted input, so the tool body runs live.
-    exact = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
     assert calls["n"] == 2
     # Fuzzy falls back to the near recording: no live call, recorded output.
     fuzzy = ReplayEngine(ReplayMode.FULL, fuzzy_match=True).replay(agent, mocks)

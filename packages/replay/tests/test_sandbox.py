@@ -66,6 +66,53 @@ def test_loopback_is_allowed_by_default() -> None:
             s.close()
 
 
+def test_loopback_blocked_when_disallowed() -> None:
+    # P6: with loopback not allowed, a local connection is blocked, so a replay
+    # cannot reach a local model server (Ollama, vLLM, LM Studio) on loopback.
+    with NetworkSandbox(allow_loopback=False):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            with pytest.raises(BlockedNetworkError):
+                s.connect(("127.0.0.1", 1))
+        finally:
+            s.close()
+
+
+def test_loopback_passes_when_explicitly_allowed_even_if_default_blocks() -> None:
+    # An explicitly allowed loopback host still passes: a closed port gives a normal
+    # connection error, not a BlockedNetworkError.
+    with NetworkSandbox(["127.0.0.1"], allow_loopback=False):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1)
+        try:
+            with pytest.raises(OSError) as exc:
+                s.connect(("127.0.0.1", 1))
+            assert not isinstance(exc.value, BlockedNetworkError)
+        finally:
+            s.close()
+
+
+def test_engine_sandbox_blocks_a_loopback_live_call() -> None:
+    # P6 end to end: a live model call reaching loopback during replay is now
+    # blocked by the engine's sandbox, not allowed through to a local server.
+    @pytracer.op(kind=SpanKind.LLM)
+    def model(x: str) -> str:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.connect(("127.0.0.1", 1))
+        finally:
+            s.close()
+        return "unreachable"
+
+    @pytracer.op(kind=SpanKind.AGENT)
+    def agent() -> str:
+        return model("hi")
+
+    result = ReplayEngine(ReplayMode.PARTIAL, sandbox=True).replay(agent, MockSet())
+    assert result.failed
+    assert result.error_type == "BlockedNetworkError"  # blocked, not a closed-port error
+
+
 def test_explicit_allowlist_permits_host() -> None:
     with NetworkSandbox(allow=[BLOCKED_HOST]):
         # getaddrinfo for an IP literal does no DNS and is now allowed.

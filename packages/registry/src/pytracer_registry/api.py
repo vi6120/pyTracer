@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from .diffmerge import MergeConflict
 from .models import Collection, CollectionArtifact, PullRequest, Version, Visibility
 from .registry import AccessDenied, NotFoundError, Registry
-from .store import FilesystemStore, InMemoryStore
+from .store import FilesystemStore, InMemoryStore, Store
 
 API_KEY_HEADER = "X-API-Key"
 
@@ -175,5 +175,9 @@ def build_default_app() -> FastAPI:
     (``key:user,key:user``).
     """
     store_dir = os.getenv("PYTRACER_REGISTRY_DIR")
-    store = FilesystemStore(store_dir) if store_dir else InMemoryStore()
+    store: Store
+    if store_dir:
+        store = FilesystemStore(store_dir)
+    else:
+        store = InMemoryStore()
     return create_app(registry=Registry(store), auth=StaticUserAuth(_load_keys()))

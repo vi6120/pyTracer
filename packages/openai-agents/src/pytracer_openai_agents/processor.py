@@ -81,6 +81,20 @@ def _classify(data: Any) -> tuple[str, SpanKind, str | None, str | None]:
     return str(getattr(data, "type", "span")), SpanKind.UNKNOWN, None, None
 
 
+# Span data types that carry a real agent/model/tool/handoff. Anything else (the
+# SDK's structural "task"/"turn" spans) is folded into its parent so the tree has
+# no "unknown" spans and the real work still nests correctly.
+_KNOWN_SPAN_DATA = (
+    AgentSpanData,
+    FunctionSpanData,
+    GenerationSpanData,
+    ResponseSpanData,
+    HandoffSpanData,
+    GuardrailSpanData,
+    CustomSpanData,
+)
+
+
 def _output(data: Any) -> Any:
     if isinstance(data, ResponseSpanData):
         return _jsonify(getattr(data, "response", None))
@@ -112,6 +126,15 @@ class PyTracerTracingProcessor(TracingProcessor):
 
     def __init__(self, tracer: Tracer | None = None) -> None:
         self._recorder = SpanRecorder(tracer or get_tracer())
+        # Folded structural spans: id -> the parent its children should attach to.
+        self._folded: dict[str, str] = {}
+
+    def _effective_parent(self, span: Span[Any]) -> str:
+        """The parent to nest under, skipping any folded (structural) ancestors."""
+        parent = span.parent_id or span.trace_id
+        while parent in self._folded:
+            parent = self._folded[parent]
+        return parent
 
     def on_trace_start(self, trace: AgentsTrace) -> None:
         self._recorder.start(
@@ -125,6 +148,12 @@ class PyTracerTracingProcessor(TracingProcessor):
         self._recorder.end(trace.trace_id)
 
     def on_span_start(self, span: Span[Any]) -> None:
+        parent = self._effective_parent(span)
+        if not isinstance(span.span_data, _KNOWN_SPAN_DATA):
+            # A structural span (e.g. "task"/"turn"): fold it so its children nest
+            # under its parent instead of an "unknown" span.
+            self._folded[span.span_id] = parent
+            return
         name, kind, agent_name, tool_name = _classify(span.span_data)
         self._recorder.start(
             span.span_id,
@@ -132,11 +161,13 @@ class PyTracerTracingProcessor(TracingProcessor):
             kind=kind,
             agent_name=agent_name,
             tool_name=tool_name,
-            parent_run_id=span.parent_id or span.trace_id,
+            parent_run_id=parent,
             attributes={"framework": "openai-agents"},
         )
 
     def on_span_end(self, span: Span[Any]) -> None:
+        if self._folded.pop(span.span_id, None) is not None:
+            return
         data = span.span_data
         self._recorder.end(
             span.span_id,

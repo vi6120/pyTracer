@@ -62,9 +62,6 @@ jobs:
 
   container-scan:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write  # upload the SARIF report to the Security tab
     steps:
       - uses: actions/checkout@v4
 
@@ -73,18 +70,14 @@ jobs:
       - name: Build the gateway image
         run: docker build -f packages/gateway/Dockerfile -t pytracer-gateway:ci .
 
+      # Table output so any finding is readable in the job log, and exit-code 1
+      # gates the build. ignore-unfixed skips base-image CVEs that have no fix
+      # available yet (SARIF output and exit-code gating cannot share one step).
       - name: Scan the image with Trivy
         uses: aquasecurity/trivy-action@v0.33.1
         with:
           image-ref: pytracer-gateway:ci
-          format: sarif
-          output: trivy-results.sarif
+          format: table
           severity: CRITICAL,HIGH
-          ignore-unfixed: true  # don't fail on base-image CVEs with no fix available
+          ignore-unfixed: true
           exit-code: "1"
-
-      - name: Upload Trivy results
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-results.sarif

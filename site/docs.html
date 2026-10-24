@@ -227,7 +227,12 @@ scenarios:
     (recorded tools, live model), and <code>live</code>.</p>
     <p>For higher fidelity, <strong>streaming</strong> model responses replay token by
     token, and <strong>concurrent or repeated tool calls</strong> replay their recorded
-    responses in order. The engine can also freeze the clock and seed the RNG around a
+    responses in order. Calls with the same input that run at the same time on different
+    threads are matched by the op that made them (its name and input), so each gets the
+    response recorded under its own caller whatever order the threads arrive in; only
+    calls with an identical path (same op, same input, same caller with the same input)
+    and differing recordings cannot be told apart, and those are reported in the run's
+    result rather than silently swapped. The engine can also freeze the clock and seed the RNG around a
     run (so a live or partial replay stays reproducible beyond the mocks), and it records
     the external tool calls a replay makes, so you can flag non-idempotent or conflicting
     writes.</p>

@@ -35,3 +35,7 @@ jobs:
             echo "::endgroup::"
           done
           exit $failed
+
+      # The examples are what new users copy first, so hold them to the same bar.
+      - name: Lint the examples
+        run: ruff check examples

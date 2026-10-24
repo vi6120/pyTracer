@@ -378,6 +378,18 @@ pytest -v
 pip install pytracer-openai-agents    # OpenAI Agents SDK
 pip install pytracer-crewai           # CrewAI
 pip install pytracer-autogen          # AutoGen</code></pre>
+    <p id="adapter-capabilities">What each adapter captures today:</p>
+    <table>
+      <thead><tr><th></th><th>LangGraph</th><th>OpenAI Agents</th><th>CrewAI</th><th>AutoGen</th></tr></thead>
+      <tbody>
+        <tr><td>Agent spans</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>Model calls (model, tokens, output)</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Not emitted by AutoGen 0.7.x; with a GenAI-instrumented model client, model and tokens but no output</td></tr>
+        <tr><td>Tool calls with their output</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Tool span only; AutoGen 0.7.x reports no result</td></tr>
+        <tr><td>One trace per framework run</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No, a team run arrives as several traces</td></tr>
+        <tr><td>Nests under an enclosing <code>pytracer.start_span(...)</code></td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+        <tr><td>Replay through the adapter</td><td colspan="4">Not yet, for any adapter: replay needs <code>@op</code> (see below)</td></tr>
+      </tbody>
+    </table>
     <p>An adapter captures only what its framework reports. The LangGraph adapter sees
     calls made through LangChain, so a model call on a raw provider client, or a tool
     that is a plain Python function, is not captured; instrument those with

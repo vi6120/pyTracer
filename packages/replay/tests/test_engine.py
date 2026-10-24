@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 import pytracer_sdk as pytracer
 from pytracer_sdk import SpanKind, SpanStatus
+from pytracer_sdk.schema import Span
 
 from pytracer_replay import MockSet, ReplayEngine, ReplayMode
 
@@ -326,6 +328,25 @@ def test_a_handled_tool_error_leaves_the_run_passing() -> None:
     res = ReplayEngine(ReplayMode.FULL).replay(agent, MockSet.from_trace(rec.spans))  # type: ignore[attr-defined]
     assert res.return_value == "fallback"
     assert not res.failed
+
+
+def test_decimal_output_replays_as_decimal_from_a_saved_recording() -> None:
+    # A tool returning a Decimal, written to a recording and loaded back, must hand
+    # the agent a Decimal on replay: served as the string "19.99", price * qty would
+    # silently repeat the text instead of multiplying.
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="get_item")
+    def get_item(item_id: str) -> dict[str, Any]:
+        return {"price": Decimal("19.99"), "qty": 2}
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> object:
+        item = get_item("x")
+        return item["price"] * item["qty"]
+
+    rec = _record(agent)
+    reloaded = [Span.from_json(s.to_json()) for s in rec.spans]  # type: ignore[attr-defined]
+    res = ReplayEngine(ReplayMode.FULL).replay(agent, MockSet.from_trace(reloaded))
+    assert res.return_value == Decimal("39.98")
 
 
 def test_uninstrumented_replay_is_flagged() -> None:

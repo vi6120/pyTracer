@@ -20,6 +20,18 @@ crew.kickoff(inputs={...})
 The bus stamps each event with an id, a parent id, and (on completion) the
 matching start id, which the listener uses to build a correctly nested trace.
 
+## One trace per request
+
+Each run starts its own trace. To keep a request that makes several runs, or
+also uses another framework, in one trace, wrap it in a pyTracer span; the run
+nests under the span that is open when it starts:
+
+```python
+with pytracer.start_span("answer-question"):
+    crew.kickoff(inputs={...})
+    ...  # further runs, other adapters, or @op calls join the same trace
+```
+
 ## Replay
 
 This adapter **captures** runs. Replaying a captured run currently requires `@op`

@@ -291,7 +291,7 @@ def test_autogen_run_replays_from_the_store(trace_store: TraceStore, tmp_path: P
     from opentelemetry.sdk.trace import TracerProvider
 
     from pytracer_autogen import PyTracerSpanExporter, install_seams, uninstall_seams
-    from pytracer_autogen.exporter import _LinkingSpanProcessor, _RunLinker
+    from pytracer_autogen.linking import _LinkingSpanProcessor, _RunLinker
 
     # pyTracer as the global OpenTelemetry provider, as install() does (the global
     # can be set once per process, so it is reused if already ours).

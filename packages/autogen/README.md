@@ -42,6 +42,17 @@ Because it keys off standard GenAI attributes (`gen_ai.operation.name`,
 `gen_ai.tool.name`, `gen_ai.agent.name`, `gen_ai.usage.*`), the same exporter
 captures spans from any GenAI-instrumented library, not only AutoGen.
 
+**What `install()` changes in your process**, each logged at INFO when it happens:
+
+- It registers pyTracer as the global OpenTelemetry tracer provider.
+- It adds a handler to the `autogen_core.events` logger to read model-call events.
+  If that logger was dropping INFO records (the default), it is set to INFO with
+  propagation off, so your other handlers see exactly what they saw before; set
+  that logger's level yourself to manage it.
+- It adds a processor to the global OpenTelemetry LoggerProvider to read GenAI
+  model content, registering a LoggerProvider if none is set. To use your own,
+  register it before `install()` and pyTracer adds to it.
+
 **Versions:** what is captured depends on the AutoGen version emitting GenAI
 spans. Some versions emit no model-call span or tool result; pyTracer records what
 the framework reports, so upgrade AutoGen (or add the relevant GenAI

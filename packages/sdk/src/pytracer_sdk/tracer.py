@@ -151,9 +151,11 @@ class ActiveSpan:
         self._span.end_time_ns = time.time_ns()
         if self._span.status is SpanStatus.UNSET:
             self._span.status = SpanStatus.OK
-        # Re-validate to derive latency_ms from the timestamps.
-        finalized = Span.model_validate(self._span.model_dump())
-        self._tracer.buffer.record(finalized)
+        # Setting end_time_ns above already derived latency_ms (validate_assignment).
+        # Hand the buffer a copy, not a dump-and-revalidate: model_dump turns a
+        # pydantic model or dataclass in the input/output into a plain dict, and
+        # the recorded value must keep its type so replay returns the same object.
+        self._tracer.buffer.record(self._span.model_copy())
         if self._token is not None:
             _current.reset(self._token)
             self._token = None

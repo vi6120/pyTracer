@@ -89,7 +89,9 @@ services:
       - "${PYTRACER_GATEWAY_PUBLISH:-8080:8080}"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      # Readiness, not liveness: the container reports unhealthy if the ingest
+      # writer is not running, instead of looking healthy while nothing is written.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/readyz')"]
       interval: 10s
       timeout: 3s
       retries: 10

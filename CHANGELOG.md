@@ -21,6 +21,16 @@
 
 ### Fixed
 
+- **The gateway keeps writing after a Redis outage.** One error from the ingest
+  queue (for example Redis restarting) ended the gateway's background writer for
+  good: ingest kept answering 202 while nothing reached storage until the gateway
+  was restarted (the spans waited in Redis). The writer now logs the error, backs
+  off and retries, keeps a batch it already took until it is written and
+  acknowledged, and recreates the Redis consumer group if Redis came back without
+  its data; Redis commands retry once over a fresh connection. Shutdown no longer
+  hangs on an unreachable queue (`PYTRACER_GATEWAY_SHUTDOWN_TIMEOUT`), retried
+  errors are counted (`writer_errors`, `pytracer_ingest_writer_errors_total`), and
+  the compose health check probes `/readyz` instead of `/healthz`.
 - **Recorded values keep their type.** `Decimal`, `datetime`, `date`, `time`,
   `timedelta`, `UUID`, `bytes`, enums, tuples, sets, dataclasses and pydantic
   models in span inputs and outputs are tagged when serialized and restored on

@@ -209,3 +209,59 @@ def test_unknown_backend_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="unknown queue backend"):
         build_queue(GatewayConfig(queue_backend="rabbitmq"))
+
+
+async def _wait_written(writer: FakeWriter, n: int, timeout: float = 15.0) -> None:
+    deadline = time.monotonic() + timeout
+    while writer.count < n and time.monotonic() < deadline:
+        await asyncio.sleep(0.05)
+    assert writer.count == n
+
+
+def test_writer_survives_redis_dropping_its_connections() -> None:
+    # What a Redis restart does to a running gateway: every client connection is
+    # closed under it, including the writer's blocking read. The writer must
+    # reconnect and keep writing, not stop while ingest keeps accepting spans.
+    async def scenario() -> None:
+        import redis.asyncio as redis
+
+        cfg = _config()
+        writer = FakeWriter()
+        pipeline = IngestPipeline(writer, cfg, queue=RedisQueue(cfg))
+        admin = redis.from_url(cfg.redis_url, decode_responses=True)
+        try:
+            await pipeline.start()
+            await pipeline.enqueue("proj", [make_span(f"a{i}") for i in range(3)])
+            await _wait_written(writer, 3)
+            await admin.execute_command("CLIENT", "KILL", "TYPE", "normal", "SKIPME", "yes")
+            await asyncio.sleep(0.3)
+            await pipeline.enqueue("proj", [make_span(f"b{i}") for i in range(3)])
+            await _wait_written(writer, 6)
+            assert pipeline.running
+        finally:
+            await pipeline.stop()
+            await _drop(cfg)
+            await admin.aclose()
+
+    asyncio.run(scenario())
+
+
+def test_writer_recreates_a_consumer_group_lost_with_redis_data() -> None:
+    # A Redis restarted without persistence comes back without the stream and
+    # its consumer group; the writer recreates them and resumes.
+    async def scenario() -> None:
+        cfg = _config()
+        writer = FakeWriter()
+        pipeline = IngestPipeline(writer, cfg, queue=RedisQueue(cfg))
+        try:
+            await pipeline.start()
+            await _drop(cfg)
+            await asyncio.sleep(0.3)
+            await pipeline.enqueue("proj", [make_span(f"s{i}") for i in range(4)])
+            await _wait_written(writer, 4)
+            assert pipeline.running
+        finally:
+            await pipeline.stop()
+            await _drop(cfg)
+
+    asyncio.run(scenario())

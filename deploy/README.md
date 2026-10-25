@@ -25,6 +25,7 @@ Check it:
 
 ```bash
 curl http://localhost:8080/healthz     # {"status":"ok","version":"0.1.4"}
+curl http://localhost:8080/readyz      # {"ready":true}: the ingest writer is running
 curl http://localhost:8080/v1/stats    # ingest counters
 ```
 
@@ -42,6 +43,7 @@ Set these before a real deployment (defaults are for local trials only):
 | `PYTRACER_GATEWAY_AUTH_BACKEND` | `static` (env map) or `postgres` (managed keys) | `static` |
 | `PYTRACER_GATEWAY_RATE_LIMIT_PER_SEC` | Per-key request rate; `0` disables limiting | `0` |
 | `PYTRACER_GATEWAY_RATE_LIMIT_BURST` | Per-key burst ceiling; defaults to the rate | `0` |
+| `PYTRACER_GATEWAY_SHUTDOWN_TIMEOUT` | Seconds shutdown waits for the writer to drain the queue | `10` |
 | `PYTRACER_DOMAIN` | Gateway hostname for the `tls` profile's auto-HTTPS | (unset) |
 
 For example:
@@ -120,6 +122,19 @@ background worker. The queue between the two runs on Redis Streams
   write after the retry budget) lives in a Redis stream too. Inspect it at
   `GET /v1/dead-letters`; it survives restarts instead of vanishing with the
   process.
+- **A Redis or storage outage** pauses writing instead of ending it. Storage
+  errors are retried and then dead-lettered (see above); queue errors, such as
+  Redis restarting, are logged and retried with a backoff capped at
+  `PYTRACER_GATEWAY_RETRY_BACKOFF_MAX` seconds, and a batch already taken off the
+  queue is kept until it is written and acknowledged. Writing resumes on its own
+  once Redis is back, and `pytracer_ingest_writer_errors_total` (and
+  `writer_errors` in `/v1/stats`) counts the retried errors. Delivery is
+  at least once: a batch interrupted between writing and acknowledging can be
+  written again.
+- **Health.** `/healthz` is liveness and `/readyz` is readiness (the writer is
+  running). The compose health check probes `/readyz`. Docker marks the container
+  unhealthy but does not restart it on its own; an orchestrator (Kubernetes
+  readiness and liveness probes) or your monitoring should act on it.
 
 Set `PYTRACER_GATEWAY_QUEUE_BACKEND=memory` to fall back to the in-process queue
 (no Redis needed, but a restart drops whatever it holds). This is the default

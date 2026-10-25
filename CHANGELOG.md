@@ -7,8 +7,10 @@
 - **Replay through every framework adapter, without `@op`.** With replay switched
   on (`install_seams()` for LangGraph and CrewAI, `install(replayable=True)` for
   OpenAI Agents and AutoGen), the adapter routes the framework's own model and
-  tool calls through pyTracer, so a captured run replays in full, partial and
-  streamed modes like an `@op`-instrumented one. Model calls are matched on what
+  tool calls through pyTracer, so a captured run replays in full and partial
+  modes like an `@op`-instrumented one, and streamed model replies replay chunk
+  by chunk for LangGraph, OpenAI Agents and AutoGen (CrewAI replays the full reply
+  its model call returns). Model calls are matched on what
   was asked, not on ids the framework generates per run. Built on new seams in
   the SDK (`pytracer_sdk.seam`).
 - **AutoGen captures model calls and tool output.** Tool spans get their result

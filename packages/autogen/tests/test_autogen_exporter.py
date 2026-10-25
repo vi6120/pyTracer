@@ -391,3 +391,15 @@ def test_model_content_from_genai_log_records_fills_the_llm_span() -> None:
         {"role": "user", "content": "weather?"},
     ]
     assert llm.output == {"role": "assistant", "content": "sunny"}
+
+
+def test_uninstall_seams_lets_the_exporter_record_again() -> None:
+    from pytracer_autogen import PyTracerSpanExporter, install_seams, uninstall_seams
+    from pytracer_autogen.exporter import _RunLinker
+
+    pytest.importorskip("autogen_core", reason="autogen-core not installed")
+    exporter = PyTracerSpanExporter(linker=_RunLinker())
+    install_seams(exporter)
+    assert exporter.seams is True
+    uninstall_seams()
+    assert exporter.seams is False  # derived model calls and AutoGen's own spans resume

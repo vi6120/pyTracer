@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from helpers import FakeWriter, make_span
 
 from pytracer_gateway import create_app
+from pytracer_gateway.app import GATEWAY_VERSION
 
 API_KEYS = {"k": "proj"}
 HEADERS = {"X-API-Key": "k"}
@@ -64,8 +65,19 @@ def test_malformed_json_is_400() -> None:
 
 def test_healthz_and_readyz() -> None:
     with TestClient(create_app(writer=FakeWriter(), api_keys=API_KEYS)) as client:
-        assert client.get("/healthz").json() == {"status": "ok"}
+        assert client.get("/healthz").json() == {"status": "ok", "version": GATEWAY_VERSION}
         assert client.get("/readyz").status_code == 200
+
+
+def test_gateway_reports_its_installed_version() -> None:
+    # /healthz and the OpenAPI schema report the deployed release, not a stale
+    # hardcoded 0.0.1, so an operator can confirm what a gateway runs.
+    from importlib.metadata import version
+
+    assert GATEWAY_VERSION == version("pytracer-gateway")
+    with TestClient(create_app(writer=FakeWriter(), api_keys=API_KEYS)) as client:
+        assert client.get("/openapi.json").json()["info"]["version"] == GATEWAY_VERSION
+        assert client.get("/healthz").json()["version"] == GATEWAY_VERSION
 
 
 def test_span_missing_branch_or_commit_is_rejected_at_ingest() -> None:

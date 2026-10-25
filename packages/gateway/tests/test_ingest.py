@@ -134,3 +134,18 @@ def test_requeue_re_enqueues_storage_dead_letters() -> None:
         await pipe._queue.close()
 
     asyncio.run(scenario())
+
+
+def test_ingest_never_instantiates_a_class_named_in_a_payload() -> None:
+    # A client controls the payload; the gateway only stores it. A tagged value
+    # naming any class (here subprocess.Popen) must be kept as data, unimported.
+    from pytracer_gateway.ingest import validate_spans
+
+    gadget = {"__pytracer__": "path", "v": ["true"], "cls": "subprocess:Popen"}
+    span = make_span().model_dump(mode="json")
+    span["output"] = gadget
+    valid, errors = validate_spans([span])
+    assert errors == []
+    assert valid[0].output == gadget  # kept as the client wrote it
+    stored = valid[0].model_dump(mode="json")["output"]
+    assert stored == gadget  # and stored unchanged

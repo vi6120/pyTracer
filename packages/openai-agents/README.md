@@ -40,8 +40,23 @@ with pytracer.start_span("answer-question"):
 
 ## Replay
 
-This adapter **captures** runs. Replaying a captured run currently requires `@op`
-instrumentation, because the replay engine intercepts `@op` calls; replay through
-the adapter itself is on the roadmap. Attempting to replay an adapter-only trace
-is flagged (the run has recordings but hits no `@op` seam) rather than silently
-running live. See the main README for the replay workflow.
+Install with `replayable=True` and a captured run replays without adding `@op`
+to anything:
+
+```python
+install(replayable=True)   # also routes model calls and function tools through pyTracer
+```
+
+The SDK's model calls (`get_response` / `stream_response` on every `Model`,
+including custom ones) and function tools (`FunctionTool.on_invoke_tool`,
+including tools created before `install`) then run through pyTracer, so the
+replay engine can return their recorded results: in full mode neither the model
+nor the tools run again, in partial mode the tools stay frozen while the model
+runs live. Hosted tools (web search, file search) run inside the model call, so
+the recorded model response covers them. Each model call is matched on what was
+asked (instructions, conversation so far, tools, settings), not on per-run ids.
+`uninstall_seams()` removes the routing again.
+
+Without `replayable=True` the adapter only captures, and replaying an
+adapter-only trace is flagged (the run has recordings but hits no `@op` seam)
+rather than silently running live. See the main README for the replay workflow.

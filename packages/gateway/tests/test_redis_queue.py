@@ -265,3 +265,39 @@ def test_writer_recreates_a_consumer_group_lost_with_redis_data() -> None:
             await _drop(cfg)
 
     asyncio.run(scenario())
+
+
+def test_queue_read_keeps_the_payload_as_sent_and_imports_nothing() -> None:
+    # The queue re-reads spans from JSON: like ingest, it must not decode, rebuild
+    # or import what a client's payload names.
+    import json
+    import sys
+
+    from pytracer_sdk.codec import encode_value
+
+    from pytracer_gateway.ingest import validate_spans
+
+    async def scenario() -> None:
+        cfg = _config()
+        queue = RedisQueue(cfg)
+        sent = make_span().model_dump(mode="json")
+        sent["output"] = {
+            "cls": {"__pytracer__": "enum", "v": "a", "cls": "this:Anything"},
+            "plain": {"__pytracer__": "decimal", "v": "1.50"},
+        }
+        try:
+            await queue.start()
+            spans, errors = validate_spans([sent])
+            assert errors == []
+            await queue.enqueue("proj", spans)
+            (item,) = await queue.reserve(10, 1.0)
+            assert json.dumps(encode_value(item.span.output), sort_keys=True) == json.dumps(
+                sent["output"], sort_keys=True
+            )
+        finally:
+            await queue.close()
+            await _drop(cfg)
+
+    sys.modules.pop("this", None)
+    asyncio.run(scenario())
+    assert "this" not in sys.modules

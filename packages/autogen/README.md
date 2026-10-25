@@ -37,6 +37,19 @@ spans. Some versions emit no model-call span or tool result; pyTracer records wh
 the framework reports, so upgrade AutoGen (or add the relevant GenAI
 instrumentation) if model calls or tool outputs are missing.
 
+## One trace per run
+
+AutoGen delivers each message in a new OpenTelemetry trace, linked to the trace
+that sent it. The provider built by `install()` follows those links, so a team
+run is recorded as **one** pyTracer trace, with each agent turn at the top of the
+run and its tool calls beneath it. A run started inside an open pyTracer span
+nests under it, like the other adapters:
+
+```python
+with pytracer.start_span("answer-question"):
+    await team.run(task="...")   # one trace, rooted at "answer-question"
+```
+
 ## Replay
 
 This adapter **captures** runs. Replaying a captured run currently requires `@op`

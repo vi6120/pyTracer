@@ -594,3 +594,50 @@ def test_caller_scoped_mocks_fall_back_without_a_caller_op() -> None:
 
     result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
     assert result.return_value == "r1r2"
+
+
+# --- C0: framework calls routed through a seam replay without @op --------------
+
+
+def test_a_seam_routed_framework_call_replays_without_running_live() -> None:
+    import os
+
+    from pytracer_sdk.seam import call_through
+
+    from pytracer_replay.engine import REPLAY_ENVIRONMENT
+
+    live = {"model": 0, "tool": 0}
+    seen_env: list[str | None] = []
+
+    # Stand-ins for a framework's model and tool, which the user never decorates.
+    def framework_model(messages: list[str], request_id: str) -> str:
+        live["model"] += 1
+        return "call search"
+
+    def framework_tool(query: str) -> str:
+        live["tool"] += 1
+        return f"results for {query}"
+
+    def agent() -> str:
+        seen_env.append(os.environ.get("PYTRACER_REPLAY"))
+        plan = call_through(
+            framework_model, (["find cats"], f"req-{live['model']}"),
+            kind=SpanKind.LLM, name="fake-model", input={"messages": ["find cats"]},
+        )
+        found = call_through(
+            framework_tool, ("cats",), kind=SpanKind.TOOL, name="search", tool_name="search",
+            input={"query": "cats"},
+        )
+        return f"{plan} -> {found}"
+
+    recorded = ReplayEngine(ReplayMode.LIVE).replay(agent, MockSet())
+    assert recorded.return_value == "call search -> results for cats"
+    assert live == {"model": 1, "tool": 1}
+
+    replayed = ReplayEngine(ReplayMode.FULL).replay(agent, MockSet.from_trace(recorded.spans))
+    assert replayed.return_value == recorded.return_value
+    assert live == {"model": 1, "tool": 1}  # nothing ran live: both came from the recording
+    assert replayed.uninstrumented is False
+    assert seen_env == ["1", "1"]  # set while a replay runs
+    assert "PYTRACER_REPLAY" not in os.environ  # restored afterwards
+    assert set(REPLAY_ENVIRONMENT) >= {"PYTRACER_REPLAY", "CREWAI_DISABLE_TELEMETRY"}

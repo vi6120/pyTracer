@@ -15,6 +15,7 @@ gateway restart.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -34,6 +35,8 @@ __all__ = [
     "validate_spans",
 ]
 
+_log = logging.getLogger("pytracer_gateway")
+
 
 class Writer(Protocol):
     """Sync sink that persists a batch of spans for one project."""
@@ -50,6 +53,7 @@ class Stats:
     validation_failed: int = 0
     backpressured: int = 0  # could not enqueue (queue full)
     storage_dlq: int = 0  # gave up writing after retries
+    writer_errors: int = 0  # queue or dead-letter errors the writer retried
 
     def snapshot(self) -> dict[str, int]:
         return {
@@ -58,6 +62,7 @@ class Stats:
             "validation_failed": self.validation_failed,
             "backpressured": self.backpressured,
             "storage_dlq": self.storage_dlq,
+            "writer_errors": self.writer_errors,
         }
 
 
@@ -121,10 +126,20 @@ class IngestPipeline:
 
     async def stop(self) -> None:
         self._stopping.set()
-        if self._worker is not None:
-            await self._worker
-            self._worker = None
-        await self._queue.close()
+        try:
+            if self._worker is not None:
+                # Drain, but never hang shutdown on a queue that stays unreachable.
+                # Spans left unacknowledged in Redis are reclaimed on the next start.
+                try:
+                    await asyncio.wait_for(self._worker, self._config.shutdown_timeout)
+                except asyncio.TimeoutError:
+                    _log.warning(
+                        "ingest writer did not drain within %ss; stopping it",
+                        self._config.shutdown_timeout,
+                    )
+                self._worker = None
+        finally:
+            await self._queue.close()
 
     async def enqueue(self, project: str, spans: list[Span]) -> tuple[int, int]:
         """Enqueue valid spans. Returns ``(accepted, backpressured)``."""
@@ -178,15 +193,45 @@ class IngestPipeline:
 
     # --- worker -------------------------------------------------------------
     async def _run(self) -> None:
+        # One failure must never end this loop: if it did, ingest would keep
+        # answering 202 while nothing reaches storage. A queue error (e.g. Redis
+        # restarting) is logged and retried with a capped backoff, and a batch
+        # already reserved is kept and retried rather than dropped.
+        batch: list[Any] = []
+        written = False
+        failures = 0
         while True:
-            batch = await self._queue.reserve(self._config.batch_size, self._config.flush_interval)
-            if batch:
-                await self._write_batch(batch)
+            try:
+                if not batch:
+                    batch = await self._queue.reserve(
+                        self._config.batch_size, self._config.flush_interval
+                    )
+                    written = False
+                    if not batch:
+                        if self._stopping.is_set() and await self._queue.is_drained():
+                            return
+                        failures = 0
+                        continue
+                if not written:
+                    await self._write_batch(batch)
+                    written = True
                 # Ack only after the batch is terminal (written or dead-lettered),
                 # so a crash mid-write replays it instead of dropping it.
                 await self._queue.ack(batch)
-            elif self._stopping.is_set() and await self._queue.is_drained():
-                return
+                batch = []
+                failures = 0
+            except Exception:  # noqa: BLE001 - log, back off, retry; CancelledError still ends it
+                failures += 1
+                self.stats.writer_errors += 1
+                delay = min(self._config.retry_backoff * 2 ** (failures - 1), self._config.retry_backoff_max)
+                # The traceback once per outage, then one line per retry.
+                _log.warning(
+                    "ingest writer error (attempt %d); retrying in %.1fs",
+                    failures,
+                    delay,
+                    exc_info=failures == 1,
+                )
+                await asyncio.sleep(delay)
 
     async def _write_batch(self, batch: list[Any]) -> None:
         by_project: dict[str, list[Span]] = defaultdict(list)

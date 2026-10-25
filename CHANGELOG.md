@@ -2,14 +2,31 @@
 
 ## Unreleased
 
+### Added
+
+- **Replay through every framework adapter, without `@op`.** With replay switched
+  on (`install_seams()` for LangGraph and CrewAI, `install(replayable=True)` for
+  OpenAI Agents and AutoGen), the adapter routes the framework's own model and
+  tool calls through pyTracer, so a captured run replays in full, partial and
+  streamed modes like an `@op`-instrumented one. Model calls are matched on what
+  was asked, not on ids the framework generates per run. Built on new seams in
+  the SDK (`pytracer_sdk.seam`).
+- **AutoGen captures model calls and tool output.** Tool spans get their result
+  from AutoGen's result message; model calls are recorded from the call events
+  the model clients log (or rebuilt from AutoGen's replies for a client that logs
+  none); a GenAI-instrumented client keeps its prompt and reply, read from the
+  OpenTelemetry log records it sends them as (P7).
+
 ### Fixed
 
 - **Recorded values keep their type.** `Decimal`, `datetime`, `date`, `time`,
   `timedelta`, `UUID`, `bytes`, enums, tuples, sets, dataclasses and pydantic
   models in span inputs and outputs are tagged when serialized and restored on
   load, on the JSONL, gateway and store paths, so a replay computes with the same
-  types the agent saw. Recordings made before this release must be re-recorded to
-  benefit.
+  types the agent saw. A pydantic model or dataclass returned by a call is kept as
+  that object (it was flattened to a dict before), and a rebuilt pydantic model
+  keeps which fields were set. Recordings made before this release must be
+  re-recorded to benefit.
 - **Client-side span loss is visible (L1).** A full SDK queue or a failed delivery
   is logged as a rate-limited warning and passed to an optional
   `on_drop(reason, count, error)` callback set through `configure()`.

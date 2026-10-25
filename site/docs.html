@@ -189,6 +189,20 @@ transport = pytracer.HTTPTransport(
 pytracer.configure(transport, service_name="researcher", branch="main", commit="abc123")
 # ... run the agent ...
 print(transport.rejected_spans)  # 0 when every span was accepted</code></pre>
+    <p><strong>Client-side loss is surfaced too.</strong> A span can also be lost before
+    the gateway sees it: the in-process queue is full, or delivery fails (gateway
+    unreachable, or a 429/503 that outlasts the retries). The tracer counts these in
+    <code>tracer.buffer.dropped</code> and <code>tracer.buffer.send_errors</code>, logs a
+    warning on the <code>pytracer_sdk</code> logger (at most one per reason every 30
+    seconds, with the count since the last one), and calls an optional
+    <code>on_drop(reason, count, error)</code> passed to <code>configure()</code>, where
+    <code>reason</code> is <code>"queue_full"</code> or <code>"send_failed"</code>.</p>
+    <pre><code>tracer = pytracer.configure(
+    transport, service_name="researcher",
+    on_drop=lambda reason, count, error: print(f"lost {count} span(s): {reason}"),
+)
+# ... run the agent ...
+print(tracer.buffer.dropped, tracer.buffer.send_errors)  # 0 0 when nothing was lost</code></pre>
     <p><strong>Upgrade order.</strong> When a release adds a span field, upgrade the
     gateway before the SDKs that send to it (the hosted gateway first). A gateway on
     the newer release ignores fields it does not recognise, so a newer SDK stays

@@ -23,7 +23,10 @@ the same principles scale up.
 - **Per-key rate limiting.** A token bucket caps sustained per-key throughput so
   one noisy or abusive key cannot crowd out others.
 - **Durable, non-lossy ingestion.** In-flight spans and the dead-letter list
-  survive a restart (Redis Streams), so data is not silently dropped.
+  survive a restart (Redis Streams), so data is not silently dropped. On the
+  sending side, a span the SDK cannot deliver (a full queue or a failed delivery)
+  is counted, logged as a warning, and passed to an optional `on_drop` callback,
+  so loss there is never silent either.
 
 ## What you must configure
 

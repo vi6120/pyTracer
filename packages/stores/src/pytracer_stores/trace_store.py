@@ -19,7 +19,7 @@ from typing import Any
 import clickhouse_connect
 from clickhouse_connect.driver.client import Client
 from pytracer_sdk.codec import encode_value
-from pytracer_sdk.schema import Resource, Span, SpanKind, SpanStatus
+from pytracer_sdk.schema import SERIALIZED, Resource, Span, SpanKind, SpanStatus
 
 from .config import ClickHouseConfig
 from .hashing import canonical_json
@@ -320,33 +320,37 @@ class TraceStore:
 
     @staticmethod
     def _row_to_span(d: dict[str, Any]) -> Span:
-        return Span(
-            trace_id=d["trace_id"],
-            span_id=d["span_id"],
-            parent_span_id=d["parent_span_id"] or None,
-            name=d["name"],
-            kind=SpanKind(d["kind"]),
-            agent_name=d["agent_name"],
-            tool_name=d["tool_name"],
-            input=json.loads(d["input"]) if d["input"] else None,
-            output=json.loads(d["output"]) if d["output"] else None,
-            start_time_ns=int(d["start_time_ns"]),
-            end_time_ns=int(d["end_time_ns"]) if d["end_time_ns"] is not None else None,
-            token_count=int(d["token_count"]) if d["token_count"] is not None else None,
-            cost_usd=float(d["cost_usd"]) if d["cost_usd"] is not None else None,
-            status=SpanStatus(d["status"]),
-            error_type=d["error_type"],
-            error_module=d["error_module"],
-            error_message=d["error_message"],
-            attributes=json.loads(d["attributes"]) if d["attributes"] else {},
-            resource=Resource(
-                service_name=d["service_name"],
-                branch=d["branch"],
-                commit=d["commit"],
-                environment=d["environment"],
-                sdk_name=d["sdk_name"],
-                sdk_version=d["sdk_version"],
-            ),
+        # SERIALIZED: the payload columns hold encoded JSON, decoded like a recording.
+        return Span.model_validate(
+            {
+                "trace_id": d["trace_id"],
+                "span_id": d["span_id"],
+                "parent_span_id": d["parent_span_id"] or None,
+                "name": d["name"],
+                "kind": SpanKind(d["kind"]),
+                "agent_name": d["agent_name"],
+                "tool_name": d["tool_name"],
+                "input": json.loads(d["input"]) if d["input"] else None,
+                "output": json.loads(d["output"]) if d["output"] else None,
+                "start_time_ns": int(d["start_time_ns"]),
+                "end_time_ns": int(d["end_time_ns"]) if d["end_time_ns"] is not None else None,
+                "token_count": int(d["token_count"]) if d["token_count"] is not None else None,
+                "cost_usd": float(d["cost_usd"]) if d["cost_usd"] is not None else None,
+                "status": SpanStatus(d["status"]),
+                "error_type": d["error_type"],
+                "error_module": d["error_module"],
+                "error_message": d["error_message"],
+                "attributes": json.loads(d["attributes"]) if d["attributes"] else {},
+                "resource": Resource(
+                    service_name=d["service_name"],
+                    branch=d["branch"],
+                    commit=d["commit"],
+                    environment=d["environment"],
+                    sdk_name=d["sdk_name"],
+                    sdk_version=d["sdk_version"],
+                ),
+            },
+            context=SERIALIZED,
         )
 
     def count(self, *, project: str | None = None) -> int:

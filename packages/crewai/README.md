@@ -56,8 +56,8 @@ tools offered and the response model. `uninstall_seams()` removes the routing
 again.
 
 CrewAI delivers events to listeners on a thread pool, so before a seam call the
-listener briefly waits (up to 2 seconds) for already-emitted events, to nest the
-call under the right agent.
+listener waits for already-emitted events (normally well under a millisecond,
+capped at 0.25 seconds) to nest the call under the right agent.
 
 Without `install_seams` the adapter only captures, and replaying an
 adapter-only trace is flagged (the run has recordings but hits no `@op` seam)

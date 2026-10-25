@@ -169,3 +169,32 @@ def test_native_tool_calls_go_through_the_seam(capture: tuple[InMemoryTransport,
     result = ReplayEngine(ReplayMode.FULL).replay(run, MockSet.from_trace(spans))
     assert result.return_value == output
     assert LIVE == before
+
+
+def test_async_llm_calls_go_through_the_seam(capture: tuple[InMemoryTransport, Any]) -> None:
+    # CrewAI's async path (acall) records and replays like call.
+    import asyncio
+
+    from crewai.llms.base_llm import BaseLLM
+    from pytracer_replay import MockSet, ReplayEngine, ReplayMode
+
+    sink, _ = capture
+
+    class AsyncScripted(BaseLLM):
+        def call(self, messages: Any, *args: Any, **kwargs: Any) -> str:
+            raise AssertionError("the async path must not fall back to call")
+
+        async def acall(self, messages: Any, *args: Any, **kwargs: Any) -> str:
+            LIVE["model"] += 1
+            return f"async reply to {messages}"
+
+    def run() -> str:
+        return str(asyncio.run(AsyncScripted(model="async-scripted").acall("hello")))
+
+    output, spans = _recorded(sink, run)
+    assert output == "async reply to hello"
+    assert [s.name for s in spans if s.kind is SpanKind.LLM] == ["async-scripted"]
+    before = dict(LIVE)
+    result = ReplayEngine(ReplayMode.FULL).replay(run, MockSet.from_trace(spans))
+    assert result.return_value == output
+    assert LIVE == before

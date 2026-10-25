@@ -50,7 +50,7 @@ def _through_gateway_and_store(
     app = create_app(writer=TraceStoreWriter(trace_store), api_keys={"key": "adapters"})
     # Read back through a separate client: the gateway's writer thread owns the
     # first one, and a ClickHouse session takes one query at a time.
-    reader = TraceStore(ClickHouseConfig(), table=trace_store._table)  # type: ignore[attr-defined]
+    reader = TraceStore(ClickHouseConfig(), table=trace_store.table)
     with TestClient(app) as client:
         response = client.post("/v1/spans", json=body, headers={"X-API-Key": "key"})
         assert response.status_code == 202, response.text
@@ -288,24 +288,19 @@ def test_autogen_run_replays_from_the_store(trace_store: TraceStore, tmp_path: P
     from autogen_core import FunctionCall
     from autogen_core.models import ChatCompletionClient, CreateResult, ModelInfo, RequestUsage
     from opentelemetry import trace as otel_trace
-    from opentelemetry.sdk.trace import TracerProvider
 
-    from pytracer_autogen import PyTracerSpanExporter, install_seams, uninstall_seams
-    from pytracer_autogen.linking import _LinkingSpanProcessor, _RunLinker
+    from pytracer_autogen import exporter_for, install_seams, pytracer_tracer_provider, uninstall_seams
 
     # pyTracer as the global OpenTelemetry provider, as install() does (the global
     # can be set once per process, so it is reused if already ours).
-    current = otel_trace.get_tracer_provider()
-    exporter = getattr(current, "_pytracer_test_exporter", None)
+    exporter = exporter_for(otel_trace.get_tracer_provider())
     if exporter is None:
-        linker = _RunLinker()
-        exporter = PyTracerSpanExporter(linker=linker)
-        provider = TracerProvider()
-        provider.add_span_processor(_LinkingSpanProcessor(exporter, linker))
-        provider._pytracer_test_exporter = exporter  # type: ignore[attr-defined]
+        provider = pytracer_tracer_provider()
         otel_trace.set_tracer_provider(provider)
         if otel_trace.get_tracer_provider() is not provider:
             pytest.skip("another global OpenTelemetry provider is already registered")
+        exporter = exporter_for(provider)
+    assert exporter is not None
 
     def lookup(q: str) -> str:
         """Look something up."""

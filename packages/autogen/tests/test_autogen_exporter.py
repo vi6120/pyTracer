@@ -358,3 +358,36 @@ def test_a_malformed_model_event_never_raises() -> None:
     _setup()
     _log_event("not an autogen event")
     _log_event(type("E", (), {"kwargs": {"type": "LLMCall", "response": None}})())
+
+
+# --- P7: model content sent as GenAI log records -------------------------------
+
+
+def test_model_content_from_genai_log_records_fills_the_llm_span() -> None:
+    # opentelemetry-instrumentation-openai-v2 leaves the chat span empty and sends
+    # the prompt and reply as log records carrying the span's id.
+    from opentelemetry._logs import LogRecord
+    from opentelemetry.sdk._logs import LoggerProvider
+
+    from pytracer_autogen.exporter import _genai_log_processor
+
+    logs = LoggerProvider()
+    logs.add_log_record_processor(_genai_log_processor())
+    logger = logs.get_logger("gen_ai.test")
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("chat gpt-4o-mini") as span:  # type: ignore[attr-defined]
+        span.set_attribute("gen_ai.operation.name", "chat")
+        span_id = span.get_span_context().span_id
+        for name, body in (
+            ("gen_ai.system.message", {"content": "be brief"}),
+            ("gen_ai.user.message", {"content": "weather?"}),
+            ("gen_ai.choice", {"index": 0, "message": {"role": "assistant", "content": "sunny"}}),
+        ):
+            logger.emit(LogRecord(span_id=span_id, event_name=name, body=body))
+    tracer.flush()
+    (llm,) = [s for s in sink.spans if s.kind is K.LLM]
+    assert llm.input == [
+        {"role": "system", "content": "be brief"},
+        {"role": "user", "content": "weather?"},
+    ]
+    assert llm.output == {"role": "assistant", "content": "sunny"}

@@ -42,6 +42,7 @@ from crewai.events.types.tool_usage_events import (
     ToolUsageStartedEvent,
 )
 from pytracer_sdk import SpanKind, SpanRecorder, Tracer, get_tracer
+from pytracer_sdk.tracer import SpanContext
 
 _MAX_DEPTH = 6
 
@@ -103,6 +104,9 @@ class PyTracerEventListener(BaseEventListener):
         # parent_event_id, so they are attached to the current agent instead of each
         # starting its own trace (which hid which agent made the call).
         self._agent_ids: list[str] = []
+        # With replay seams installed (install_seams), model and tool calls are
+        # recorded by the seams, so the listener does not record them again.
+        self.seams = False
         # ``register`` is False in unit tests that call the handlers directly and
         # do not want to attach to the global bus.
         if register:
@@ -111,6 +115,22 @@ class PyTracerEventListener(BaseEventListener):
     @property
     def recorder(self) -> SpanRecorder:
         return self._recorder
+
+    def seam_parent(self) -> SpanContext | None:
+        """The pyTracer span a seam call nests under: the current agent.
+
+        CrewAI delivers events to listeners on a thread pool, after the fact, so
+        the agent's start event may not have been handled yet when its first model
+        call begins. Wait (briefly) for the events already emitted, then use the
+        innermost open agent.
+        """
+        from crewai.events import crewai_event_bus
+
+        try:
+            crewai_event_bus.flush(timeout=2.0)
+        except Exception:  # noqa: BLE001 - never block the agent on the bus
+            pass
+        return self._recorder.context_of(self._current_agent())
 
     # --- registration -------------------------------------------------------
     def setup_listeners(self, bus: Any) -> None:
@@ -219,6 +239,10 @@ class PyTracerEventListener(BaseEventListener):
 
     # --- tool ---------------------------------------------------------------
     def on_tool_start(self, source: Any, event: Any) -> None:
+        if self.seams:
+            # CrewAI emits this before the tool runs, outside the tool's seam, so
+            # it cannot be adopted; the seam records the call instead.
+            return
         name = getattr(event, "tool_name", None) or "tool"
         self._start(
             event, name=name, kind=SpanKind.TOOL, tool_name=name,
@@ -238,6 +262,10 @@ class PyTracerEventListener(BaseEventListener):
 
     # --- llm ----------------------------------------------------------------
     def on_llm_start(self, source: Any, event: Any) -> None:
+        # Emitted inside the model call, so its handler runs in a copy of the seam's
+        # context and can hand the run to the seam recording it.
+        if self.seams and self._recorder.adopt(str(event.event_id), SpanKind.LLM):
+            return
         self._start(
             event, name=getattr(event, "model", None) or "llm", kind=SpanKind.LLM,
             input=getattr(event, "messages", None),
@@ -251,3 +279,28 @@ class PyTracerEventListener(BaseEventListener):
 
     def on_llm_error(self, source: Any, event: Any) -> None:
         self._end(event, error=str(getattr(event, "error", "llm call failed")))
+
+
+_installed_seams: Any = None
+
+
+def install_seams(listener: PyTracerEventListener) -> None:
+    """Route CrewAI's model calls and tools through pyTracer so a captured run
+    replays without ``@op``, recorded under ``listener``'s agent spans."""
+    global _installed_seams
+    from .replay import Seams
+
+    uninstall_seams()
+    listener.seams = True
+    _installed_seams = (Seams(listener.seam_parent), listener)
+    _installed_seams[0].install()
+
+
+def uninstall_seams() -> None:
+    """Remove the seams installed by :func:`install_seams`."""
+    global _installed_seams
+    if _installed_seams is not None:
+        seams, listener = _installed_seams
+        seams.uninstall()
+        listener.seams = False
+        _installed_seams = None

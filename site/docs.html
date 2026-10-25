@@ -417,7 +417,10 @@ pip install pytracer-autogen          # AutoGen</code></pre>
     LLMs and tools, AutoGen model clients and tools. The replay engine then returns
     their recorded results exactly as it does for <code>@op</code>: in full mode neither
     the model nor the tools run again, in partial mode the tools stay frozen while the
-    model runs live, and streamed replies replay chunk by chunk. A model call is matched
+    model runs live. Where the framework hands the agent a stream (LangGraph, OpenAI
+    Agents, AutoGen), the recorded stream replays chunk by chunk; CrewAI's model call
+    returns the full reply even when it streams internally, and that reply is what
+    replays. A model call is matched
     on what was asked (its messages, the tools offered, the output format), not on ids
     the framework generates per run. Without replay switched on, an adapter only
     captures, and an adapter-only run is flagged rather than replayed live.</p>

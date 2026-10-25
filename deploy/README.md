@@ -24,7 +24,7 @@ startup, so there is no separate migration step.
 Check it:
 
 ```bash
-curl http://localhost:8080/healthz     # {"status":"ok"}
+curl http://localhost:8080/healthz     # {"status":"ok","version":"0.1.4"}
 curl http://localhost:8080/v1/stats    # ingest counters
 ```
 

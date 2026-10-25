@@ -101,7 +101,7 @@ class SpanRecorder:
         from .seam import active_seam  # late: seam imports the tracer module
 
         seam = active_seam()
-        if seam is None or not seam.span.span_id or (kind is not None and seam.kind is not kind):
+        if seam is None or seam.span is None or (kind is not None and seam.kind is not kind):
             return False
         with self._lock:
             self._adopted[run_id] = seam.span

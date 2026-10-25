@@ -58,6 +58,17 @@ spans. Some versions emit no model-call span or tool result; pyTracer records wh
 the framework reports, so upgrade AutoGen (or add the relevant GenAI
 instrumentation) if model calls or tool outputs are missing.
 
+## Alongside other frameworks
+
+AutoGen 0.7.5, its latest release (September 2025; AutoGen is in maintenance mode), pins
+`protobuf~=5.29.3`, while `googleapis-common-protos` 1.75.1 and later need
+`protobuf>=6.33.5`. Installed in one command with other frameworks (CrewAI pulls
+it in through `chromadb`), pip picks a compatible 1.75.0. Added to an existing
+environment that has a newer one, pip downgrades protobuf and only warns, and the
+next import fails with `VersionError: Detected incompatible Protobuf Gencode/Runtime
+versions`; fix it with `pip install "googleapis-common-protos<1.75.1"`. See
+[using several frameworks in one environment](https://pytracer.com/docs#framework-combinations).
+
 ## One trace per run
 
 AutoGen delivers each message in a new OpenTelemetry trace, linked to the trace

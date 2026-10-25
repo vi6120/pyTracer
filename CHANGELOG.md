@@ -43,6 +43,10 @@
 
 ### Documentation
 
+- Using several frameworks in one environment: all four install together, with
+  the constraints their own dependencies impose (CrewAI caps the OpenAI Agents SDK
+  at 0.20.0; AutoGen needs `googleapis-common-protos<1.75.1`) and how to handle
+  them. CI now runs every adapter with all four frameworks installed together.
 - A per-adapter capability table on the docs page and in the README, and an
   accurate description of what the AutoGen adapter captures.
 - One trace per request with `pytracer.start_span(...)`, for every adapter.

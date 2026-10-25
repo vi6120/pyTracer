@@ -288,6 +288,7 @@ def _log_event(event: object) -> None:
 
 
 def test_logged_model_call_becomes_an_llm_span_under_its_agent() -> None:
+    pytest.importorskip("autogen_core", reason="autogen-core not installed")
     from autogen_core.logging import LLMCallEvent
 
     ot, sink, tracer = _setup()
@@ -314,6 +315,7 @@ def test_logged_model_call_becomes_an_llm_span_under_its_agent() -> None:
 
 
 def test_streamed_model_call_spans_start_to_end() -> None:
+    pytest.importorskip("autogen_core", reason="autogen-core not installed")
     from autogen_core.logging import LLMStreamEndEvent, LLMStreamStartEvent
 
     ot, sink, tracer = _setup()

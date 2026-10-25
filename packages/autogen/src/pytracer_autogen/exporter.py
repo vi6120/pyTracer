@@ -10,13 +10,19 @@ GenAI-instrumented library, not just AutoGen.
 
 from __future__ import annotations
 
+import threading
+from collections import OrderedDict
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
+from opentelemetry.context import Context
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
+from opentelemetry.sdk.trace import Span as OTelSpan
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
 from pytracer_sdk import Span, SpanKind, SpanStatus, Tracer, get_tracer
+from pytracer_sdk.tracer import _current
 
 # GenAI semantic-convention attribute keys.
 _OP = "gen_ai.operation.name"
@@ -102,13 +108,127 @@ def _tokens(attrs: dict[str, Any]) -> int | None:
     return None
 
 
+@dataclass(frozen=True)
+class _Run:
+    """The pyTracer trace a group of linked OpenTelemetry traces is recorded under."""
+
+    trace_id: str
+    parent_span_id: str | None  # the enclosing pyTracer span, if the run had one
+
+
+@dataclass(frozen=True)
+class _Placement:
+    trace_id: str
+    parent_span_id: str | None
+
+
+# Bound on remembered spans and traces, so a long-lived process does not grow
+# without limit; far more than any one run holds.
+_MAX_TRACKED = 20_000
+
+
+class _RunLinker:
+    """Groups the OpenTelemetry traces of one AutoGen run into one pyTracer trace.
+
+    AutoGen starts a new OpenTelemetry trace for every message it delivers, and
+    connects it to the trace that sent the message with a span *link*, not a
+    parent. So a team run arrives as many traces. Watching spans as they start,
+    this follows those links: a trace whose root links to a known trace joins
+    that trace's run. A run that starts inside an open pyTracer span (e.g.
+    ``pytracer.start_span(...)``) is recorded under it, like the other adapters.
+
+    Only GenAI spans are recorded, so each recorded span is re-parented to its
+    nearest recorded ancestor (within its own trace); a span with none sits at
+    the top of the run, under the enclosing pyTracer span when there is one.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._runs: OrderedDict[int, _Run] = OrderedDict()  # OTel trace id -> run
+        # OTel span id -> (the span, its parent's span id within the same trace).
+        # The span is kept so whether it is recorded (has GenAI attributes) is
+        # read when a descendant is placed, since attributes are often set after
+        # a span starts.
+        self._spans: OrderedDict[int, tuple[OTelSpan, int | None]] = OrderedDict()
+
+    def on_start(self, span: OTelSpan) -> None:
+        context = span.get_span_context()
+        if context is None:
+            return
+        trace_id, span_id = context.trace_id, context.span_id
+        parent = span.parent
+        parent_id = parent.span_id if parent is not None and parent.trace_id == trace_id else None
+        with self._lock:
+            if trace_id not in self._runs:
+                self._remember(self._runs, trace_id, self._run_for(span))
+            self._remember(self._spans, span_id, (span, parent_id))
+
+    def _run_for(self, span: OTelSpan) -> _Run:
+        """The run a newly seen trace belongs to: a linked trace's, else a new one."""
+        for link in span.links or ():
+            linked = self._runs.get(link.context.trace_id)
+            if linked is not None:
+                return linked
+        ambient = _current.get()
+        if ambient is not None:
+            return _Run(ambient.trace_id, ambient.span_id)
+        context = span.get_span_context()
+        return _Run(f"{context.trace_id:032x}", None)
+
+    def place(self, span: ReadableSpan) -> _Placement | None:
+        """Where to record a finished span, or ``None`` if its start was not seen."""
+        context = span.get_span_context()
+        if context is None:
+            return None
+        with self._lock:
+            run = self._runs.get(context.trace_id)
+            entry = self._spans.get(context.span_id)
+            if run is None or entry is None:
+                return None
+            # Walk up to the nearest ancestor that is itself recorded.
+            ancestor = entry[1]
+            while ancestor is not None:
+                found = self._spans.get(ancestor)
+                if found is None:
+                    ancestor = None  # forgotten or never seen: treat as the top
+                elif _has_genai(dict(found[0].attributes or {})):
+                    break
+                else:
+                    ancestor = found[1]
+        if ancestor is not None:
+            return _Placement(run.trace_id, f"{ancestor:016x}")
+        return _Placement(run.trace_id, run.parent_span_id)
+
+    @staticmethod
+    def _remember(store: OrderedDict[int, Any], key: int, value: Any) -> None:
+        store[key] = value
+        store.move_to_end(key)
+        while len(store) > _MAX_TRACKED:
+            store.popitem(last=False)
+
+
+class _LinkingSpanProcessor(SimpleSpanProcessor):
+    """Exports each span when it ends, and feeds span starts to the run linker."""
+
+    def __init__(self, exporter: PyTracerSpanExporter, linker: _RunLinker) -> None:
+        super().__init__(exporter)
+        self._linker = linker
+
+    def on_start(self, span: OTelSpan, parent_context: Context | None = None) -> None:
+        self._linker.on_start(span)
+        super().on_start(span, parent_context)
+
+
 class PyTracerSpanExporter(SpanExporter):
     """Maps finished OpenTelemetry spans to pyTracer spans."""
 
-    def __init__(self, tracer: Tracer | None = None) -> None:
+    def __init__(self, tracer: Tracer | None = None, *, linker: _RunLinker | None = None) -> None:
         # Resolve the tracer lazily at export time, not here, so an exporter built
         # before pytracer.configure(...) still records into the configured tracer.
         self._explicit_tracer = tracer
+        # With a linker (see pytracer_tracer_provider), an AutoGen run's linked
+        # traces are recorded as one trace; without one, OTel's ids are kept.
+        self._linker = linker
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
         tracer = self._explicit_tracer or get_tracer()
@@ -137,10 +257,16 @@ class PyTracerSpanExporter(SpanExporter):
                 if span.status.status_code is StatusCode.ERROR
                 else SpanStatus.OK
             )
+            placement = self._linker.place(span) if self._linker is not None else None
+            if placement is not None:
+                trace_id, parent_span_id = placement.trace_id, placement.parent_span_id
+            else:
+                trace_id = f"{context.trace_id:032x}"
+                parent_span_id = f"{span.parent.span_id:016x}" if span.parent else None
             pytracer_span = Span(
-                trace_id=f"{context.trace_id:032x}",
+                trace_id=trace_id,
                 span_id=f"{context.span_id:016x}",
-                parent_span_id=f"{span.parent.span_id:016x}" if span.parent else None,
+                parent_span_id=parent_span_id,
                 name=span.name,
                 kind=kind,
                 agent_name=agent_name,
@@ -172,9 +298,16 @@ def pytracer_tracer_provider(tracer: Tracer | None = None) -> TracerProvider:
     model and tool spans are captured. Passing it only to the runtime
     (``SingleThreadedAgentRuntime(tracer_provider=...)``) sees just the runtime's
     internal messaging spans, which this exporter drops as noise.
+
+    The provider records each AutoGen run as one trace (following the links
+    AutoGen puts between the per-message traces), nested under the pyTracer span
+    that is open when the run starts, if any.
     """
+    linker = _RunLinker()
     provider = TracerProvider()
-    provider.add_span_processor(SimpleSpanProcessor(PyTracerSpanExporter(tracer)))
+    provider.add_span_processor(
+        _LinkingSpanProcessor(PyTracerSpanExporter(tracer, linker=linker), linker)
+    )
     return provider
 
 

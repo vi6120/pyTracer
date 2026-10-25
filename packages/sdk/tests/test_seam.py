@@ -142,3 +142,26 @@ def test_patcher_wraps_once_and_restores() -> None:
     patcher.unpatch_all()
     assert Model().invoke(4) == 4 and calls == [3]
     assert len(patcher) == 0
+
+
+def test_a_call_made_inside_a_stream_is_not_recorded_again() -> None:
+    # A client whose stream calls its own create must be recorded once, or the
+    # replayed stream could be served the inner call's recording.
+    tracer, sink = _tracer()
+
+    async def create() -> str:
+        return "full reply"
+
+    async def stream() -> Any:
+        reply = await acall_through(create, kind=SpanKind.LLM, name="m", tracer=tracer)
+        for word in str(reply).split(" "):
+            yield word
+
+    async def run() -> list[str]:
+        return [w async for w in astream_through(stream, kind=SpanKind.LLM, name="m", tracer=tracer)]
+
+    assert asyncio.run(run()) == ["full", "reply"]
+    assert active_seam() is None
+    tracer.flush()
+    (span,) = sink.spans
+    assert span.output == ["full", "reply"]

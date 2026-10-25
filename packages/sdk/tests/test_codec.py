@@ -15,8 +15,8 @@ import pytest
 from pydantic import BaseModel
 
 from pytracer_sdk import new_span_id, new_trace_id
-from pytracer_sdk.codec import TAG, decode_value, encode_value
-from pytracer_sdk.schema import Span
+from pytracer_sdk.codec import TAG, EncodedPayload, decode_value, encode_value
+from pytracer_sdk.schema import SERIALIZED, STORE_ONLY, Span
 
 
 class Color(enum.Enum):
@@ -79,10 +79,13 @@ def test_recording_round_trip_keeps_the_type(name: str) -> None:
 
 @pytest.mark.parametrize("name", list(SAMPLES))
 def test_gateway_wire_round_trip_keeps_the_type(name: str) -> None:
-    # The HTTP transport sends model_dump(mode="json"); the gateway validates it.
+    # The HTTP transport sends model_dump(mode="json"); the gateway keeps it as
+    # received and the store reads it back as serialized data.
     value = SAMPLES[name]
     wire = json.loads(json.dumps(_span({"v": value}).model_dump(mode="json")))
-    assert _same(Span.model_validate(wire).output["v"], value)
+    stored = json.loads(Span.model_validate(wire, context=STORE_ONLY).model_dump_json())
+    assert stored == wire
+    assert _same(Span.model_validate(stored, context=SERIALIZED).output["v"], value)
 
 
 def test_nested_values_keep_their_types() -> None:
@@ -188,13 +191,14 @@ def test_a_crafted_popen_payload_decodes_to_plain_data() -> None:
     assert isinstance(decode_value(path), pathlib.PurePath)
 
 
-def test_store_only_decoding_keeps_class_values_tagged_and_writes_them_back() -> None:
-    # A store-only process (the gateway) imports nothing and stores the value as
+def test_store_only_keeps_payloads_as_received_and_writes_them_back() -> None:
+    # A store-only process (the gateway) decodes nothing and stores the value as
     # the client wrote it; a replay machine later rebuilds it.
-    tagged = encode_value(_Item(name="weather"))
-    kept = decode_value(json.loads(json.dumps(tagged)), rebuild_classes=False)
-    assert kept == tagged
-    assert encode_value(kept) == tagged  # written back unchanged, not re-escaped
-    assert decode_value(encode_value(kept)) == _Item(name="weather")
-    # Plain tagged values (no class) still decode, e.g. a Decimal.
-    assert decode_value(encode_value(Decimal("1.5")), rebuild_classes=False) == Decimal("1.5")
+    tagged = encode_value({"item": _Item(name="weather"), "price": Decimal("1.5")})
+    span = Span.model_validate(
+        {**json.loads(_span(None).to_json()), "output": tagged}, context=STORE_ONLY
+    )
+    assert span.output == EncodedPayload(tagged)
+    assert encode_value(span.output) == tagged  # written back unchanged, not re-escaped
+    assert json.loads(span.model_dump_json())["output"] == tagged
+    assert decode_value(tagged) == {"item": _Item(name="weather"), "price": Decimal("1.5")}

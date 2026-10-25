@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from pydantic import ValidationError
-from pytracer_sdk.schema import Span
+from pytracer_sdk.schema import STORE_ONLY, Span
 
 from .config import GatewayConfig
 from .queue import DeadLetter, SpanQueue, build_queue
@@ -72,7 +72,8 @@ def validate_spans(raw: list[Any]) -> tuple[list[Span], list[dict[str, Any]]]:
     errors: list[dict[str, Any]] = []
     for i, item in enumerate(raw):
         try:
-            span = Span.model_validate(item)
+            # Store-only: never rebuild a class a client's payload names.
+            span = Span.model_validate(item, context=STORE_ONLY)
         except ValidationError as exc:
             # Drop context/input so the error payload is always JSON-serializable
             # (ctx can hold the original exception object).

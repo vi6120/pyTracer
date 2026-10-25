@@ -9,7 +9,6 @@ sandbox on. Skipped when CrewAI is not installed.
 from __future__ import annotations
 
 import importlib.util
-import os
 from collections.abc import Iterator
 from typing import Any
 
@@ -32,7 +31,6 @@ REPLIES = [
 
 @pytest.fixture
 def capture() -> Iterator[tuple[InMemoryTransport, Any]]:
-    os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
     from pytracer_crewai import PyTracerEventListener, install_seams, uninstall_seams
 
     sink = InMemoryTransport()

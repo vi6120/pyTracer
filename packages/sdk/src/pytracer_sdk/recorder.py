@@ -21,7 +21,7 @@ from typing import Any
 
 from .ids import new_span_id, new_trace_id
 from .schema import Span, SpanKind, SpanStatus
-from .tracer import Tracer, _current
+from .tracer import SpanContext, Tracer, _current
 
 
 class SpanRecorder:
@@ -31,6 +31,9 @@ class SpanRecorder:
         self._tracer = tracer
         self._lock = threading.Lock()
         self._open: dict[str, Span] = {}
+        # Framework runs recorded by a seam span instead (see adopt): run id -> the
+        # seam span, so the run's children still nest under it.
+        self._adopted: dict[str, SpanContext] = {}
 
     def start(
         self,
@@ -55,7 +58,7 @@ class SpanRecorder:
         """
         redactor = self._tracer.redactor
         with self._lock:
-            parent = self._open.get(parent_run_id) if parent_run_id is not None else None
+            parent = self._parent(parent_run_id)
             if parent is not None:
                 trace_id = parent.trace_id
                 parent_span_id: str | None = parent.span_id
@@ -78,6 +81,30 @@ class SpanRecorder:
             )
             self._open[run_id] = span
 
+    def _parent(self, run_id: str | None) -> Span | SpanContext | None:
+        if run_id is None:
+            return None
+        return self._open.get(run_id) or self._adopted.get(run_id)
+
+    def adopt(self, run_id: str) -> bool:
+        """Let ``run_id`` be the framework call a seam is recording right now.
+
+        When a framework call runs through a seam (``pytracer_sdk.seam``), the seam
+        span records it, so the adapter must not open a second span for the same
+        call. Call this from the adapter's start hook: it returns True (and the
+        adapter skips its own span) when a seam call is active in this context, and
+        maps ``run_id`` to the seam span so the run's children nest under it. The
+        matching :meth:`end` is then a no-op, since the seam closes its own span.
+        """
+        from .seam import active_seam  # late: seam imports the tracer module
+
+        seam = active_seam()
+        if seam is None or not seam.span.span_id:
+            return False
+        with self._lock:
+            self._adopted[run_id] = seam.span
+        return True
+
     def end(
         self,
         run_id: str,
@@ -97,6 +124,8 @@ class SpanRecorder:
         """
         with self._lock:
             span = self._open.pop(run_id, None)
+            if span is None:
+                self._adopted.pop(run_id, None)  # a seam span closes itself
         if span is None:
             return
 
@@ -131,4 +160,4 @@ class SpanRecorder:
         """True when ``run_id`` names a started span that has not ended, so a
         caller can tell whether a reported parent id can actually be nested under."""
         with self._lock:
-            return run_id in self._open
+            return run_id in self._open or run_id in self._adopted

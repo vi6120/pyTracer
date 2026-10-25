@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import builtins
 import importlib
+import os
 import threading
-from collections.abc import Callable, Iterable
-from contextlib import AbstractContextManager, nullcontext
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -31,6 +32,30 @@ from .fidelity import (
 from .hashing import input_hash
 from .mocks import MockSet, RecordedError, _identifier
 from .sandbox import NetworkSandbox
+
+
+# Set while a replay runs. PYTRACER_REPLAY lets code (and adapters) tell a replay
+# from a live run; the others switch off framework telemetry, whose background
+# calls would otherwise hit the network sandbox and could change the run.
+REPLAY_ENVIRONMENT: dict[str, str] = {
+    "PYTRACER_REPLAY": "1",
+    "CREWAI_DISABLE_TELEMETRY": "true",
+    "CREWAI_DISABLE_TRACKING": "true",
+}
+
+
+@contextmanager
+def _replay_environment() -> Iterator[None]:
+    saved = {key: os.environ.get(key) for key in REPLAY_ENVIRONMENT}
+    os.environ.update(REPLAY_ENVIRONMENT)
+    try:
+        yield
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 class ReplayMode(str, Enum):
@@ -312,10 +337,11 @@ class ReplayEngine:
                 # call (no @op seam) would otherwise reach a local model server
                 # (Ollama, vLLM, LM Studio) during replay. A loopback host that is
                 # genuinely needed can still be added to network_allow.
-                with NetworkSandbox(self.network_allow, allow_loopback=False), run_ctx:
+                sandbox = NetworkSandbox(self.network_allow, allow_loopback=False)
+                with _replay_environment(), sandbox, run_ctx:
                     return_value = agent()
             else:
-                with run_ctx:
+                with _replay_environment(), run_ctx:
                     return_value = agent()
         except Exception as exc:  # noqa: BLE001 - capture agent failure as a result, not a raise
             status = SpanStatus.ERROR

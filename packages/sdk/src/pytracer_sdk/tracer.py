@@ -76,9 +76,19 @@ class _OpMeta:
     capture_io: bool
 
 
-def _make_op_input(meta: _OpMeta, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any | None:
+# Marks "no explicit op input": the input is built from the call's args/kwargs.
+_FROM_ARGS: Any = object()
+
+
+def _make_op_input(
+    meta: _OpMeta, args: tuple[Any, ...], kwargs: dict[str, Any], op_input: Any = _FROM_ARGS
+) -> Any | None:
     if not meta.capture_io:
         return None
+    if op_input is not _FROM_ARGS:
+        # A framework seam supplies the call's input already normalized (volatile
+        # ids stripped), so the same call records and replays under one key.
+        return op_input
     return {"args": list(args), "kwargs": dict(kwargs)}
 
 
@@ -192,8 +202,11 @@ class Tracer:
         agent_name: str | None = None,
         tool_name: str | None = None,
         input: Any | None = None,
+        parent: SpanContext | None = None,
     ) -> ActiveSpan:
-        parent = _current.get()
+        """Open a span; it nests under ``parent`` when given, else under the span
+        active in this context (an ``@op`` or ``start_span``), else starts a trace."""
+        parent = parent or _current.get()
         trace_id = parent.trace_id if parent else new_trace_id()
         span_id = new_span_id()
         span = Span(
@@ -267,7 +280,14 @@ class Tracer:
         return decorator
 
     def call_op(
-        self, fn: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any], meta: _OpMeta
+        self,
+        fn: Callable[..., Any],
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        meta: _OpMeta,
+        *,
+        op_input: Any = _FROM_ARGS,
+        parent: SpanContext | None = None,
     ) -> Any:
         """Execute one sync op call through this tracer (used by decorators)."""
         with self.start_span(
@@ -275,7 +295,8 @@ class Tracer:
             kind=meta.kind,
             agent_name=meta.agent_name,
             tool_name=meta.tool_name,
-            input=_make_op_input(meta, args, kwargs),
+            input=_make_op_input(meta, args, kwargs, op_input),
+            parent=parent,
         ) as active:
             injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
             if injected is not None:
@@ -286,7 +307,14 @@ class Tracer:
             return result
 
     async def acall_op(
-        self, fn: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any], meta: _OpMeta
+        self,
+        fn: Callable[..., Any],
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        meta: _OpMeta,
+        *,
+        op_input: Any = _FROM_ARGS,
+        parent: SpanContext | None = None,
     ) -> Any:
         """Execute one async op call through this tracer (used by decorators)."""
         with self.start_span(
@@ -294,7 +322,8 @@ class Tracer:
             kind=meta.kind,
             agent_name=meta.agent_name,
             tool_name=meta.tool_name,
-            input=_make_op_input(meta, args, kwargs),
+            input=_make_op_input(meta, args, kwargs, op_input),
+            parent=parent,
         ) as active:
             injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
             if injected is not None:
@@ -305,7 +334,14 @@ class Tracer:
             return result
 
     def call_gen_op(
-        self, fn: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any], meta: _OpMeta
+        self,
+        fn: Callable[..., Any],
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        meta: _OpMeta,
+        *,
+        op_input: Any = _FROM_ARGS,
+        parent: SpanContext | None = None,
     ) -> Any:
         """Execute a sync generator op, capturing the streamed items as the output.
 
@@ -321,7 +357,8 @@ class Tracer:
             kind=meta.kind,
             agent_name=meta.agent_name,
             tool_name=meta.tool_name,
-            input=_make_op_input(meta, args, kwargs),
+            input=_make_op_input(meta, args, kwargs, op_input),
+            parent=parent,
         )
         injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
         source = injected.output if injected is not None else fn(*args, **kwargs)
@@ -343,7 +380,14 @@ class Tracer:
             active.close()
 
     def call_async_gen_op(
-        self, fn: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any], meta: _OpMeta
+        self,
+        fn: Callable[..., Any],
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        meta: _OpMeta,
+        *,
+        op_input: Any = _FROM_ARGS,
+        parent: SpanContext | None = None,
     ) -> Any:
         """Async-generator counterpart of :meth:`call_gen_op`."""
         active = self.start_span(
@@ -351,7 +395,8 @@ class Tracer:
             kind=meta.kind,
             agent_name=meta.agent_name,
             tool_name=meta.tool_name,
-            input=_make_op_input(meta, args, kwargs),
+            input=_make_op_input(meta, args, kwargs, op_input),
+            parent=parent,
         )
         injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
         source = injected.output if injected is not None else fn(*args, **kwargs)

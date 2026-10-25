@@ -3,11 +3,12 @@ name: adapters
 # The adapter replay acceptance tests need the real frameworks and, for the
 # gateway-to-store path, ClickHouse. The main test job installs neither, so those
 # tests skip there; this job runs them with pytest's skip markers disabled, so a
-# missing framework fails instead of passing quietly. The frameworks cannot all
-# share one environment (CrewAI 1.15 needs openai<3 while OpenAI Agents 0.22 needs
-# openai>=3, and CrewAI's protobuf requirement conflicts with AutoGen 0.7.5's), so
-# each group installs only its own adapters. Framework versions are pinned to the
-# ones the adapters were verified against; bump them deliberately.
+# missing framework fails instead of passing quietly. The all-frameworks group
+# installs the four together, at the versions pip resolves for them jointly
+# (CrewAI's openai<3 caps OpenAI Agents at 0.20.0, and AutoGen's protobuf pin
+# selects googleapis-common-protos 1.75.0); the other groups cover each framework
+# at newer versions than that combination allows. Framework versions are pinned to
+# the ones the adapters were verified against; bump them deliberately.
 
 on:
   push:
@@ -39,6 +40,15 @@ jobs:
             adapters: "packages/openai-agents"
             frameworks: "openai-agents==0.22.1 httpx"
             store_tests: "openai_agents"
+          - group: all-frameworks
+            adapters: "packages/langgraph packages/autogen packages/crewai packages/openai-agents"
+            frameworks: >-
+              crewai==1.15.30 openai-agents==0.20.0
+              autogen-agentchat==0.7.5 autogen-core==0.7.5
+              langgraph==1.2.17 langgraph-prebuilt==1.1.1 httpx
+            store_tests: "langgraph or autogen or crewai or openai_agents"
+            # The openai-v2 instrumentation test runs in the langgraph-autogen group.
+            pytest_args: "--deselect tests/test_genai_instrumentation.py"
     name: acceptance (${{ matrix.group }})
     services:
       clickhouse:
@@ -64,6 +74,7 @@ jobs:
       # Matrix values reach the shell as environment variables, not pasted into the
       # script: a specifier like wrapt<2 would otherwise be read as a redirection.
       - name: Install the core packages, this group's adapters and frameworks
+        # One install command, so pip resolves the frameworks together.
         env:
           ADAPTERS: ${{ matrix.adapters }}
           FRAMEWORKS: ${{ matrix.frameworks }}
@@ -79,12 +90,13 @@ jobs:
         env:
           ADAPTERS: ${{ matrix.adapters }}
           STORE_TESTS: ${{ matrix.store_tests }}
+          PYTEST_ARGS: ${{ matrix.pytest_args }}
         run: |
           set -o pipefail
           failed=0
           for d in $ADAPTERS; do
             echo "::group::$d"
-            ( cd "$d" && python -m pytest -q -rs -p no:skipping ) | tee -a results.txt || failed=1
+            ( cd "$d" && python -m pytest -q -rs -p no:skipping $PYTEST_ARGS ) | tee -a results.txt || failed=1
             echo "::endgroup::"
           done
           echo "::group::gateway to store"

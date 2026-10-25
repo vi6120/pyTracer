@@ -20,6 +20,15 @@ crew.kickoff(inputs={...})
 The bus stamps each event with an id, a parent id, and (on completion) the
 matching start id, which the listener uses to build a correctly nested trace.
 
+## Alongside other frameworks
+
+CrewAI requires `openai<3`, so in the same environment the OpenAI Agents SDK is
+capped at 0.20.0 (0.21 and later need `openai>=3`); pyTracer's OpenAI Agents
+adapter supports 0.20.0. With AutoGen in the same environment, install both in one
+command, or pin `googleapis-common-protos<1.75.1`, or CrewAI fails at import with a
+protobuf `VersionError`. See
+[using several frameworks in one environment](https://pytracer.com/docs#framework-combinations).
+
 ## One trace per request
 
 Each run starts its own trace. To keep a request that makes several runs, or

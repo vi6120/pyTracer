@@ -86,7 +86,7 @@ class SpanRecorder:
             return None
         return self._open.get(run_id) or self._adopted.get(run_id)
 
-    def adopt(self, run_id: str) -> bool:
+    def adopt(self, run_id: str, kind: SpanKind | None = None) -> bool:
         """Let ``run_id`` be the framework call a seam is recording right now.
 
         When a framework call runs through a seam (``pytracer_sdk.seam``), the seam
@@ -95,11 +95,13 @@ class SpanRecorder:
         adapter skips its own span) when a seam call is active in this context, and
         maps ``run_id`` to the seam span so the run's children nest under it. The
         matching :meth:`end` is then a no-op, since the seam closes its own span.
+        With ``kind``, only a seam call of that kind is adopted (a tool callback
+        never stands in for a model call's seam, or the reverse).
         """
         from .seam import active_seam  # late: seam imports the tracer module
 
         seam = active_seam()
-        if seam is None or not seam.span.span_id:
+        if seam is None or not seam.span.span_id or (kind is not None and seam.kind is not kind):
             return False
         with self._lock:
             self._adopted[run_id] = seam.span

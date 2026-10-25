@@ -209,3 +209,43 @@ def test_generator_error_is_recorded_and_propagates() -> None:
     (span,) = sink.spans
     assert span.status is SpanStatus.ERROR
     assert span.error_type == "ValueError"
+
+
+def test_object_outputs_keep_their_type_through_capture() -> None:
+    # A pydantic model or dataclass returned by an op must be recorded as that
+    # object, not flattened to a dict, so a replay hands the agent the same type.
+    import dataclasses
+
+    from pydantic import BaseModel
+
+    from pytracer_sdk import Span
+    from pytracer_sdk.transport import InMemoryTransport
+
+    class Price(BaseModel):
+        amount: float
+
+    @dataclasses.dataclass
+    class Order:
+        id: int
+
+    sink = InMemoryTransport()
+    tracer = Tracer(sink)
+
+    @tracer.op(kind=SpanKind.TOOL)
+    def quote() -> Price:
+        return Price(amount=1.5)
+
+    @tracer.op(kind=SpanKind.TOOL)
+    def order() -> Order:
+        return Order(id=7)
+
+    quote()
+    order()
+    tracer.flush()
+    outputs = {s.name: s.output for s in sink.spans}
+    assert outputs["quote"] == Price(amount=1.5)
+    assert outputs["order"] == Order(id=7)
+    assert all(s.latency_ms is not None for s in sink.spans)
+    # Through JSON, a local class falls back to plain data (it cannot be imported
+    # back); the type survives the capture itself, which is what replay serves.
+    assert all(Span.from_json(s.to_json()).output is not None for s in sink.spans)

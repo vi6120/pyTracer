@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import uuid4
 
-from pytracer_sdk.schema import Span
+from pytracer_sdk.schema import STORE_ONLY, Span
 
 from .config import GatewayConfig
 
@@ -255,7 +255,7 @@ class RedisQueue:
                 malformed.append(msg_id)
                 continue
             try:
-                span = Span.model_validate_json(raw)
+                span = Span.model_validate_json(raw, context=STORE_ONLY)
             except Exception:  # noqa: BLE001 - a corrupt entry must not wedge the queue.
                 malformed.append(msg_id)
                 continue

@@ -174,6 +174,11 @@ class ActiveSpan:
     def span(self) -> Span:
         return self._span
 
+    @property
+    def context(self) -> SpanContext:
+        """This span's identity, as children see it while it is current."""
+        return self._ctx
+
 
 class Tracer:
     """Creates spans, wires up parent/child context, and buffers them."""
@@ -351,8 +356,10 @@ class Tracer:
         sequence of yielded items, so a streaming response is captured instead of
         the bare generator object. Items are still yielded lazily, so the caller's
         streaming behavior is unchanged. The span is created (fixing its parent)
-        when the op is called, but its context is not entered during the deferred
-        iteration, so a span cannot leak into an unrelated context.
+        when the op is called. While the generator body runs (each step up to its
+        next item) the span is current, so calls the stream makes nest under it; it
+        is reset before every item is handed to the consumer, so the span never
+        leaks into the consumer's context between items.
         """
         active = self.start_span(
             meta.name,
@@ -369,10 +376,20 @@ class Tracer:
     def _stream_sync(self, active: ActiveSpan, source: Any, meta: _OpMeta, *, live: bool) -> Any:
         collected: list[Any] = []
         try:
-            for item in source:
-                if live:
+            if live:
+                iterator = iter(source)
+                while True:
+                    token = _current.set(active.context)
+                    try:
+                        item = next(iterator)
+                    except StopIteration:
+                        break
+                    finally:
+                        _current.reset(token)
                     collected.append(item)
-                yield item
+                    yield item
+            else:
+                yield from source  # a recorded stream replays as a plain sequence
         except Exception as exc:
             active.set_error(exc)
             raise
@@ -410,7 +427,15 @@ class Tracer:
         collected: list[Any] = []
         try:
             if live:
-                async for item in source:
+                iterator = source.__aiter__()
+                while True:
+                    token = _current.set(active.context)
+                    try:
+                        item = await iterator.__anext__()
+                    except StopAsyncIteration:
+                        break
+                    finally:
+                        _current.reset(token)
                     collected.append(item)
                     yield item
             else:

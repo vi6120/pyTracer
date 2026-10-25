@@ -39,7 +39,8 @@ ParentResolver = Callable[[], "SpanContext | None"]
 
 _SEAM_ATTR = "__pytracer_seam__"
 _TOOL_INVOKE = "on_invoke_tool"
-_ORIGINAL_ATTR = "__pytracer_original__"
+# Where a tool keeps its seam wrapper, so every read returns the same object.
+_SEAMED_INVOKE = "_pytracer_seamed_invoke"
 
 
 def _jsonable(value: Any) -> Any:
@@ -124,13 +125,45 @@ def _tool_arguments(arguments: Any) -> Any:
     return arguments
 
 
+class _SeamedInvoke:
+    """A tool's ``on_invoke_tool`` routed through a seam.
+
+    It compares and hashes like the callable it wraps, so tools stay equal to
+    themselves and to copies (dataclass equality compares this field), and other
+    attributes are read from the wrapped callable.
+    """
+
+    def __init__(self, tool: Any, original: Callable[..., Any], parent: ParentResolver) -> None:
+        self._tool = tool
+        self.original = original
+        self._parent = parent
+
+    async def __call__(self, context: Any, arguments: str) -> Any:
+        name = self._tool.name
+        return await acall_through(
+            self.original, (context, arguments), kind=SpanKind.TOOL, name=name, tool_name=name,
+            input={"arguments": _tool_arguments(arguments)}, parent=self._parent(),
+        )
+
+    def __eq__(self, other: object) -> bool:
+        other_original = other.original if isinstance(other, _SeamedInvoke) else other
+        return bool(self.original == other_original)
+
+    def __hash__(self) -> int:
+        return hash(self.original)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.original, name)
+
+
 class _ToolInvokeDescriptor:
     """Reads ``FunctionTool.on_invoke_tool`` through a seam.
 
     A data descriptor on the class takes precedence over the instance attribute,
     so every tool (including ones built before ``install``) is wrapped when the
     SDK reads the callable to invoke it. The real callable stays in the instance's
-    own ``on_invoke_tool`` slot, so removing the descriptor restores plain access.
+    own ``on_invoke_tool`` slot, so removing the descriptor restores plain access;
+    the wrapper is built once per tool and reused, so reads return the same object.
     """
 
     def __init__(self, parent: ParentResolver) -> None:
@@ -139,7 +172,7 @@ class _ToolInvokeDescriptor:
     def __set__(self, tool: Any, value: Any) -> None:
         # Store the real callable, never a seam wrapper read back from another tool
         # (e.g. by dataclasses.replace), so a call is never wrapped twice.
-        tool.__dict__[_TOOL_INVOKE] = getattr(value, _ORIGINAL_ATTR, value)
+        tool.__dict__[_TOOL_INVOKE] = value.original if isinstance(value, _SeamedInvoke) else value
 
     def __get__(self, tool: Any, owner: type | None = None) -> Any:
         if tool is None:
@@ -147,18 +180,11 @@ class _ToolInvokeDescriptor:
         original = tool.__dict__.get(_TOOL_INVOKE)
         if original is None:
             raise AttributeError(_TOOL_INVOKE)
-        parent = self._parent
-
-        @functools.wraps(original)
-        async def on_invoke_tool(context: Any, arguments: str) -> Any:
-            return await acall_through(
-                original, (context, arguments), kind=SpanKind.TOOL, name=tool.name,
-                tool_name=tool.name, input={"arguments": _tool_arguments(arguments)},
-                parent=parent(),
-            )
-
-        setattr(on_invoke_tool, _ORIGINAL_ATTR, original)
-        return on_invoke_tool
+        cached = tool.__dict__.get(_SEAMED_INVOKE)
+        if not isinstance(cached, _SeamedInvoke) or cached.original is not original:
+            cached = _SeamedInvoke(tool, original, self._parent)
+            tool.__dict__[_SEAMED_INVOKE] = cached
+        return cached
 
 
 class Seams:

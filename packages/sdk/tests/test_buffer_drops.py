@@ -56,27 +56,46 @@ def _drop_warnings(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
 
 def test_queue_full_is_counted_reported_and_warned_once(caplog: pytest.LogCaptureFixture) -> None:
     calls: list[tuple[str, int, BaseException | None]] = []
+    threads: list[str] = []
+
+    def on_drop(reason: str, count: int, error: BaseException | None) -> None:
+        calls.append((reason, count, error))
+        threads.append(threading.current_thread().name)
+
     sink = _BlockedSink()
-    buf = SpanBuffer(
-        sink,
-        max_queue_size=2,
-        batch_size=1,
-        flush_interval=0.01,
-        on_drop=lambda reason, count, error: calls.append((reason, count, error)),
-    )
+    buf = SpanBuffer(sink, max_queue_size=2, batch_size=1, flush_interval=0.01, on_drop=on_drop)
     with caplog.at_level(logging.WARNING, logger="pytracer_sdk"):
         buf.record(_span())
         assert sink.entered.wait(2.0)  # worker holds one span, queue is empty again
         for _ in range(12):
             buf.record(_span())
-    sink.release.set()
-    buf.shutdown(timeout=2.0)
+        assert calls == []  # dropping never calls back on the agent's thread
+        sink.release.set()
+        buf.shutdown(timeout=2.0)
 
     assert buf.dropped == 10
-    assert calls == [("queue_full", 1, None)] * 10
+    assert sum(count for _, count, _ in calls) == 10
+    assert all(reason == "queue_full" and error is None for reason, _, error in calls)
+    assert set(threads) == {"pytracer-span-flush"}  # reported by the worker
     warnings = _drop_warnings(caplog)
     assert len(warnings) == 1  # rate limited: one warning, not one per span
     assert "queue_full" in warnings[0].getMessage()
+
+
+def test_losses_suppressed_by_the_rate_limit_are_logged_at_shutdown(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    buf = SpanBuffer(_FailingSink(), batch_size=1, flush_interval=0.01)
+    with caplog.at_level(logging.WARNING, logger="pytracer_sdk"):
+        buf.record(_span())
+        buf.flush(timeout=2.0)  # first loss: warned
+        buf.record(_span())
+        buf.record(_span())
+        buf.flush(timeout=2.0)  # within the interval: counted, not yet warned
+        buf.shutdown(timeout=2.0)
+    messages = [r.getMessage() for r in _drop_warnings(caplog)]
+    assert len(messages) == 2
+    assert "2 more span(s) (send_failed) before shutdown" in messages[-1]
 
 
 def test_send_failure_is_counted_reported_and_warned(caplog: pytest.LogCaptureFixture) -> None:

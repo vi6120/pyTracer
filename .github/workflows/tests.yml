@@ -63,8 +63,9 @@ jobs:
       - name: Install the gateway with its Redis extra
         run: |
           python -m pip install --upgrade pip
+          # httpx for Starlette's TestClient, which the HTTP-level test uses.
           python -m pip install -e packages/sdk -e packages/stores -e "packages/gateway[redis]" \
-            "pytest>=8" "pytest-asyncio>=0.23"
+            httpx==0.28.1 "pytest>=8" "pytest-asyncio>=0.23"
 
       - name: Run the Redis queue tests, no skips
         run: |

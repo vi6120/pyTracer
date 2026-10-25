@@ -276,3 +276,85 @@ def test_tool_span_without_a_result_is_still_recorded_on_flush() -> None:
     tracer.flush()
     (tool,) = [s for s in sink.spans if s.kind is K.TOOL]
     assert tool.output is None
+
+
+# --- model calls from AutoGen's model-call log events ---------------------------
+
+
+def _log_event(event: object) -> None:
+    import logging
+
+    logging.getLogger("autogen_core.events").info(event)
+
+
+def test_logged_model_call_becomes_an_llm_span_under_its_agent() -> None:
+    pytest.importorskip("autogen_core", reason="autogen-core not installed")
+    from autogen_core.logging import LLMCallEvent
+
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("invoke_agent planner") as agent:  # type: ignore[attr-defined]
+        _genai(agent, "invoke_agent", **{"agent.name": "planner"})
+        _log_event(
+            LLMCallEvent(
+                messages=[{"role": "user", "content": "plan a trip"}],
+                response={"model": "gpt-4o", "choices": [{"message": {"role": "assistant", "content": "ok"}}]},
+                prompt_tokens=7,
+                completion_tokens=3,
+            )
+        )
+    tracer.flush()
+    agent_span = next(s for s in sink.spans if s.kind is K.AGENT)
+    (llm,) = [s for s in sink.spans if s.kind is K.LLM]
+    assert llm.parent_span_id == agent_span.span_id
+    assert llm.trace_id == agent_span.trace_id
+    assert llm.name == "chat gpt-4o"
+    assert llm.input == [{"role": "user", "content": "plan a trip"}]
+    assert llm.output == {"role": "assistant", "content": "ok"}
+    assert llm.token_count == 10
+    assert llm.attributes["pytracer.start_unknown"] is True
+
+
+def test_streamed_model_call_spans_start_to_end() -> None:
+    pytest.importorskip("autogen_core", reason="autogen-core not installed")
+    from autogen_core.logging import LLMStreamEndEvent, LLMStreamStartEvent
+
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("invoke_agent planner") as agent:  # type: ignore[attr-defined]
+        _genai(agent, "invoke_agent", **{"agent.name": "planner"})
+        _log_event(LLMStreamStartEvent(messages=[{"role": "user", "content": "hi"}]))
+        _log_event(
+            LLMStreamEndEvent(
+                response={"model": "gpt-4o", "choices": [{"message": {"content": "hello"}}]},
+                prompt_tokens=1,
+                completion_tokens=1,
+            )
+        )
+    tracer.flush()
+    (llm,) = [s for s in sink.spans if s.kind is K.LLM]
+    assert llm.input == [{"role": "user", "content": "hi"}]
+    assert llm.output == {"content": "hello"}
+    assert llm.end_time_ns is not None and llm.end_time_ns >= llm.start_time_ns
+    assert "pytracer.start_unknown" not in llm.attributes
+
+
+def test_event_logger_is_enabled_without_changing_other_handlers() -> None:
+    import logging
+
+    logger = logging.getLogger("autogen_core.events")
+    logger.setLevel(logging.NOTSET)
+    logger.propagate = True
+    _setup()
+    assert logger.getEffectiveLevel() <= logging.INFO
+    assert logger.propagate is False  # events were dropped before; nobody else sees them now either
+
+    logger.setLevel(logging.DEBUG)  # the user already listens: leave their setup alone
+    logger.propagate = True
+    _setup()
+    assert logger.level == logging.DEBUG
+    assert logger.propagate is True
+
+
+def test_a_malformed_model_event_never_raises() -> None:
+    _setup()
+    _log_event("not an autogen event")
+    _log_event(type("E", (), {"kwargs": {"type": "LLMCall", "response": None}})())

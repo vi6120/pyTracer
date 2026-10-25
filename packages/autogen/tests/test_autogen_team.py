@@ -19,7 +19,10 @@ from pytracer_sdk import SpanKind as K
 from pytracer_sdk import SpanStatus
 from pytracer_sdk.transport import InMemoryTransport
 
-from pytracer_autogen import pytracer_tracer_provider
+from opentelemetry.sdk.trace import TracerProvider
+
+from pytracer_autogen import PyTracerSpanExporter
+from pytracer_autogen.exporter import _attach_model_call_handler, _LinkingSpanProcessor, _RunLinker
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("autogen_agentchat") is None, reason="autogen-agentchat not installed"
@@ -31,7 +34,7 @@ def _lookup(q: str) -> str:
     return f"found {q}"
 
 
-def _team(tool: Any = _lookup) -> Any:
+def _team(tool: Any = _lookup, *, log_calls: bool = False) -> Any:
     from autogen_agentchat.agents import AssistantAgent
     from autogen_agentchat.conditions import MaxMessageTermination
     from autogen_agentchat.teams import RoundRobinGroupChat
@@ -41,11 +44,26 @@ def _team(tool: Any = _lookup) -> Any:
     class Scripted(ChatCompletionClient):
         """Returns canned replies in order, so the team runs without a model."""
 
-        def __init__(self, replies: list[Any]) -> None:
+        def __init__(self, replies: list[Any], *, log_calls: bool) -> None:
             self._replies = list(replies)
+            self._log_calls = log_calls
 
         async def create(self, messages: Any, **kwargs: Any) -> CreateResult:
             reply = self._replies.pop(0)
+            if self._log_calls:
+                # As the autogen_ext clients (OpenAI, Anthropic, Ollama, ...) do.
+                import logging
+
+                from autogen_core.logging import LLMCallEvent
+
+                logging.getLogger("autogen_core.events").info(
+                    LLMCallEvent(
+                        messages=[{"role": "user", "content": "task"}],
+                        response={"model": "scripted", "choices": [{"message": {"content": str(reply)}}]},
+                        prompt_tokens=3,
+                        completion_tokens=2,
+                    )
+                )
             return CreateResult(
                 finish_reason="function_calls" if isinstance(reply, list) else "stop",
                 content=reply,
@@ -83,12 +101,15 @@ def _team(tool: Any = _lookup) -> Any:
             )
 
     call = FunctionCall(id="1", name=tool.__name__, arguments='{"q": "x"}')
-    writer = AssistantAgent("writer", model_client=Scripted([[call], "draft"]), tools=[tool])
-    critic = AssistantAgent("critic", model_client=Scripted(["ok"]))
+    writer = AssistantAgent(
+        "writer", model_client=Scripted([[call], "draft"], log_calls=log_calls), tools=[tool]
+    )
+    critic = AssistantAgent("critic", model_client=Scripted(["ok"], log_calls=log_calls))
     return RoundRobinGroupChat([writer, critic], termination_condition=MaxMessageTermination(4))
 
 
 _PROVIDER = None
+_EXPORTER = None
 
 
 @pytest.fixture
@@ -96,12 +117,19 @@ def recorded() -> Iterator[tuple[InMemoryTransport, pytracer.Tracer]]:
     # As the README says: pyTracer is the global OpenTelemetry provider. OTel lets
     # the global be set once per process, so register a provider that resolves the
     # tracer lazily once, and point the default tracer at each test's sink.
-    global _PROVIDER
+    global _PROVIDER, _EXPORTER
     if _PROVIDER is None:
-        _PROVIDER = pytracer_tracer_provider()
+        # What pytracer_tracer_provider() builds, kept so the model-call handler
+        # can be pointed back at this provider's exporter for every test.
+        linker = _RunLinker()
+        _EXPORTER = PyTracerSpanExporter(linker=linker)
+        _PROVIDER = TracerProvider()
+        _PROVIDER.add_span_processor(_LinkingSpanProcessor(_EXPORTER, linker))
         otel_trace.set_tracer_provider(_PROVIDER)
     if otel_trace.get_tracer_provider() is not _PROVIDER:
         pytest.skip("another global OpenTelemetry provider is already registered")
+    assert _EXPORTER is not None
+    _attach_model_call_handler(_EXPORTER)
     sink = InMemoryTransport()
     tracer = pytracer.Tracer(sink, resource=pytracer.Resource(service_name="ag", branch="main", commit="c0"))
     previous = pytracer.get_tracer()
@@ -154,3 +182,37 @@ def test_team_run_nests_under_an_enclosing_span(
     assert all(s.trace_id == root.trace_id for s in sink.spans)  # agents built inside too
     agents = [s for s in sink.spans if s.name.startswith("invoke_agent")]
     assert agents and all(s.parent_span_id == root.span_id for s in agents)
+
+
+def _model_calls_by_agent(sink: InMemoryTransport) -> dict[str, int]:
+    agents = {s.span_id: s.agent_name for s in sink.spans if s.kind is K.AGENT}
+    counts: dict[str, int] = {}
+    for s in sink.spans:
+        if s.kind is K.LLM:
+            name = agents.get(s.parent_span_id or "", "?") or "?"
+            counts[name] = counts.get(name, 0) + 1
+    return counts
+
+
+def test_logged_model_calls_are_recorded_under_their_agent_turns(
+    recorded: tuple[InMemoryTransport, pytracer.Tracer],
+) -> None:
+    sink, tracer = recorded
+    asyncio.run(_team(log_calls=True).run(task="write"))
+    tracer.flush()
+    llm = [s for s in sink.spans if s.kind is K.LLM]
+    assert _model_calls_by_agent(sink) == {"writer": 2, "critic": 1}
+    assert all(s.name == "chat scripted" and s.token_count == 5 for s in llm)
+    assert not any(s.attributes.get("pytracer.derived") for s in llm)  # no duplicates
+
+
+def test_model_calls_are_derived_when_the_client_logs_nothing(
+    recorded: tuple[InMemoryTransport, pytracer.Tracer],
+) -> None:
+    sink, tracer = recorded
+    asyncio.run(_team(log_calls=False).run(task="write"))
+    tracer.flush()
+    llm = [s for s in sink.spans if s.kind is K.LLM]
+    assert _model_calls_by_agent(sink) == {"writer": 2, "critic": 1}
+    assert all(s.attributes.get("pytracer.derived") is True for s in llm)
+    assert {str(s.output) for s in llm} >= {"draft", "ok"}

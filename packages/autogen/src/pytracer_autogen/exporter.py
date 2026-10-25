@@ -11,18 +11,20 @@ GenAI-instrumented library, not just AutoGen.
 from __future__ import annotations
 
 import json
+import logging
 import threading
+import time
 from collections import OrderedDict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 from opentelemetry.context import Context
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace import Span as OTelSpan
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
-from pytracer_sdk import Span, SpanKind, SpanStatus, Tracer, get_tracer
+from pytracer_sdk import Span, SpanKind, SpanStatus, Tracer, get_tracer, new_span_id, new_trace_id
 from pytracer_sdk.tracer import _current
 
 # GenAI semantic-convention attribute keys.
@@ -123,6 +125,8 @@ class _Placement:
     parent_span_id: str | None
 
 
+_K = TypeVar("_K")
+
 # Bound on remembered spans and traces, so a long-lived process does not grow
 # without limit; far more than any one run holds.
 _MAX_TRACKED = 20_000
@@ -146,11 +150,16 @@ class _RunLinker:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._runs: OrderedDict[int, _Run] = OrderedDict()  # OTel trace id -> run
-        # OTel span id -> (the span, its parent's span id within the same trace).
-        # The span is kept so whether it is recorded (has GenAI attributes) is
-        # read when a descendant is placed, since attributes are often set after
-        # a span starts.
-        self._spans: OrderedDict[int, tuple[OTelSpan, int | None]] = OrderedDict()
+        # OTel span id -> (the span, its parent's span id within the same trace,
+        # and for a trace's root the span its link points to, i.e. the span that
+        # sent the message this trace delivers). The span is kept so whether it is
+        # recorded (has GenAI attributes) is read when a descendant is placed, since
+        # attributes are often set after a span starts.
+        self._spans: OrderedDict[int, tuple[OTelSpan, int | None, int | None]] = OrderedDict()
+        # Runs whose model client logged its calls, so no call is derived from
+        # messages there as well; and message ids already turned into a call.
+        self._logged_runs: OrderedDict[str, None] = OrderedDict()
+        self._derived: OrderedDict[tuple[str, str], None] = OrderedDict()
 
     def on_start(self, span: OTelSpan) -> None:
         context = span.get_span_context()
@@ -159,10 +168,13 @@ class _RunLinker:
         trace_id, span_id = context.trace_id, context.span_id
         parent = span.parent
         parent_id = parent.span_id if parent is not None and parent.trace_id == trace_id else None
+        cause_id = None
+        if parent is None:
+            cause_id = next((link.context.span_id for link in span.links or ()), None)
         with self._lock:
             if trace_id not in self._runs:
                 self._remember(self._runs, trace_id, self._run_for(span))
-            self._remember(self._spans, span_id, (span, parent_id))
+            self._remember(self._spans, span_id, (span, parent_id, cause_id))
 
     def _run_for(self, span: OTelSpan) -> _Run:
         """The run a newly seen trace belongs to: a linked trace's, else a new one."""
@@ -195,22 +207,59 @@ class _RunLinker:
             entry = self._spans.get(context.span_id)
             if run is None or entry is None:
                 return None
-            # Walk up to the nearest ancestor that is itself recorded.
-            ancestor = entry[1]
-            while ancestor is not None:
-                found = self._spans.get(ancestor)
-                if found is None:
-                    ancestor = None  # forgotten or never seen: treat as the top
-                elif _has_genai(dict(found[0].attributes or {})):
-                    break
-                else:
-                    ancestor = found[1]
+            ancestor = self._nearest_recorded(entry[1], follow_links=False)
+        return self._placement(run, ancestor)
+
+    def place_child(self, trace_id: int, span_id: int, *, follow_links: bool) -> _Placement | None:
+        """Where to record a new span created under the OTel span ``span_id``.
+
+        The new span nests under that span if it is recorded, else under its
+        nearest recorded ancestor. With ``follow_links``, the walk continues from a
+        trace's root to the span that sent its message, so a span derived from a
+        delivered message lands under the agent turn that produced it.
+        """
+        with self._lock:
+            run = self._runs.get(trace_id)
+            if run is None or span_id not in self._spans:
+                return None
+            ancestor = self._nearest_recorded(span_id, follow_links=follow_links)
+        return self._placement(run, ancestor)
+
+    def _nearest_recorded(self, start: int | None, *, follow_links: bool) -> int | None:
+        """The first recorded span from ``start`` upward (``start`` included)."""
+        current = start
+        seen: set[int] = set()
+        while current is not None and current not in seen:
+            seen.add(current)
+            found = self._spans.get(current)
+            if found is None:
+                return None  # forgotten or never seen: treat as the top
+            if _has_genai(dict(found[0].attributes or {})):
+                return current
+            _, parent_id, cause_id = found
+            current = parent_id if parent_id is not None else (cause_id if follow_links else None)
+        return None
+
+    @staticmethod
+    def _placement(run: _Run, ancestor: int | None) -> _Placement:
         if ancestor is not None:
             return _Placement(run.trace_id, f"{ancestor:016x}")
         return _Placement(run.trace_id, run.parent_span_id)
 
+    def note_logged_calls(self, run_trace_id: str) -> None:
+        with self._lock:
+            self._remember(self._logged_runs, run_trace_id, None)
+
+    def claim_derived(self, run_trace_id: str, message_id: str) -> bool:
+        """True the first time a message is seen in a run whose client logs nothing."""
+        with self._lock:
+            if run_trace_id in self._logged_runs or (run_trace_id, message_id) in self._derived:
+                return False
+            self._remember(self._derived, (run_trace_id, message_id), None)
+            return True
+
     @staticmethod
-    def _remember(store: OrderedDict[int, Any], key: int, value: Any) -> None:
+    def _remember(store: OrderedDict[_K, Any], key: _K, value: Any) -> None:
         store[key] = value
         store.move_to_end(key)
         while len(store) > _MAX_TRACKED:
@@ -323,6 +372,81 @@ def _record(tracer: Tracer, span: Span) -> None:
     tracer.buffer.record(Span.model_validate(span.model_dump()))
 
 
+# AutoGen's model clients (autogen_ext: OpenAI, Azure, Anthropic, Ollama, ...) log
+# each call as an event on this logger; AutoGen itself emits no model-call span.
+_EVENT_LOGGER = "autogen_core.events"
+
+
+def _model_output(response: Any) -> Any:
+    """The reply in a logged model response: the first choice's message for the
+    OpenAI shape, else the response's content, else the whole response."""
+    if isinstance(response, dict):
+        choices = response.get("choices")
+        if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+            return choices[0].get("message", choices[0])
+        if "content" in response:
+            return response["content"]
+    return response
+
+
+def _usage_messages(message: Any) -> list[dict[str, Any]]:
+    """Messages in a runtime message that carry model usage (a model reply)."""
+    if not isinstance(message, str) or '"models_usage"' not in message:
+        return []
+    try:
+        data = json.loads(message)
+    except ValueError:
+        return []
+    found: list[dict[str, Any]] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            if isinstance(node.get("models_usage"), dict) and node.get("id") is not None:
+                found.append(node)
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(data)
+    return found
+
+
+class _ModelCallLogHandler(logging.Handler):
+    """Turns the model-call events AutoGen's clients log into pyTracer LLM spans."""
+
+    def __init__(self, exporter: PyTracerSpanExporter) -> None:
+        super().__init__(logging.INFO)
+        self._exporter = exporter
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self._exporter.record_model_event(record.msg)
+        except Exception:  # noqa: BLE001 - capture must never break the agent
+            _log.debug("pytracer could not record an AutoGen model event", exc_info=True)
+
+
+_log = logging.getLogger("pytracer_autogen")
+
+
+def _attach_model_call_handler(exporter: PyTracerSpanExporter) -> None:
+    """Route AutoGen's model-call events to ``exporter`` (the latest provider wins).
+
+    The events are logged at INFO. When the event logger would drop them (its
+    effective level is above INFO, the default), its level is lowered and its
+    propagation turned off, so other handlers see exactly what they saw before.
+    """
+    logger = logging.getLogger(_EVENT_LOGGER)
+    for handler in list(logger.handlers):
+        if isinstance(handler, _ModelCallLogHandler):
+            logger.removeHandler(handler)
+    logger.addHandler(_ModelCallLogHandler(exporter))
+    if logger.getEffectiveLevel() > logging.INFO:
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+
+
 class _LinkingSpanProcessor(SimpleSpanProcessor):
     """Exports each span when it ends, and feeds span starts to the run linker."""
 
@@ -354,6 +478,9 @@ class PyTracerSpanExporter(SpanExporter):
         # With a linker, tool spans are joined to the result AutoGen sends in a
         # later message, so a tool's output is recorded.
         self._results = _ToolResultJoiner() if linker is not None else None
+        # Streamed model calls: start time and request, keyed by the OTel span the
+        # call runs under and the agent, until the stream's end event arrives.
+        self._stream_starts: dict[tuple[int, str | None], tuple[int, Any]] = {}
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
         tracer = self._explicit_tracer or get_tracer()
@@ -369,6 +496,11 @@ class PyTracerSpanExporter(SpanExporter):
                     run = self._linker.run_trace_id(span)
                     if run is not None:
                         self._results.resolve((run, call_id), content, is_error)
+            # A model reply in a runtime message stands in for the model call when
+            # the client logs no call events (e.g. a custom client).
+            if self._linker is not None:
+                for reply in _usage_messages(raw_attrs.get(_MESSAGE_ATTR)):
+                    self._record_derived_call(span, reply, tracer)
             # Skip the runtime's internal messaging spans (no GenAI attributes), so
             # a run is the agent/model/tool calls, not dozens of unknown id-named spans.
             if not _has_genai(raw_attrs):
@@ -425,6 +557,110 @@ class PyTracerSpanExporter(SpanExporter):
             _record(tracer, pytracer_span)
         return SpanExportResult.SUCCESS
 
+    def record_model_event(self, event: Any) -> None:
+        """Record a model call from an AutoGen ``LLMCallEvent`` / stream events."""
+        from opentelemetry import trace as otel_trace
+
+        kwargs = getattr(event, "kwargs", None)
+        if not isinstance(kwargs, dict):
+            return
+        kind = kwargs.get("type")
+        if kind not in ("LLMCall", "LLMStreamStart", "LLMStreamEnd"):
+            return
+        now = time.time_ns()
+        agent_id = kwargs.get("agent_id")
+        context = otel_trace.get_current_span().get_span_context()
+        key = (context.span_id if context.is_valid else 0, agent_id)
+        if kind == "LLMStreamStart":
+            self._stream_starts[key] = (now, kwargs.get("messages"))
+            return
+        start, messages = now, kwargs.get("messages")
+        if kind == "LLMStreamEnd":
+            start, messages = self._stream_starts.pop(key, (now, None))
+        response = kwargs.get("response")
+        tracer = self._explicit_tracer or get_tracer()
+        redactor = tracer.redactor
+        placement = (
+            self._linker.place_child(context.trace_id, context.span_id, follow_links=False)
+            if self._linker is not None and context.is_valid
+            else None
+        )
+        if placement is not None:
+            trace_id, parent_span_id = placement.trace_id, placement.parent_span_id
+            if self._linker is not None:
+                self._linker.note_logged_calls(trace_id)
+        elif context.is_valid:
+            trace_id, parent_span_id = f"{context.trace_id:032x}", f"{context.span_id:016x}"
+        else:
+            trace_id, parent_span_id = new_trace_id(), None
+        model = response.get("model") if isinstance(response, dict) else None
+        tokens = int(kwargs.get("prompt_tokens") or 0) + int(kwargs.get("completion_tokens") or 0)
+        attributes: dict[str, Any] = {"framework": "autogen"}
+        if kind == "LLMCall":
+            # The event is logged when the call returns, so its start is not known.
+            attributes["pytracer.start_unknown"] = True
+        if model:
+            attributes["gen_ai.response.model"] = model
+        if agent_id:
+            attributes["gen_ai.agent.id"] = agent_id
+        _record(
+            tracer,
+            Span(
+                trace_id=trace_id,
+                span_id=new_span_id(),
+                parent_span_id=parent_span_id,
+                name=f"chat {model}" if model else "chat",
+                kind=SpanKind.LLM,
+                input=redactor.redact(messages) if messages is not None else None,
+                output=redactor.redact(_model_output(response)),
+                start_time_ns=start,
+                end_time_ns=now,
+                token_count=tokens or None,
+                status=SpanStatus.OK,
+                attributes=redactor.redact(attributes),
+                resource=tracer.resource,
+            ),
+        )
+
+    def _record_derived_call(self, span: ReadableSpan, reply: dict[str, Any], tracer: Tracer) -> None:
+        """Record a model call from a model reply AutoGen delivered in a message.
+
+        Used only in runs whose client logs no call events. It has the reply and
+        its token counts, but not the request or the call's timing, and is marked
+        ``pytracer.derived``.
+        """
+        context = span.get_span_context()
+        if context is None or self._linker is None:
+            return
+        run = self._linker.run_trace_id(span)
+        if run is None or not self._linker.claim_derived(run, str(reply["id"])):
+            return
+        placement = self._linker.place_child(context.trace_id, context.span_id, follow_links=True)
+        if placement is None:
+            return
+        usage = reply["models_usage"]
+        tokens = int(usage.get("prompt_tokens") or 0) + int(usage.get("completion_tokens") or 0)
+        at = int(span.start_time or time.time_ns())
+        source = reply.get("source")
+        _record(
+            tracer,
+            Span(
+                trace_id=placement.trace_id,
+                span_id=new_span_id(),
+                parent_span_id=placement.parent_span_id,
+                name="chat",
+                kind=SpanKind.LLM,
+                agent_name=str(source) if source is not None else None,
+                output=tracer.redactor.redact(reply.get("content")),
+                start_time_ns=at,
+                end_time_ns=at,
+                token_count=tokens or None,
+                status=SpanStatus.OK,
+                attributes={"framework": "autogen", "pytracer.derived": True},
+                resource=tracer.resource,
+            ),
+        )
+
     def shutdown(self) -> None:
         self.force_flush()
 
@@ -447,10 +683,10 @@ def pytracer_tracer_provider(tracer: Tracer | None = None) -> TracerProvider:
     that is open when the run starts, if any.
     """
     linker = _RunLinker()
+    exporter = PyTracerSpanExporter(tracer, linker=linker)
     provider = TracerProvider()
-    provider.add_span_processor(
-        _LinkingSpanProcessor(PyTracerSpanExporter(tracer, linker=linker), linker)
-    )
+    provider.add_span_processor(_LinkingSpanProcessor(exporter, linker))
+    _attach_model_call_handler(exporter)
     return provider
 
 

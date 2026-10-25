@@ -18,6 +18,7 @@ from enum import Enum
 
 import pytracer_sdk as pytracer
 from pytracer_sdk import InMemoryTransport, Intercept, Resource, Span, SpanKind, SpanStatus, Tracer
+from pytracer_sdk.tracer import intercepted_span
 
 from .fidelity import (
     ConcurrencyLedger,
@@ -27,6 +28,7 @@ from .fidelity import (
     SideEffectLog,
     controlled,
 )
+from .hashing import input_hash
 from .mocks import MockSet, RecordedError, _identifier
 from .sandbox import NetworkSandbox
 
@@ -107,9 +109,10 @@ class ReplayResult:
     # response does not apply and the step cannot be judged by a frozen replay.
     model_input_changes: list[str] = field(default_factory=list)
     # Identifiers of ops called concurrently from different OS threads with the same
-    # input but differing recorded responses: arrival order cannot settle which
-    # recording each call should get, so the match may be swapped (surfaced, not
-    # silent). Sequential and single-threaded-async concurrency is not affected.
+    # input, under the same caller (or no caller op), but differing recorded
+    # responses: nothing distinguishes those calls, so the match may be swapped
+    # (surfaced, not silent). Concurrent calls from different callers resolve by
+    # caller; sequential and single-threaded-async concurrency is not affected.
     concurrency_ambiguities: list[str] = field(default_factory=list)
     # True when there were recordings to inject but the agent hit no @op seam, so
     # nothing could be replayed (e.g. a run captured via an adapter, which records
@@ -193,15 +196,29 @@ class ReplayEngine:
         # Numbers each (identifier, input) call so concurrent/repeat calls resolve
         # to their recording in order; thread-safe for concurrent tool execution.
         ledger = ConcurrencyLedger()
+        # Each live op's span id -> its (identifier, input hash), so a call can name
+        # its caller the same way the recording does. Same-input calls racing on
+        # different threads then resolve by caller instead of by arrival order.
+        callers: dict[str, tuple[str, str]] = {}
         # Flags whether any @op was seen, to detect replaying a run that has
         # recordings but never hits the @op seam (adapter-captured, record-only).
         seen_op = {"any": False}
+
+        def caller_of(identifier: str, inp: object) -> tuple[str, str] | None:
+            """Register this op and return its calling op's key, if it has one."""
+            span = intercepted_span()
+            if span is None:
+                return None
+            with se_lock:
+                callers[span.span_id] = (identifier, input_hash(inp))
+                return callers.get(span.parent_span_id) if span.parent_span_id else None
 
         def interceptor(
             kind: SpanKind, name: str, tool_name: str | None, inp: object
         ) -> Intercept | None:
             seen_op["any"] = True
             identifier = _identifier(kind, name, tool_name)
+            caller = caller_of(identifier, inp)
             # Per-op selective freeze overrides the mode's kind-based default.
             if identifier in self.frozen_ops:
                 mock_this = True
@@ -210,7 +227,19 @@ class ReplayEngine:
             else:
                 mock_this = kind in mocked
             if mock_this:
-                occurrence = ledger.key_for(identifier, inp).occurrence
+                # Resolve by caller when the recording has calls under this caller;
+                # the call is still numbered on its plain key so a later call that
+                # has no caller scope keeps its place in the sequence.
+                if caller is not None and not mocks.has_caller_scope(identifier, inp, caller):
+                    caller = None
+                occurrence = ledger.key_for(
+                    identifier, inp, track_threads=caller is None
+                ).occurrence
+                caller_occurrence = (
+                    ledger.scoped_key_for(identifier, inp, caller).occurrence
+                    if caller is not None
+                    else 0
+                )
                 # In partial mode the model runs live and words tool inputs
                 # differently each run, so a frozen tool matches by call order
                 # (its per-identifier index), not by the re-worded input.
@@ -223,6 +252,8 @@ class ReplayEngine:
                     positional_occurrence=pos_occurrence,
                     fuzzy=self.fuzzy_match,
                     positional=positional,
+                    caller=caller,
+                    caller_occurrence=caller_occurrence,
                 )
                 if hit:
                     if isinstance(output, RecordedError):
@@ -303,11 +334,12 @@ class ReplayEngine:
         # still fails the run, because it propagates out of agent() into the except
         # above. A handled child error that should still fail is left to the
         # assertions (no_errors with scope="any").
-        # A same-input key reached from more than one OS thread, whose recordings
-        # differ, could have had its matches swapped by arrival order; surface it.
+        # A key (same input, and same caller when resolved by caller) reached from
+        # more than one OS thread, whose recordings differ, could have had its
+        # matches swapped by arrival order; surface it.
         order_sensitive = mocks.order_sensitive_keys()
         concurrency_ambiguities = sorted(
-            {ident for (ident, ih) in ledger.multi_thread_keys() if (ident, ih) in order_sensitive}
+            {key[0] for key in ledger.multi_thread_keys() if key in order_sensitive}
         )
         return ReplayResult(
             return_value=return_value,

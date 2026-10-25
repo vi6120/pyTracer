@@ -120,35 +120,55 @@ class ConcurrencyLedger:
     those replay in order correctly. Concurrent calls whose inputs differ also
     resolve correctly, each to its own recording.
 
-    The one case arrival order cannot settle is calls that run on **different OS
-    threads** and share the same input: the threads reach the interceptor in a
-    race-determined order, so if their recorded responses differ the two can be
-    swapped. That needs a caller-supplied ordering key replay does not capture; when
-    the shared-input responses are identical (the common case) order is irrelevant.
-    :meth:`ambiguous_keys` reports exactly this case so it is surfaced, not silent.
+    Calls on **different OS threads** that share the same input reach the
+    interceptor in a race-determined order. When they come from different callers
+    (each thread's own ``@op``, called with its own input), :meth:`scoped_key_for`
+    numbers them per caller, so each resolves to the recording made under that
+    caller whatever order the threads arrive in. What remains is calls with an
+    identical code path: same op, same input, under the same caller with the same
+    input. Those cannot be told apart, so if their recorded responses differ the two
+    can be swapped; when they are identical (the common case) order is irrelevant.
+    :meth:`multi_thread_keys` reports the keys reached from several threads so the
+    engine can surface exactly this case, not silently.
     """
 
-    _counts: dict[tuple[str, str], int] = field(default_factory=dict)
+    _counts: dict[tuple[str, ...], int] = field(default_factory=dict)
     _identifier_counts: dict[str, int] = field(default_factory=dict)
     # Threads that requested each key, to tell single-threaded (sequential/async,
-    # deterministic) access apart from multi-threaded (race-ordered) access.
-    _threads: dict[tuple[str, str], set[int]] = field(default_factory=dict)
+    # deterministic) access apart from multi-threaded (race-ordered) access. A key
+    # is (identifier, input_hash), or with the caller's (identifier, input_hash)
+    # appended for a caller-scoped call.
+    _threads: dict[tuple[str, ...], set[int]] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
-    def key_for(self, identifier: str, inp: object) -> CallKey:
-        """Return the stable key for the next call of ``identifier`` with ``inp``."""
+    def key_for(self, identifier: str, inp: object, *, track_threads: bool = True) -> CallKey:
+        """Return the stable key for the next call of ``identifier`` with ``inp``.
+
+        ``track_threads=False`` numbers the call without counting its thread, for a
+        call that is resolved by its caller-scoped key instead.
+        """
         ih = input_hash(inp)
+        return CallKey(identifier, ih, self._next((identifier, ih), track_threads))
+
+    def scoped_key_for(self, identifier: str, inp: object, parent: tuple[str, str]) -> CallKey:
+        """Return the key for the next call of ``identifier`` with ``inp`` under
+        the caller ``parent`` (its identifier and input hash)."""
+        ih = input_hash(inp)
+        return CallKey(identifier, ih, self._next((identifier, ih, *parent), True))
+
+    def _next(self, key: tuple[str, ...], track_threads: bool) -> int:
         # Identify the thread by its live object, not threading.get_ident(): the OS
         # thread id is reused once a short thread exits, which would make two
         # genuinely different threads look like one.
         thread_id = id(threading.current_thread())
         with self._lock:
-            n = self._counts.get((identifier, ih), 0)
-            self._counts[(identifier, ih)] = n + 1
-            self._threads.setdefault((identifier, ih), set()).add(thread_id)
-        return CallKey(identifier=identifier, input_hash=ih, occurrence=n)
+            n = self._counts.get(key, 0)
+            self._counts[key] = n + 1
+            if track_threads:
+                self._threads.setdefault(key, set()).add(thread_id)
+        return n
 
-    def multi_thread_keys(self) -> set[tuple[str, str]]:
+    def multi_thread_keys(self) -> set[tuple[str, ...]]:
         """Keys requested from more than one OS thread (race-ordered arrival)."""
         with self._lock:
             return {key for key, threads in self._threads.items() if len(threads) > 1}

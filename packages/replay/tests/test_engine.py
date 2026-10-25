@@ -492,3 +492,105 @@ def test_concurrent_same_input_identical_recordings_not_flagged() -> None:
 
     result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
     assert result.concurrency_ambiguities == []
+
+
+def _per_worker_recordings() -> tuple[Any, Any, MockSet]:
+    """worker(order) calls fetch(1); each worker's fetch(1) recorded a different
+    response (r1 under worker "a", r2 under worker "b")."""
+    import threading
+
+    n = {"i": 0}
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="fetch")
+    def fetch(x: int) -> str:
+        n["i"] += 1
+        return f"r{n['i']}"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="worker")
+    def worker(order: str) -> str:
+        return f"{order}:{fetch(1)}"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="cap")
+    def capture() -> str:
+        out: list[str] = []
+        for order in ("a", "b"):  # a records first, then b
+            t = threading.Thread(target=lambda o=order: out.append(worker(o)))
+            t.start()
+            t.join()
+        return ",".join(out)
+
+    mocks = MockSet.from_trace(_record(capture).spans)  # type: ignore[attr-defined]
+    return fetch, worker, mocks
+
+
+def test_concurrent_same_input_calls_resolve_by_their_caller() -> None:
+    # R7: the same input on different threads, but from different callers
+    # (worker("a") and worker("b")). Even when the threads arrive in the opposite
+    # order to the recording, each call gets the response recorded under its own
+    # caller, and nothing is flagged.
+    import threading
+
+    _, worker, mocks = _per_worker_recordings()
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        out: list[str] = []
+        for order in ("b", "a"):  # reversed arrival order
+            t = threading.Thread(target=lambda o=order: out.append(worker(o)))
+            t.start()
+            t.join()
+        return ",".join(sorted(out))
+
+    result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert result.return_value == "a:r1,b:r2"  # not swapped to a:r2,b:r1
+    assert result.concurrency_ambiguities == []
+
+
+def test_concurrent_same_input_calls_under_the_same_caller_are_still_flagged() -> None:
+    # An identical code path (same caller with the same input on two threads)
+    # cannot be told apart, so differing recordings are still surfaced.
+    import threading
+
+    n = {"i": 0}
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="fetch")
+    def fetch(x: int) -> str:
+        n["i"] += 1
+        return f"r{n['i']}"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="worker")
+    def worker(order: str) -> str:
+        return fetch(1)
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="cap")
+    def capture() -> str:
+        return worker("a") + worker("a")
+
+    mocks = MockSet.from_trace(_record(capture).spans)  # type: ignore[attr-defined]
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+    def agent() -> str:
+        out: list[str] = []
+        threads = [threading.Thread(target=lambda: out.append(worker("a"))) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        return ",".join(sorted(out))
+
+    result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert result.return_value == "r1,r2"  # both served from the recording
+    assert "fetch" in result.concurrency_ambiguities
+
+
+def test_caller_scoped_mocks_fall_back_without_a_caller_op() -> None:
+    # A replay whose fetch has no calling op (or a caller the recording never saw)
+    # still resolves by input and order, as before.
+    fetch, _, mocks = _per_worker_recordings()
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="other")
+    def agent() -> str:
+        return fetch(1) + fetch(1)
+
+    result = ReplayEngine(ReplayMode.FULL).replay(agent, mocks)
+    assert result.return_value == "r1r2"

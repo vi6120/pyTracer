@@ -107,6 +107,10 @@ class MockSet:
     _sequences: dict[tuple[str, str], list[Any]] = field(default_factory=dict)
     # identifier -> recordings in capture order, for the identifier/fuzzy fallback.
     _by_identifier: dict[str, list[tuple[Any, Any]]] = field(default_factory=dict)
+    # (identifier, input_hash, caller identifier, caller input_hash) -> recordings in
+    # capture order, so same-input calls made concurrently from different callers
+    # each resolve to the recording made under their own caller.
+    _by_caller: dict[tuple[str, str, str, str], list[Any]] = field(default_factory=dict)
 
     @classmethod
     def from_trace(
@@ -114,6 +118,8 @@ class MockSet:
     ) -> MockSet:
         """Build a mock set from a trace's recorded tool/model spans."""
         mocks = cls()
+        spans = list(spans)
+        by_id = {s.span_id: s for s in spans}
         for span in spans:
             if span.kind in kinds:
                 # A span that failed is recorded as an error to re-raise on replay,
@@ -125,12 +131,26 @@ class MockSet:
                     if span.status is SpanStatus.ERROR
                     else span.output
                 )
-                mocks.add(_identifier(span.kind, span.name, span.tool_name), span.input, recorded)
+                identifier = _identifier(span.kind, span.name, span.tool_name)
+                mocks.add(identifier, span.input, recorded)
+                caller = by_id.get(span.parent_span_id) if span.parent_span_id else None
+                if caller is not None:
+                    key = (
+                        identifier,
+                        input_hash(span.input),
+                        _identifier(caller.kind, caller.name, caller.tool_name),
+                        input_hash(caller.input),
+                    )
+                    mocks._by_caller.setdefault(key, []).append(recorded)
         return mocks
 
     def add(self, identifier: str, input: Any, output: Any) -> None:
         self._sequences.setdefault((identifier, input_hash(input)), []).append(output)
         self._by_identifier.setdefault(identifier, []).append((input, output))
+
+    def has_caller_scope(self, identifier: str, input: Any, caller: tuple[str, str]) -> bool:
+        """Whether recordings exist for ``identifier`` with ``input`` under ``caller``."""
+        return (identifier, input_hash(input), *caller) in self._by_caller
 
     def lookup(
         self,
@@ -142,11 +162,16 @@ class MockSet:
         fuzzy: bool = False,
         positional: bool = False,
         threshold: float = DEFAULT_FUZZY_THRESHOLD,
+        caller: tuple[str, str] | None = None,
+        caller_occurrence: int = 0,
     ) -> tuple[bool, Any, str]:
         """Return ``(hit, output, match)``.
 
         ``match`` is ``"exact"``, ``"positional"``, ``"fuzzy"``, or ``"miss"``.
-        Exact match first: the recording at ``occurrence`` for this
+        With ``caller`` (the calling op's identifier and input hash) and recordings
+        under that caller, the exact match is the recording at ``caller_occurrence``
+        among them, so concurrent same-input calls from different callers cannot be
+        swapped. Otherwise exact match first: the recording at ``occurrence`` for this
         (identifier, input). When the call count runs past the recorded sequence
         the result is a ``miss``, not the last recording again: an over-run is a
         real divergence (the agent called the op more often than it did when
@@ -161,6 +186,12 @@ class MockSet:
         the nearest recording for this identifier by input similarity if it clears
         ``threshold``. A non-exact match is reported so the caller can mark it.
         """
+        if caller is not None:
+            scoped = self._by_caller.get((identifier, input_hash(input), *caller))
+            if scoped is not None:
+                if caller_occurrence < len(scoped):
+                    return True, scoped[caller_occurrence], "exact"
+                return False, None, "miss"
         seq = self._sequences.get((identifier, input_hash(input)))
         if seq is not None:
             if occurrence < len(seq):
@@ -202,17 +233,20 @@ class MockSet:
             return True, best_output
         return False, None
 
-    def order_sensitive_keys(self) -> set[tuple[str, str]]:
-        """(identifier, input_hash) keys with more than one distinct recorded output.
+    def order_sensitive_keys(self) -> set[tuple[str, ...]]:
+        """Keys with more than one distinct recorded output.
 
-        When several recordings for the same (identifier, input) differ, the order
-        they are consumed matters (so concurrent same-input calls can be swapped);
-        when the recordings are identical, order is irrelevant.
+        Both (identifier, input_hash) keys and caller-scoped keys (with the
+        caller's identifier and input hash appended). When several recordings for
+        one key differ, the order they are consumed matters (so concurrent calls on
+        that key can be swapped); when the recordings are identical, order is
+        irrelevant.
         """
-        return {
-            key for key, outputs in self._sequences.items()
-            if len({repr(o) for o in outputs}) > 1
-        }
+        keyed: list[tuple[tuple[str, ...], list[Any]]] = [
+            *self._sequences.items(),
+            *self._by_caller.items(),
+        ]
+        return {key for key, outputs in keyed if len({repr(o) for o in outputs}) > 1}
 
     def __len__(self) -> int:
         return len(self._sequences)

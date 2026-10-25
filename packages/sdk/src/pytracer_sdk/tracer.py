@@ -86,6 +86,18 @@ _current: contextvars.ContextVar[SpanContext | None] = contextvars.ContextVar(
     "pytracer_current_span", default=None
 )
 
+# The span of the op an interceptor is being consulted for, set only for the
+# duration of that call, so an interceptor can see where the op sits in the tree
+# (its parent_span_id) without a change to the Interceptor signature.
+_intercepting: contextvars.ContextVar[Span | None] = contextvars.ContextVar(
+    "pytracer_intercepting_span", default=None
+)
+
+
+def intercepted_span() -> Span | None:
+    """Inside an interceptor, the span of the op being intercepted; else ``None``."""
+    return _intercepting.get()
+
 
 class ActiveSpan:
     """A span in progress. Use as a context manager; closing it records the span."""
@@ -375,7 +387,11 @@ class Tracer:
         """Consult the interceptor; on a hit, record the injected output on the span."""
         if self.interceptor is None:
             return None
-        decision = self.interceptor(kind, name, tool_name, active.span.input)
+        token = _intercepting.set(active.span)
+        try:
+            decision = self.interceptor(kind, name, tool_name, active.span.input)
+        finally:
+            _intercepting.reset(token)
         if decision is not None:
             active.set_output(decision.output)
             active.set_attribute("pytracer.replayed", True)

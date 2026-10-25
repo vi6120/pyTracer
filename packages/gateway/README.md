@@ -12,7 +12,7 @@ PYTRACER_GATEWAY_API_KEYS="devkey:my-app" uvicorn pytracer_gateway.app:build_def
 
 ```
 POST /v1/spans      body: {"spans": [ <span>, ... ]}   header: X-API-Key: <key>
-GET  /healthz       liveness
+GET  /healthz       liveness, and the gateway's version
 GET  /readyz        readiness (ingest worker running)
 GET  /v1/stats      ingest counters
 ```

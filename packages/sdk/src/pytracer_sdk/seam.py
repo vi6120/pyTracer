@@ -44,7 +44,7 @@ class SeamCall:
     """A framework call currently running through a seam."""
 
     kind: SpanKind
-    span: SpanContext  # the span recording this call
+    span: SpanContext | None  # the span recording this call
 
 
 _active: contextvars.ContextVar[SeamCall | None] = contextvars.ContextVar(
@@ -92,7 +92,7 @@ def call_through(
         return fn(*args, **kwargs)
 
     def body(*a: Any, **k: Any) -> Any:
-        token = _active.set(SeamCall(kind, _current.get() or SpanContext("", "")))
+        token = _active.set(SeamCall(kind, _current.get()))
         try:
             return fn(*a, **k)
         finally:
@@ -121,7 +121,7 @@ async def acall_through(
         return await fn(*args, **kwargs)
 
     async def body(*a: Any, **k: Any) -> Any:
-        token = _active.set(SeamCall(kind, _current.get() or SpanContext("", "")))
+        token = _active.set(SeamCall(kind, _current.get()))
         try:
             return await fn(*a, **k)
         finally:
@@ -158,7 +158,7 @@ def stream_through(
         return fn(*args, **kwargs)
 
     def body(*a: Any, **k: Any) -> Any:
-        token = _active.set(SeamCall(kind, _current.get() or SpanContext("", "")))
+        token = _active.set(SeamCall(kind, _current.get()))
         try:
             yield from fn(*a, **k)
         finally:
@@ -187,7 +187,7 @@ def astream_through(
         return fn(*args, **kwargs)
 
     async def body(*a: Any, **k: Any) -> Any:
-        token = _active.set(SeamCall(kind, _current.get() or SpanContext("", "")))
+        token = _active.set(SeamCall(kind, _current.get()))
         try:
             async for item in fn(*a, **k):
                 yield item

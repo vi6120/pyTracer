@@ -22,7 +22,8 @@ from pytracer_sdk.transport import InMemoryTransport
 from opentelemetry.sdk.trace import TracerProvider
 
 from pytracer_autogen import PyTracerSpanExporter
-from pytracer_autogen.exporter import _attach_model_call_handler, _LinkingSpanProcessor, _RunLinker
+from pytracer_autogen.linking import _LinkingSpanProcessor, _RunLinker
+from pytracer_autogen.model_calls import _attach_model_call_handler
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("autogen_agentchat") is None, reason="autogen-agentchat not installed"

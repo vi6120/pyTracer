@@ -46,7 +46,9 @@
   including when it requeues dead letters.
 - **Client-side span loss is visible (L1).** A full SDK queue or a failed delivery
   is logged as a rate-limited warning and passed to an optional
-  `on_drop(reason, count, error)` callback set through `configure()`.
+  `on_drop(reason, count, error)` callback set through `configure()`. A full queue
+  is warned at its first drop, even while delivery is stuck in a slow send; the
+  callback runs on the background thread, never the agent's.
 - **Concurrent same-input calls replay by caller (R7).** Same-input calls racing
   on different threads each get the response recorded under their own calling op;
   only calls with an identical path are still reported as ambiguous.

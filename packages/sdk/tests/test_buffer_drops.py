@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 
 import pytest
 
@@ -54,7 +55,9 @@ def _drop_warnings(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
     return [r for r in caplog.records if r.name == "pytracer_sdk" and "dropped" in r.getMessage()]
 
 
-def test_queue_full_is_counted_reported_and_warned_once(caplog: pytest.LogCaptureFixture) -> None:
+def test_queue_full_is_warned_at_once_and_reported_by_the_worker(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     calls: list[tuple[str, int, BaseException | None]] = []
     threads: list[str] = []
 
@@ -67,19 +70,27 @@ def test_queue_full_is_counted_reported_and_warned_once(caplog: pytest.LogCaptur
     with caplog.at_level(logging.WARNING, logger="pytracer_sdk"):
         buf.record(_span())
         assert sink.entered.wait(2.0)  # worker holds one span, queue is empty again
+        started = time.monotonic()
         for _ in range(12):
             buf.record(_span())
+        # Warned while send is still blocked, without waiting for the worker.
+        warnings = _drop_warnings(caplog)
+        assert len(warnings) == 1 and "queue_full" in warnings[0].getMessage()
+        assert time.monotonic() - started < 0.2
+        assert warnings[0].threadName == threading.current_thread().name
         assert calls == []  # dropping never calls back on the agent's thread
         sink.release.set()
         buf.shutdown(timeout=2.0)
 
     assert buf.dropped == 10
-    assert sum(count for _, count, _ in calls) == 10
+    assert sum(count for _, count, _ in calls) == 10  # every drop, once send returned
     assert all(reason == "queue_full" and error is None for reason, _, error in calls)
     assert set(threads) == {"pytracer-span-flush"}  # reported by the worker
-    warnings = _drop_warnings(caplog)
-    assert len(warnings) == 1  # rate limited: one warning, not one per span
-    assert "queue_full" in warnings[0].getMessage()
+    # Rate limited: the first drop is warned at once, the rest in one line later.
+    messages = [r.getMessage() for r in _drop_warnings(caplog)]
+    assert len(messages) == 2
+    assert "dropped 1 span(s) (queue_full)" in messages[0]
+    assert "9 more span(s) (queue_full) before shutdown" in messages[1]
 
 
 def test_losses_suppressed_by_the_rate_limit_are_logged_at_shutdown(

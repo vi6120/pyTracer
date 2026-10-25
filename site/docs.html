@@ -194,11 +194,13 @@ print(transport.rejected_spans)  # 0 when every span was accepted</code></pre>
     unreachable, or a 429/503 that outlasts the retries). The tracer counts these in
     <code>tracer.buffer.dropped</code> and <code>tracer.buffer.send_errors</code>, logs a
     warning on the <code>pytracer_sdk</code> logger (at most one per reason every 30
-    seconds, with the count since the last one, and any remainder at shutdown), and
+    seconds, with the count since the last one, and any remainder at shutdown; a full
+    queue is warned at its first drop), and
     calls an optional <code>on_drop(reason, count, error)</code> passed to
     <code>configure()</code>, where <code>reason</code> is <code>"queue_full"</code> or
     <code>"send_failed"</code>. The callback runs on the buffer's background thread, so
-    it never slows the agent.</p>
+    it never slows the agent; during an outage it can lag the drops by one send
+    attempt (about 35 seconds at worst), while the warning is immediate.</p>
     <pre><code>tracer = pytracer.configure(
     transport, service_name="researcher",
     on_drop=lambda reason, count, error: print(f"lost {count} span(s): {reason}"),

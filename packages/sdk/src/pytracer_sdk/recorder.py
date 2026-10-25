@@ -152,6 +152,15 @@ class SpanRecorder:
         # an object output (a pydantic model, a dataclass) keeps its type.
         self._tracer.buffer.record(span)
 
+    def context_of(self, run_id: str | None) -> SpanContext | None:
+        """The span recording ``run_id`` (open, or adopted by a seam), so a seam
+        call made inside that framework run can nest under it."""
+        with self._lock:
+            parent = self._parent(run_id)
+        if parent is None:
+            return None
+        return SpanContext(parent.trace_id, parent.span_id)
+
     def open_count(self) -> int:
         """Number of spans started but not yet ended (useful for diagnostics)."""
         with self._lock:

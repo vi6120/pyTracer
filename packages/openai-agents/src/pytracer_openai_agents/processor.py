@@ -29,6 +29,8 @@ from agents.tracing import (
 )
 from agents.tracing import Trace as AgentsTrace
 from pytracer_sdk import SpanKind, SpanRecorder, Tracer, get_tracer
+from pytracer_sdk.seam import active_seam
+from pytracer_sdk.tracer import SpanContext
 
 _MAX_DEPTH = 6
 
@@ -124,10 +126,32 @@ def _error(span: Any) -> str | None:
 class PyTracerTracingProcessor(TracingProcessor):
     """Records pyTracer spans from OpenAI Agents SDK trace/span callbacks."""
 
-    def __init__(self, tracer: Tracer | None = None) -> None:
+    def __init__(self, tracer: Tracer | None = None, *, seams: bool = False) -> None:
         self._recorder = SpanRecorder(tracer or get_tracer())
         # Folded structural spans: id -> the parent its children should attach to.
         self._folded: dict[str, str] = {}
+        # With seams installed, model and tool calls are recorded by the seams (so
+        # they replay); the SDK's own spans for them are folded, not recorded twice.
+        self._seams = seams
+
+    def _recorded_by_seam(self, data: Any) -> bool:
+        if not self._seams:
+            return False
+        if isinstance(data, FunctionSpanData):
+            return True  # opened just before the tool's seam call, which records it
+        if isinstance(data, (GenerationSpanData, ResponseSpanData)):
+            seam = active_seam()  # opened inside the model's seam call
+            return seam is not None and seam.kind is SpanKind.LLM
+        return False
+
+    def seam_parent(self) -> SpanContext | None:
+        """The pyTracer span a seam call made in the current SDK context nests under."""
+        from .replay import current_sdk_run_id
+
+        run = current_sdk_run_id()
+        while run is not None and run in self._folded:
+            run = self._folded[run]
+        return self._recorder.context_of(run)
 
     def _effective_parent(self, span: Span[Any]) -> str:
         """The parent to nest under, skipping any folded (structural) ancestors."""
@@ -149,7 +173,7 @@ class PyTracerTracingProcessor(TracingProcessor):
 
     def on_span_start(self, span: Span[Any]) -> None:
         parent = self._effective_parent(span)
-        if not isinstance(span.span_data, _KNOWN_SPAN_DATA):
+        if not isinstance(span.span_data, _KNOWN_SPAN_DATA) or self._recorded_by_seam(span.span_data):
             # A structural span (e.g. "task"/"turn"): fold it so its children nest
             # under its parent instead of an "unknown" span.
             self._folded[span.span_id] = parent
@@ -184,7 +208,10 @@ class PyTracerTracingProcessor(TracingProcessor):
         pass
 
 
-def install(tracer: Tracer | None = None) -> PyTracerTracingProcessor:
+_installed_seams: Any = None
+
+
+def install(tracer: Tracer | None = None, *, replayable: bool = False) -> PyTracerTracingProcessor:
     """Register pyTracer as the sole trace processor and return it.
 
     Uses ``set_trace_processors`` (replace), not ``add_trace_processor`` (append).
@@ -192,7 +219,28 @@ def install(tracer: Tracer | None = None) -> PyTracerTracingProcessor:
     ``OPENAI_API_KEY`` is set, so appending would quietly upload every run to
     OpenAI as well; replacing sends traces only to pyTracer. Call this after
     ``pytracer.configure(...)``.
+
+    With ``replayable=True``, the SDK's model calls and function tools are also
+    routed through pyTracer (see :mod:`pytracer_openai_agents.replay`), so a
+    captured run can be replayed without adding ``@op`` to anything.
     """
-    processor = PyTracerTracingProcessor(tracer)
+    global _installed_seams
+    from .replay import Seams
+
+    if _installed_seams is not None:
+        _installed_seams.uninstall()
+        _installed_seams = None
+    processor = PyTracerTracingProcessor(tracer, seams=replayable)
     set_trace_processors([processor])
+    if replayable:
+        _installed_seams = Seams(processor.seam_parent)
+        _installed_seams.install()
     return processor
+
+
+def uninstall_seams() -> None:
+    """Remove the replay seams installed by ``install(replayable=True)``."""
+    global _installed_seams
+    if _installed_seams is not None:
+        _installed_seams.uninstall()
+        _installed_seams = None

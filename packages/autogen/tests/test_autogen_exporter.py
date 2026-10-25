@@ -135,3 +135,86 @@ def test_install_registers_the_provider_globally(monkeypatch: pytest.MonkeyPatch
     )
     provider = install()
     assert captured["provider"] is provider
+
+
+# --- P2: one trace per run ---------------------------------------------------
+# AutoGen starts a new OTel trace for each message and links it to the sender's
+# trace (a span link, not a parent). These build that shape with plain OTel spans.
+
+
+def _genai(span: object, operation: str, **attrs: str) -> None:
+    span.set_attribute("gen_ai.operation.name", operation)  # type: ignore[attr-defined]
+    for key, value in attrs.items():
+        span.set_attribute(f"gen_ai.{key}", value)  # type: ignore[attr-defined]
+
+
+def _message_hop(ot: object, sender_span: object) -> object:
+    """A runtime 'publish' root in a new trace, linked to the sender's span."""
+    from opentelemetry.trace import Link
+
+    return ot.start_as_current_span(  # type: ignore[attr-defined]
+        "autogen publish", context=None, links=[Link(sender_span.get_span_context())]  # type: ignore[attr-defined]
+    )
+
+
+def test_linked_message_traces_are_one_trace() -> None:
+    from opentelemetry import context as otel_context
+
+    ot, sink, tracer = _setup()
+    token = otel_context.attach(otel_context.Context())  # start from no active span
+    try:
+        with ot.start_as_current_span("invoke_agent writer") as writer:  # type: ignore[attr-defined]
+            _genai(writer, "invoke_agent", **{"agent.name": "writer"})
+            with ot.start_as_current_span("autogen create group_topic") as create:  # type: ignore[attr-defined]
+                pass
+        # The next message is delivered in a fresh trace, linked to `create`.
+        with _message_hop(ot, create):  # type: ignore[attr-defined]
+            with ot.start_as_current_span("autogen process critic"):  # type: ignore[attr-defined]
+                with ot.start_as_current_span("invoke_agent critic") as critic:  # type: ignore[attr-defined]
+                    _genai(critic, "invoke_agent", **{"agent.name": "critic"})
+    finally:
+        otel_context.detach(token)
+    tracer.flush()
+    spans = {s.agent_name: s for s in sink.spans}
+    assert spans["writer"].trace_id == spans["critic"].trace_id  # one trace for the run
+    assert spans["critic"].parent_span_id is None  # top of the run, not a dropped noise span
+
+
+def test_unlinked_runs_stay_separate_traces() -> None:
+    from opentelemetry import context as otel_context
+
+    ot, sink, tracer = _setup()
+    for name in ("first", "second"):
+        token = otel_context.attach(otel_context.Context())
+        try:
+            with ot.start_as_current_span(f"invoke_agent {name}") as span:  # type: ignore[attr-defined]
+                _genai(span, "invoke_agent", **{"agent.name": name})
+        finally:
+            otel_context.detach(token)
+    tracer.flush()
+    assert len({s.trace_id for s in sink.spans}) == 2
+
+
+def test_tool_nests_under_its_agent_across_dropped_messaging_spans() -> None:
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("invoke_agent planner") as agent:  # type: ignore[attr-defined]
+        _genai(agent, "invoke_agent", **{"agent.name": "planner"})
+        with ot.start_as_current_span("autogen create output_topic"):  # type: ignore[attr-defined]
+            with ot.start_as_current_span("execute_tool search") as tool:  # type: ignore[attr-defined]
+                _genai(tool, "execute_tool", **{"tool.name": "search"})
+    tracer.flush()
+    agent_span = next(s for s in sink.spans if s.kind is K.AGENT)
+    tool_span = next(s for s in sink.spans if s.kind is K.TOOL)
+    assert tool_span.parent_span_id == agent_span.span_id  # not the dropped noise span
+
+
+def test_run_nests_under_an_enclosing_pytracer_span() -> None:
+    ot, sink, tracer = _setup()
+    with tracer.start_span("request") as request:
+        with ot.start_as_current_span("invoke_agent writer") as writer:  # type: ignore[attr-defined]
+            _genai(writer, "invoke_agent", **{"agent.name": "writer"})
+    tracer.flush()
+    request_span = next(s for s in sink.spans if s.name == "request")
+    writer_span = next(s for s in sink.spans if s.agent_name == "writer")
+    assert writer_span.trace_id == request_span.trace_id
+    assert writer_span.parent_span_id == request.span.span_id

@@ -24,6 +24,8 @@ class GatewayConfig:
     # backoff growing without bound; beyond the retry budget, spans go to the DLQ
     # and can be re-queued once storage recovers.
     retry_backoff_max: float = float(os.getenv("PYTRACER_GATEWAY_RETRY_BACKOFF_MAX", "5.0"))
+    # Seconds shutdown waits for the writer to drain the queue before stopping it.
+    shutdown_timeout: float = float(os.getenv("PYTRACER_GATEWAY_SHUTDOWN_TIMEOUT", "10"))
     max_errors_in_response: int = int(os.getenv("PYTRACER_GATEWAY_MAX_ERRORS_IN_RESPONSE", "20"))
 
     # Queue backend: "memory" (default, in-process) or "redis" (durable, so a

@@ -249,3 +249,43 @@ def test_object_outputs_keep_their_type_through_capture() -> None:
     # Through JSON, a local class falls back to plain data (it cannot be imported
     # back); the type survives the capture itself, which is what replay serves.
     assert all(Span.from_json(s.to_json()).output is not None for s in sink.spans)
+
+
+def test_calls_inside_a_generator_op_nest_under_it_without_leaking() -> None:
+    # The stream's span is current while its body runs, so a call it makes nests
+    # under it; between items the consumer still sees its own context.
+    from pytracer_sdk.tracer import _current
+    from pytracer_sdk.transport import InMemoryTransport
+
+    sink = InMemoryTransport()
+    tracer = Tracer(sink)
+
+    @tracer.op(kind=SpanKind.TOOL)
+    def lookup(word: str) -> str:
+        return word.upper()
+
+    @tracer.op(kind=SpanKind.LLM)
+    def stream() -> Iterator[str]:
+        for word in ("a", "b"):
+            yield lookup(word)
+
+    @tracer.op(kind=SpanKind.LLM)
+    async def astream() -> AsyncIterator[str]:
+        for word in ("c",):
+            yield lookup(word)
+
+    seen_between_items = []
+    for item in stream():
+        seen_between_items.append(_current.get())
+        assert item in ("A", "B")
+
+    async def consume() -> list[str]:
+        return [item async for item in astream()]
+
+    assert asyncio.run(consume()) == ["C"]
+    tracer.flush()
+    assert seen_between_items == [None, None]  # no leak into the consumer
+    spans = {s.span_id: s for s in sink.spans}
+    for s in sink.spans:
+        if s.name == "lookup":
+            assert spans[s.parent_span_id or ""].name in ("stream", "astream")

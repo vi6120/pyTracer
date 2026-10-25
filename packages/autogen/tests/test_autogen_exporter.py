@@ -369,7 +369,7 @@ def test_model_content_from_genai_log_records_fills_the_llm_span() -> None:
     from opentelemetry._logs import LogRecord
     from opentelemetry.sdk._logs import LoggerProvider
 
-    from pytracer_autogen.exporter import _genai_log_processor
+    from pytracer_autogen.genai_logs import _genai_log_processor
 
     logs = LoggerProvider()
     logs.add_log_record_processor(_genai_log_processor())
@@ -395,7 +395,7 @@ def test_model_content_from_genai_log_records_fills_the_llm_span() -> None:
 
 def test_uninstall_seams_lets_the_exporter_record_again() -> None:
     from pytracer_autogen import PyTracerSpanExporter, install_seams, uninstall_seams
-    from pytracer_autogen.exporter import _RunLinker
+    from pytracer_autogen.linking import _RunLinker
 
     pytest.importorskip("autogen_core", reason="autogen-core not installed")
     exporter = PyTracerSpanExporter(linker=_RunLinker())
@@ -403,3 +403,19 @@ def test_uninstall_seams_lets_the_exporter_record_again() -> None:
     assert exporter.seams is True
     uninstall_seams()
     assert exporter.seams is False  # derived model calls and AutoGen's own spans resume
+
+
+def test_a_tool_span_whose_result_never_comes_is_swept_on_a_later_export(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # No thread per held span: an expired one is recorded by the next export.
+    import pytracer_autogen.tool_results as tool_results
+
+    monkeypatch.setattr(tool_results, "_RESULT_WAIT_SECONDS", 0.0)
+    ot, sink, tracer = _setup()
+    _tool_call(ot, "never-answered")
+    with ot.start_as_current_span("invoke_agent planner") as agent:  # type: ignore[attr-defined]
+        _genai(agent, "invoke_agent", **{"agent.name": "planner"})  # any later export
+    tracer.flush()
+    (tool,) = [s for s in sink.spans if s.kind is K.TOOL]
+    assert tool.output is None

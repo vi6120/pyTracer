@@ -194,3 +194,18 @@ def test_uninstall_restores_the_sdk(seams: InMemoryTransport) -> None:
     assert "on_invoke_tool" not in FunctionTool.__dict__
     assert not getattr(ScriptedModel.get_response, "__pytracer_seam__", False)
     assert callable(weather.on_invoke_tool)
+
+
+def test_tools_stay_equal_with_seams_installed(seams: InMemoryTransport) -> None:
+    import dataclasses
+
+    from pytracer_openai_agents.replay import _SeamedInvoke
+
+    assert weather == weather  # broken before: every read built a new wrapper
+    assert weather.on_invoke_tool is weather.on_invoke_tool  # one wrapper per tool
+    # A copy behaves as it does without seams (the SDK binds each copy its own
+    # callable, so a copy is not equal to the original) and stores the real
+    # callable, never a seam wrapper.
+    copy = dataclasses.replace(weather)
+    assert copy == copy
+    assert not isinstance(copy.__dict__["on_invoke_tool"], _SeamedInvoke)

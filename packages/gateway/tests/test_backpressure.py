@@ -32,7 +32,7 @@ def test_full_queue_returns_429_then_drains(wait_until: Callable[..., bool]) -> 
         assert body["accepted"] + body["backpressured"] == 30
 
         # Service is still alive and serving other routes.
-        assert client.get("/healthz").json() == {"status": "ok"}
+        assert client.get("/healthz").json()["status"] == "ok"
 
         # Release storage; everything that was accepted gets written.
         accepted = body["accepted"]

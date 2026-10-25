@@ -12,12 +12,26 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 from .codec import decode_value, encode_value
 from .ids import is_valid_span_id, is_valid_trace_id
 
 NANOS_PER_MILLI = 1_000_000
+
+# Validation context for a process that only stores spans (the ingestion
+# gateway): class-backed input/output values stay as their tagged JSON, so
+# validating a client's span never imports or instantiates a class it names.
+# Use as ``Span.model_validate(data, context=STORE_ONLY)``.
+STORE_ONLY: dict[str, bool] = {"pytracer_rebuild_classes": False}
 
 try:
     # Single source of truth: the installed distribution's version, so spans
@@ -137,8 +151,9 @@ class Span(BaseModel):
 
     @field_validator("input", "output", mode="before")
     @classmethod
-    def _decode_payload(cls, value: Any) -> Any:
-        return decode_value(value)
+    def _decode_payload(cls, value: Any, info: ValidationInfo) -> Any:
+        context = info.context or {}
+        return decode_value(value, rebuild_classes=context.get("pytracer_rebuild_classes", True))
 
     # --- validation ---------------------------------------------------------
     @field_validator("trace_id")

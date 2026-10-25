@@ -404,8 +404,8 @@ pip install pytracer-autogen          # AutoGen</code></pre>
         <tr><td>Agent spans</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
         <tr><td>Model calls (model, tokens, output)</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Not emitted by AutoGen 0.7.x; with a GenAI-instrumented model client, model and tokens but no output</td></tr>
         <tr><td>Tool calls with their output</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Tool span only; AutoGen 0.7.x reports no result</td></tr>
-        <tr><td>One trace per framework run</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No, a team run arrives as several traces</td></tr>
-        <tr><td>Nests under an enclosing <code>pytracer.start_span(...)</code></td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+        <tr><td>One trace per framework run</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>Nests under an enclosing <code>pytracer.start_span(...)</code></td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
         <tr><td>Replay through the adapter</td><td colspan="4">Not yet, for any adapter: replay needs <code>@op</code> (see below)</td></tr>
       </tbody>
     </table>
@@ -424,15 +424,16 @@ pip install pytracer-autogen          # AutoGen</code></pre>
     <p id="one-trace"><strong>One trace per request.</strong> Each framework run starts its
     own trace, so a request that uses two frameworks (or calls the same one twice)
     arrives as several traces. To get one trace, wrap the request in a pyTracer span:
-    the LangGraph, CrewAI and OpenAI Agents adapters nest their run under the span that
-    is open when the run starts.</p>
+    every adapter (LangGraph, CrewAI, OpenAI Agents and AutoGen) nests its run under the
+    span that is open when the run starts.</p>
     <pre><code>with pytracer.start_span("answer-question"):
     plan = graph.invoke(inputs, config={"callbacks": [handler]})   # LangGraph
     result = crew.kickoff(inputs={"plan": plan})                   # CrewAI
 # one trace, rooted at "answer-question"</code></pre>
     <p>An <code>@op</code>-decorated function works the same way as
-    <code>start_span</code>. The AutoGen adapter does not nest: its spans keep
-    AutoGen's own trace ids.</p>
+    <code>start_span</code>. AutoGen delivers each message in a new OpenTelemetry trace
+    linked to the one that sent it; the adapter follows those links, so a team run is
+    one trace as well.</p>
 
     <h2 id="selfhost">Self-hosting the gateway</h2>
     <p>The gateway plus its stores run as a Docker stack. A single-instance setup

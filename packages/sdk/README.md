@@ -51,12 +51,14 @@ past the retries). These are surfaced the same way:
   `tracer.buffer.send_errors` counts spans whose delivery failed.
 - Each loss is logged as a warning on the `pytracer_sdk` logger. The warning is
   rate limited to one per reason every 30 seconds, carrying the number of spans
-  lost since the previous one, so an outage does not flood the agent's log.
+  lost since the previous one, so an outage does not flood the agent's log; losses
+  still waiting for the next warning are logged at shutdown.
 - `on_drop`, an optional `Callable[[str, int, BaseException | None], None]`
-  passed to `configure()`, is called on every loss with the reason
-  (`"queue_full"` or `"send_failed"`), the number of spans, and the delivery error
-  (`None` for a full queue). Like `on_rejection`, a raise from it is logged, not
-  propagated.
+  passed to `configure()`, is called with the reason (`"queue_full"` or
+  `"send_failed"`), the number of spans, and the delivery error (`None` for a full
+  queue). It runs on the buffer's background thread, never the agent's: spans
+  dropped from a full queue are counted as they are dropped and reported together.
+  Like `on_rejection`, a raise from it is logged, not propagated.
 
 ```python
 def on_drop(reason, count, error):

@@ -55,9 +55,12 @@ class SpanBuffer:
     on_drop:
         Called as ``on_drop(reason, count, error)`` whenever spans are lost:
         ``"queue_full"`` (``error`` is ``None``) or ``"send_failed"`` (``error``
-        is what the transport raised). Every loss is also logged as a rate-limited
-        warning on the ``pytracer_sdk`` logger. An exception raised by the callback
-        is logged and never reaches the agent.
+        is what the transport raised). It runs on the buffer's background thread,
+        never on the agent's: spans dropped from a full queue are counted when they
+        are dropped and reported together by the worker. Every loss is also logged
+        as a rate-limited warning on the ``pytracer_sdk`` logger, and losses still
+        waiting for the next warning are logged at shutdown. An exception raised by
+        the callback is logged and never reaches the agent.
     """
 
     def __init__(
@@ -77,6 +80,8 @@ class SpanBuffer:
         self._dropped = 0
         self._send_errors = 0
         self._dropped_lock = threading.Lock()
+        # Spans dropped from a full queue that the worker has not reported yet.
+        self._queue_full_pending = 0
         # Per reason: spans lost since the last warning, and when it was logged.
         self._unreported: dict[str, int] = {}
         self._last_warning: dict[str, float] = {}
@@ -103,9 +108,11 @@ class SpanBuffer:
         try:
             self._queue.put_nowait(span)
         except queue.Full:
+            # Only count here: this runs on the agent's thread, so the callback
+            # and warning are left to the worker.
             with self._dropped_lock:
                 self._dropped += 1
-            self._report("queue_full", 1, None)
+                self._queue_full_pending += 1
 
     def flush(self, timeout: float | None = DEFAULT_FLUSH_TIMEOUT) -> None:
         """Wait until queued spans are handed to the transport, up to ``timeout`` s.
@@ -126,6 +133,7 @@ class SpanBuffer:
     def _run(self) -> None:
         while True:
             batch, saw_sentinel = self._collect_batch()
+            self._report_queue_full()
             if batch:
                 try:
                     self._transport.send(batch)
@@ -138,7 +146,23 @@ class SpanBuffer:
                         self._queue.task_done()
             if saw_sentinel:
                 self._queue.task_done()  # account for the sentinel itself
+                self._report_queue_full()
+                self._log_unreported()
                 return
+
+    def _report_queue_full(self) -> None:
+        with self._dropped_lock:
+            count, self._queue_full_pending = self._queue_full_pending, 0
+        if count:
+            self._report("queue_full", count, None)
+
+    def _log_unreported(self) -> None:
+        """At shutdown, log losses still waiting for the next rate-limited warning."""
+        with self._dropped_lock:
+            pending = {reason: n for reason, n in self._unreported.items() if n}
+            self._unreported.clear()
+        for reason, count in pending.items():
+            _log.warning("pytracer dropped %d more span(s) (%s) before shutdown", count, reason)
 
     def _report(self, reason: str, count: int, error: BaseException | None) -> None:
         """Surface a span loss: callback every time, warning at most once per interval."""

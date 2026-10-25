@@ -218,3 +218,176 @@ def test_run_nests_under_an_enclosing_pytracer_span() -> None:
     writer_span = next(s for s in sink.spans if s.agent_name == "writer")
     assert writer_span.trace_id == request_span.trace_id
     assert writer_span.parent_span_id == request.span.span_id
+
+
+# --- tool results (AutoGen sends them in a later runtime message) ---------------
+
+
+def _tool_call(ot: object, call_id: str) -> None:
+    with ot.start_as_current_span("execute_tool search") as tool:  # type: ignore[attr-defined]
+        _genai(tool, "execute_tool", **{"tool.name": "search", "tool.call.id": call_id})
+
+
+def _result_message(ot: object, call_id: str, content: str, *, is_error: bool = False) -> None:
+    import json
+
+    message = {
+        "message": {
+            "type": "ToolCallExecutionEvent",
+            "source": "planner",
+            "content": [{"content": content, "name": "search", "call_id": call_id, "is_error": is_error}],
+        }
+    }
+    with ot.start_as_current_span("autogen process manager") as span:  # type: ignore[attr-defined]
+        span.set_attribute("message", json.dumps(message))
+
+
+def test_tool_output_is_joined_from_the_result_message() -> None:
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("invoke_agent planner") as agent:  # type: ignore[attr-defined]
+        _genai(agent, "invoke_agent", **{"agent.name": "planner"})
+        _tool_call(ot, "c1")
+        _result_message(ot, "c1", "3 results")
+    tracer.flush()
+    (tool,) = [s for s in sink.spans if s.kind is K.TOOL]
+    assert tool.output == "3 results"
+    assert tool.status is SpanStatus.OK
+
+
+def test_tool_error_result_marks_the_span_failed() -> None:
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("invoke_agent planner") as agent:  # type: ignore[attr-defined]
+        _genai(agent, "invoke_agent", **{"agent.name": "planner"})
+        _tool_call(ot, "c2")
+        _result_message(ot, "c2", "Error: index offline", is_error=True)
+    tracer.flush()
+    (tool,) = [s for s in sink.spans if s.kind is K.TOOL]
+    assert tool.status is SpanStatus.ERROR
+    assert tool.error_message == "Error: index offline"
+
+
+def test_tool_span_without_a_result_is_still_recorded_on_flush() -> None:
+    sink = InMemoryTransport()
+    tracer = pytracer.Tracer(sink, resource=pytracer.Resource(service_name="ag", branch="main", commit="c0"))
+    provider = pytracer_tracer_provider(tracer)
+    ot = provider.get_tracer("test")
+    _tool_call(ot, "never-answered")
+    provider.force_flush()
+    tracer.flush()
+    (tool,) = [s for s in sink.spans if s.kind is K.TOOL]
+    assert tool.output is None
+
+
+# --- model calls from AutoGen's model-call log events ---------------------------
+
+
+def _log_event(event: object) -> None:
+    import logging
+
+    logging.getLogger("autogen_core.events").info(event)
+
+
+def test_logged_model_call_becomes_an_llm_span_under_its_agent() -> None:
+    pytest.importorskip("autogen_core", reason="autogen-core not installed")
+    from autogen_core.logging import LLMCallEvent
+
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("invoke_agent planner") as agent:  # type: ignore[attr-defined]
+        _genai(agent, "invoke_agent", **{"agent.name": "planner"})
+        _log_event(
+            LLMCallEvent(
+                messages=[{"role": "user", "content": "plan a trip"}],
+                response={"model": "gpt-4o", "choices": [{"message": {"role": "assistant", "content": "ok"}}]},
+                prompt_tokens=7,
+                completion_tokens=3,
+            )
+        )
+    tracer.flush()
+    agent_span = next(s for s in sink.spans if s.kind is K.AGENT)
+    (llm,) = [s for s in sink.spans if s.kind is K.LLM]
+    assert llm.parent_span_id == agent_span.span_id
+    assert llm.trace_id == agent_span.trace_id
+    assert llm.name == "chat gpt-4o"
+    assert llm.input == [{"role": "user", "content": "plan a trip"}]
+    assert llm.output == {"role": "assistant", "content": "ok"}
+    assert llm.token_count == 10
+    assert llm.attributes["pytracer.start_unknown"] is True
+
+
+def test_streamed_model_call_spans_start_to_end() -> None:
+    pytest.importorskip("autogen_core", reason="autogen-core not installed")
+    from autogen_core.logging import LLMStreamEndEvent, LLMStreamStartEvent
+
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("invoke_agent planner") as agent:  # type: ignore[attr-defined]
+        _genai(agent, "invoke_agent", **{"agent.name": "planner"})
+        _log_event(LLMStreamStartEvent(messages=[{"role": "user", "content": "hi"}]))
+        _log_event(
+            LLMStreamEndEvent(
+                response={"model": "gpt-4o", "choices": [{"message": {"content": "hello"}}]},
+                prompt_tokens=1,
+                completion_tokens=1,
+            )
+        )
+    tracer.flush()
+    (llm,) = [s for s in sink.spans if s.kind is K.LLM]
+    assert llm.input == [{"role": "user", "content": "hi"}]
+    assert llm.output == {"content": "hello"}
+    assert llm.end_time_ns is not None and llm.end_time_ns >= llm.start_time_ns
+    assert "pytracer.start_unknown" not in llm.attributes
+
+
+def test_event_logger_is_enabled_without_changing_other_handlers() -> None:
+    import logging
+
+    logger = logging.getLogger("autogen_core.events")
+    logger.setLevel(logging.NOTSET)
+    logger.propagate = True
+    _setup()
+    assert logger.getEffectiveLevel() <= logging.INFO
+    assert logger.propagate is False  # events were dropped before; nobody else sees them now either
+
+    logger.setLevel(logging.DEBUG)  # the user already listens: leave their setup alone
+    logger.propagate = True
+    _setup()
+    assert logger.level == logging.DEBUG
+    assert logger.propagate is True
+
+
+def test_a_malformed_model_event_never_raises() -> None:
+    _setup()
+    _log_event("not an autogen event")
+    _log_event(type("E", (), {"kwargs": {"type": "LLMCall", "response": None}})())
+
+
+# --- P7: model content sent as GenAI log records -------------------------------
+
+
+def test_model_content_from_genai_log_records_fills_the_llm_span() -> None:
+    # opentelemetry-instrumentation-openai-v2 leaves the chat span empty and sends
+    # the prompt and reply as log records carrying the span's id.
+    from opentelemetry._logs import LogRecord
+    from opentelemetry.sdk._logs import LoggerProvider
+
+    from pytracer_autogen.exporter import _genai_log_processor
+
+    logs = LoggerProvider()
+    logs.add_log_record_processor(_genai_log_processor())
+    logger = logs.get_logger("gen_ai.test")
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("chat gpt-4o-mini") as span:  # type: ignore[attr-defined]
+        span.set_attribute("gen_ai.operation.name", "chat")
+        span_id = span.get_span_context().span_id
+        for name, body in (
+            ("gen_ai.system.message", {"content": "be brief"}),
+            ("gen_ai.user.message", {"content": "weather?"}),
+            ("gen_ai.choice", {"index": 0, "message": {"role": "assistant", "content": "sunny"}}),
+        ):
+            logger.emit(LogRecord(span_id=span_id, event_name=name, body=body))
+    tracer.flush()
+    (llm,) = [s for s in sink.spans if s.kind is K.LLM]
+    assert llm.input == [
+        {"role": "system", "content": "be brief"},
+        {"role": "user", "content": "weather?"},
+    ]
+    assert llm.output == {"role": "assistant", "content": "sunny"}

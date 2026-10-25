@@ -128,3 +128,22 @@ def test_live_values_are_not_copied() -> None:
 def test_encode_leaves_plain_values_alone() -> None:
     for value in ("s", 1, 1.5, True, None, [1, "a"], {"k": "v"}):
         assert encode_value(value) == value
+
+
+class _Item(BaseModel):
+    name: str
+    caller: str | None = None
+    note: str = "default"
+
+
+def test_pydantic_model_keeps_which_fields_were_set() -> None:
+    # An SDK that builds its next request with model_dump(exclude_unset=True) must
+    # see the same dict from a replayed object as from the live one.
+    live = _Item(name="weather")
+    back = decode_value(json.loads(json.dumps(encode_value(live))))
+    assert back == live
+    assert back.model_fields_set == live.model_fields_set == {"name"}
+    assert back.model_dump(exclude_unset=True) == {"name": "weather"}
+    explicit = _Item(name="weather", caller=None)
+    again = decode_value(json.loads(json.dumps(encode_value(explicit))))
+    assert again.model_fields_set == {"name", "caller"}

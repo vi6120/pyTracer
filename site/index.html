@@ -614,7 +614,7 @@
           </details>
           <details class="item">
             <summary>Which frameworks are supported?</summary>
-            <div class="body" style="max-width: 720px;">LangGraph, CrewAI, AutoGen, and the OpenAI Agents SDK have dedicated adapters, and any Python agent works once you instrument it by hand. An adapter captures what its framework reports: LangGraph, CrewAI and OpenAI Agents give agent, model and tool spans with their outputs in one trace per run, while AutoGen 0.7.x reports agents and tool calls but no model calls or tool results, across several traces per team run. The <a href="/docs#adapter-capabilities">capability table</a> has the details.</div>
+            <div class="body" style="max-width: 720px;">LangGraph, CrewAI, AutoGen, and the OpenAI Agents SDK have dedicated adapters, and any Python agent works once you instrument it by hand. An adapter captures what its framework reports: LangGraph, CrewAI and OpenAI Agents give agent, model and tool spans with their outputs in one trace per run, while AutoGen 0.7.x reports agents and tool calls, also in one trace per team run, but no model calls or tool results. The <a href="/docs#adapter-capabilities">capability table</a> has the details.</div>
           </details>
           <details class="item">
             <summary>Can I replay a run captured through an adapter?</summary>

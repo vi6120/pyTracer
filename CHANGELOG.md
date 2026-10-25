@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Recorded values keep their type.** `Decimal`, `datetime`, `date`, `time`,
+  `timedelta`, `UUID`, `bytes`, enums, tuples, sets, dataclasses and pydantic
+  models in span inputs and outputs are tagged when serialized and restored on
+  load, on the JSONL, gateway and store paths, so a replay computes with the same
+  types the agent saw. Recordings made before this release must be re-recorded to
+  benefit.
+- **Client-side span loss is visible (L1).** A full SDK queue or a failed delivery
+  is logged as a rate-limited warning and passed to an optional
+  `on_drop(reason, count, error)` callback set through `configure()`.
+- **Concurrent same-input calls replay by caller (R7).** Same-input calls racing
+  on different threads each get the response recorded under their own calling op;
+  only calls with an identical path are still reported as ambiguous.
+- **AutoGen: one trace per team run (P2).** The adapter follows the links AutoGen
+  puts between its per-message traces, records a team run as one trace, and nests
+  it under an open pyTracer span like the other adapters.
+- **The gateway reports its real version** in `/openapi.json`, `/docs`, the
+  startup log and `/healthz` (instead of `0.0.1`).
+
+### Documentation
+
+- A per-adapter capability table on the docs page and in the README, and an
+  accurate description of what the AutoGen adapter captures.
+- One trace per request with `pytracer.start_span(...)`, for every adapter.
+- Queue sizing guidance in the deploy guide.
+
 ## 0.1.3
 
 First release after the pilot re-tests. All 12 packages move to 0.1.3 together.

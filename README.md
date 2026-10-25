@@ -72,8 +72,8 @@ An adapter captures only what its framework reports:
 | Agent spans | Yes | Yes | Yes | Yes |
 | Model calls (model, tokens, output) | Yes | Yes | Yes | Not emitted by AutoGen 0.7.x; with a GenAI-instrumented model client, model and tokens but no output |
 | Tool calls with their output | Yes | Yes | Yes | Tool span only; AutoGen 0.7.x reports no result |
-| One trace per framework run | Yes | Yes | Yes | No, a team run arrives as several traces |
-| Nests under an enclosing `pytracer.start_span(...)` | Yes | Yes | Yes | No |
+| One trace per framework run | Yes | Yes | Yes | Yes |
+| Nests under an enclosing `pytracer.start_span(...)` | Yes | Yes | Yes | Yes |
 | Replay through the adapter | Not yet | Not yet | Not yet | Not yet |
 
 Backing services (ClickHouse, PostgreSQL, and Redis for the durable ingest
@@ -123,8 +123,7 @@ unreachable the agent keeps running.
 
 With a framework adapter, each framework run starts its own trace. To keep a
 request that spans several runs (or several frameworks) in one trace, wrap it in a
-pyTracer span; the LangGraph, CrewAI and OpenAI Agents adapters nest under it
-(AutoGen does not):
+pyTracer span; all four adapters nest under it:
 
 ```python
 with pytracer.start_span("answer-question"):

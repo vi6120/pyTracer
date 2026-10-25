@@ -138,3 +138,23 @@ def test_orphan_parent_starts_new_trace() -> None:
     tracer.flush()
     (span,) = sink.spans
     assert span.parent_span_id is None
+
+
+def test_recorder_keeps_object_outputs() -> None:
+    import dataclasses
+
+    from pytracer_sdk import Tracer
+    from pytracer_sdk.transport import InMemoryTransport
+
+    @dataclasses.dataclass
+    class Reply:
+        text: str
+
+    sink = InMemoryTransport()
+    recorder = SpanRecorder(Tracer(sink))
+    recorder.start("r1", name="model")
+    recorder.end("r1", output=Reply("hi"))
+    recorder._tracer.flush()  # type: ignore[attr-defined]
+    (span,) = sink.spans
+    assert span.output == Reply("hi")
+    assert span.latency_ms is not None

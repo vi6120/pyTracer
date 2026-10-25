@@ -116,10 +116,14 @@ def test_send_failure_is_counted_reported_and_warned(caplog: pytest.LogCaptureFi
     assert sum(count for _, count, _ in calls) == 3
     assert all(reason == "send_failed" for reason, _, _ in calls)
     assert all(isinstance(error, ConnectionError) for _, _, error in calls)
-    warnings = _drop_warnings(caplog)
-    assert len(warnings) == 1
-    assert "send_failed" in warnings[0].getMessage()
-    assert "gateway unreachable" in warnings[0].getMessage()
+    # The worker may send the 3 spans as one batch or several; however they are
+    # batched, the warnings (the first one, plus any rate-limited remainder logged
+    # at shutdown) account for exactly the 3 lost spans.
+    import re
+
+    messages = [r.getMessage() for r in _drop_warnings(caplog)]
+    assert "send_failed" in messages[0] and "gateway unreachable" in messages[0]
+    assert sum(int(re.search(r"dropped (\d+)", m).group(1)) for m in messages) == 3  # type: ignore[union-attr]
 
 
 def test_loss_is_warned_without_a_callback(caplog: pytest.LogCaptureFixture) -> None:

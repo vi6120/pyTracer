@@ -74,13 +74,13 @@ def test_instrumented_model_call_keeps_its_prompt_and_reply(
     from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
     from opentelemetry.sdk._logs import LoggerProvider
 
-    from pytracer_autogen.genai_logs import _genai_log_processor
+    from pytracer_autogen import genai_log_processor
 
     monkeypatch.setenv("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "true")
     sink = InMemoryTransport()
     tracer = pytracer.Tracer(sink, resource=pytracer.Resource(service_name="p7", branch="main", commit="c0"))
     logs = LoggerProvider()
-    logs.add_log_record_processor(_genai_log_processor())
+    logs.add_log_record_processor(genai_log_processor())
     instrumentor = OpenAIInstrumentor()
     instrumentor.instrument(tracer_provider=pytracer_tracer_provider(tracer), logger_provider=logs)
     try:

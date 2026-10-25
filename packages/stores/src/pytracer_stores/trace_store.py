@@ -135,6 +135,12 @@ class TraceStore:
         )
 
     @property
+    def table(self) -> str:
+        """The spans table this store reads and writes (e.g. to open a second
+        store on the same table from another thread)."""
+        return self._table
+
+    @property
     def qualified_table(self) -> str:
         return f"{self._config.database}.{self._table}"
 

@@ -369,10 +369,10 @@ def test_model_content_from_genai_log_records_fills_the_llm_span() -> None:
     from opentelemetry._logs import LogRecord
     from opentelemetry.sdk._logs import LoggerProvider
 
-    from pytracer_autogen.genai_logs import _genai_log_processor
+    from pytracer_autogen import genai_log_processor
 
     logs = LoggerProvider()
-    logs.add_log_record_processor(_genai_log_processor())
+    logs.add_log_record_processor(genai_log_processor())
     logger = logs.get_logger("gen_ai.test")
     ot, sink, tracer = _setup()
     with ot.start_as_current_span("chat gpt-4o-mini") as span:  # type: ignore[attr-defined]
@@ -394,11 +394,11 @@ def test_model_content_from_genai_log_records_fills_the_llm_span() -> None:
 
 
 def test_uninstall_seams_lets_the_exporter_record_again() -> None:
-    from pytracer_autogen import PyTracerSpanExporter, install_seams, uninstall_seams
-    from pytracer_autogen.linking import _RunLinker
+    from pytracer_autogen import exporter_for, install_seams, uninstall_seams
 
     pytest.importorskip("autogen_core", reason="autogen-core not installed")
-    exporter = PyTracerSpanExporter(linker=_RunLinker())
+    exporter = exporter_for(pytracer_tracer_provider())
+    assert exporter is not None
     install_seams(exporter)
     assert exporter.seams is True
     uninstall_seams()
@@ -419,3 +419,13 @@ def test_a_tool_span_whose_result_never_comes_is_swept_on_a_later_export(
     tracer.flush()
     (tool,) = [s for s in sink.spans if s.kind is K.TOOL]
     assert tool.output is None
+
+
+def test_exporter_for_finds_only_pytracer_providers() -> None:
+    from opentelemetry.sdk.trace import TracerProvider
+
+    from pytracer_autogen import PyTracerSpanExporter, exporter_for
+
+    assert isinstance(exporter_for(pytracer_tracer_provider()), PyTracerSpanExporter)
+    assert exporter_for(TracerProvider()) is None
+    assert exporter_for(object()) is None

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import time
 from collections import OrderedDict
+from weakref import WeakKeyDictionary
 from collections.abc import Sequence
 from typing import Any
 
@@ -305,8 +306,22 @@ def _build_provider(tracer: Tracer | None) -> tuple[TracerProvider, PyTracerSpan
     exporter = PyTracerSpanExporter(tracer, linker=linker)
     provider = TracerProvider()
     provider.add_span_processor(_LinkingSpanProcessor(exporter, linker))
+    _EXPORTERS[provider] = exporter
     _attach_model_call_handler(exporter)
     return provider, exporter
+
+
+# Each pyTracer provider's exporter, so the exporter can be found from the provider.
+_EXPORTERS: WeakKeyDictionary[TracerProvider, PyTracerSpanExporter] = WeakKeyDictionary()
+
+
+def exporter_for(provider: Any) -> PyTracerSpanExporter | None:
+    """The exporter behind a provider built by :func:`pytracer_tracer_provider`
+    (or :func:`install`), e.g. to pass to :func:`install_seams`; else ``None``."""
+    try:
+        return _EXPORTERS.get(provider)
+    except TypeError:  # not weak-referenceable, so not one of ours
+        return None
 
 
 _installed_seams: Any = None

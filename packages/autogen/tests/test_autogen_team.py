@@ -19,11 +19,7 @@ from pytracer_sdk import SpanKind as K
 from pytracer_sdk import SpanStatus
 from pytracer_sdk.transport import InMemoryTransport
 
-from opentelemetry.sdk.trace import TracerProvider
-
-from pytracer_autogen import PyTracerSpanExporter
-from pytracer_autogen.linking import _LinkingSpanProcessor, _RunLinker
-from pytracer_autogen.model_calls import _attach_model_call_handler
+from pytracer_autogen import exporter_for, pytracer_tracer_provider
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("autogen_agentchat") is None, reason="autogen-agentchat not installed"
@@ -132,17 +128,12 @@ def recorded() -> Iterator[tuple[InMemoryTransport, pytracer.Tracer]]:
     # tracer lazily once, and point the default tracer at each test's sink.
     global _PROVIDER, _EXPORTER
     if _PROVIDER is None:
-        # What pytracer_tracer_provider() builds, kept so the model-call handler
-        # can be pointed back at this provider's exporter for every test.
-        linker = _RunLinker()
-        _EXPORTER = PyTracerSpanExporter(linker=linker)
-        _PROVIDER = TracerProvider()
-        _PROVIDER.add_span_processor(_LinkingSpanProcessor(_EXPORTER, linker))
+        _PROVIDER = pytracer_tracer_provider()
+        _EXPORTER = exporter_for(_PROVIDER)
         otel_trace.set_tracer_provider(_PROVIDER)
     if otel_trace.get_tracer_provider() is not _PROVIDER:
         pytest.skip("another global OpenTelemetry provider is already registered")
     assert _EXPORTER is not None
-    _attach_model_call_handler(_EXPORTER)
     sink = InMemoryTransport()
     tracer = pytracer.Tracer(sink, resource=pytracer.Resource(service_name="ag", branch="main", commit="c0"))
     previous = pytracer.get_tracer()

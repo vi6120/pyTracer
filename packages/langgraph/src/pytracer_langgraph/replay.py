@@ -23,7 +23,8 @@ from collections.abc import Callable
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, HumanMessage, convert_to_messages
+from langchain_core.prompt_values import PromptValue
 from langchain_core.runnables.config import ensure_config
 from langchain_core.tools import BaseTool
 from pytracer_sdk import SpanKind
@@ -50,11 +51,21 @@ def _message_key(message: BaseMessage) -> dict[str, Any]:
     return {k: v for k, v in data.items() if v not in ({}, [], "")}
 
 
+def _as_messages(value: Any) -> list[BaseMessage]:
+    """A chat model's input as messages, the way ``invoke`` reads it: a prompt
+    value, a string (one human message), or a sequence of message-like items."""
+    if isinstance(value, PromptValue):
+        return value.to_messages()
+    if isinstance(value, str):
+        return [HumanMessage(content=value)]
+    return convert_to_messages(value)
+
+
 def _model_key(model: BaseChatModel, bound: inspect.BoundArguments) -> dict[str, Any]:
     args = bound.arguments
     raw_input: Any = args.get("input")
     try:
-        messages = model._convert_input(raw_input).to_messages()
+        messages = _as_messages(raw_input)
         rendered: Any = [_message_key(m) for m in messages]
     except Exception:  # noqa: BLE001 - an input LangChain cannot convert is keyed as is
         rendered = key_data(args.get("input"))

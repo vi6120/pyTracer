@@ -49,9 +49,13 @@ class _GenAIContentStore:
 _GENAI_CONTENT = _GenAIContentStore()
 
 
-def _genai_log_processor() -> Any:
-    """A LogRecordProcessor feeding ``_GENAI_CONTENT`` (built lazily: the logs SDK
-    is optional and its module is still underscored in OpenTelemetry)."""
+def genai_log_processor() -> Any:
+    """A LogRecordProcessor that reads GenAI model content for pyTracer.
+
+    ``install()`` adds one to the global LoggerProvider; add it yourself to a
+    LoggerProvider you manage, or pass that provider to an instrumentation (built
+    lazily: the logs SDK is optional and its module is still underscored in
+    OpenTelemetry)."""
     from opentelemetry.sdk._logs import LogRecordProcessor
 
     class _GenAIContentProcessor(LogRecordProcessor):
@@ -97,5 +101,5 @@ def _attach_genai_log_records() -> None:
             "content GenAI instrumentation sends as log records; to use your own, "
             "register it before install() and pyTracer adds its processor to it"
         )
-    provider.add_log_record_processor(_genai_log_processor())
+    provider.add_log_record_processor(genai_log_processor())
     _genai_logs_attached = True

@@ -244,7 +244,6 @@ def seams(recorded: tuple[InMemoryTransport, pytracer.Tracer]) -> Iterator[InMem
         yield sink
     finally:
         uninstall_seams()
-        _EXPORTER.seams = False
 
 
 def _run_team(*, stream: bool = False) -> Any:

@@ -368,4 +368,3 @@ def test_autogen_run_replays_from_the_store(trace_store: TraceStore, tmp_path: P
         _check_replay(run, _through_gateway_and_store(spans, trace_store, tmp_path), output)
     finally:
         uninstall_seams()
-        exporter.seams = False

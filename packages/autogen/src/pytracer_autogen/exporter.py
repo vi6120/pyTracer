@@ -835,18 +835,14 @@ def install(tracer: Tracer | None = None, *, replayable: bool = False) -> Tracer
     """
     from opentelemetry import trace as otel_trace
 
-    global _installed_seams
     provider, exporter = _build_provider(tracer)
     otel_trace.set_tracer_provider(provider)
     # Model content from GenAI instrumentation arrives as log records (P7).
     _attach_genai_log_records()
-    uninstall_seams()
     if replayable:
-        from .replay import Seams
-
-        exporter.seams = True
-        _installed_seams = Seams(exporter.seam_parent)
-        _installed_seams.install()
+        install_seams(exporter)
+    else:
+        uninstall_seams()
     return provider
 
 
@@ -858,13 +854,17 @@ def install_seams(exporter: PyTracerSpanExporter) -> None:
 
     uninstall_seams()
     exporter.seams = True
-    _installed_seams = Seams(exporter.seam_parent)
-    _installed_seams.install()
+    seams = Seams(exporter.seam_parent)
+    seams.install()
+    _installed_seams = (seams, exporter)
 
 
 def uninstall_seams() -> None:
-    """Remove the replay seams installed by ``install(replayable=True)``."""
+    """Remove the replay seams installed by ``install(replayable=True)``, and let
+    the exporter record AutoGen's own spans and model events again."""
     global _installed_seams
     if _installed_seams is not None:
-        _installed_seams.uninstall()
+        seams, exporter = _installed_seams
+        seams.uninstall()
+        exporter.seams = False
         _installed_seams = None

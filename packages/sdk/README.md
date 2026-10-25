@@ -52,13 +52,16 @@ past the retries). These are surfaced the same way:
 - Each loss is logged as a warning on the `pytracer_sdk` logger. The warning is
   rate limited to one per reason every 30 seconds, carrying the number of spans
   lost since the previous one, so an outage does not flood the agent's log; losses
-  still waiting for the next warning are logged at shutdown.
+  still waiting for the next warning are logged at shutdown. A full queue is
+  warned at the moment of the first drop.
 - `on_drop`, an optional `Callable[[str, int, BaseException | None], None]`
   passed to `configure()`, is called with the reason (`"queue_full"` or
   `"send_failed"`), the number of spans, and the delivery error (`None` for a full
   queue). It runs on the buffer's background thread, never the agent's: spans
   dropped from a full queue are counted as they are dropped and reported together.
-  Like `on_rejection`, a raise from it is logged, not propagated.
+  During an outage the callback can lag the drops by one send attempt (about 35
+  seconds at worst, against a gateway answering 429 or 503), while the warning is
+  immediate. Like `on_rejection`, a raise from it is logged, not propagated.
 
 ```python
 def on_drop(reason, count, error):

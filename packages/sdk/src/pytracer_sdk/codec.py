@@ -80,7 +80,13 @@ def encode_value(value: Any) -> Any:
         return _tag("dataclass", fields, cls=_class_path(value))
     dump = getattr(value, "model_dump", None)
     if callable(dump) and hasattr(type(value), "model_validate"):
-        return _tag("model", encode_value(dump(mode="python")), cls=_class_path(value))
+        # Only the fields that were set: rebuilding with model_validate then restores
+        # the same values *and* the same fields-set, so code that dumps the object
+        # with exclude_unset (as agent SDKs do when building the next request) sees
+        # exactly what it saw live.
+        return _tag(
+            "model", encode_value(dump(mode="python", exclude_unset=True)), cls=_class_path(value)
+        )
     # Anything else is left to the caller's serializer, as before.
     return value
 

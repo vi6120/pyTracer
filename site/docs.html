@@ -416,6 +416,18 @@ pip install pytracer-autogen          # AutoGen</code></pre>
     seam, so putting <code>@op</code> on your tools does not make that model call
     replayable; full-mode replay also blocks the network, loopback included, so a
     replay cannot reach a local model server.</p>
+    <p id="one-trace"><strong>One trace per request.</strong> Each framework run starts its
+    own trace, so a request that uses two frameworks (or calls the same one twice)
+    arrives as several traces. To get one trace, wrap the request in a pyTracer span:
+    the LangGraph, CrewAI and OpenAI Agents adapters nest their run under the span that
+    is open when the run starts.</p>
+    <pre><code>with pytracer.start_span("answer-question"):
+    plan = graph.invoke(inputs, config={"callbacks": [handler]})   # LangGraph
+    result = crew.kickoff(inputs={"plan": plan})                   # CrewAI
+# one trace, rooted at "answer-question"</code></pre>
+    <p>An <code>@op</code>-decorated function works the same way as
+    <code>start_span</code>. The AutoGen adapter does not nest: its spans keep
+    AutoGen's own trace ids.</p>
 
     <h2 id="selfhost">Self-hosting the gateway</h2>
     <p>The gateway plus its stores run as a Docker stack. A single-instance setup

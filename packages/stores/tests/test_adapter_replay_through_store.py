@@ -159,9 +159,6 @@ def test_openai_agents_run_replays_from_the_store(trace_store: TraceStore, tmp_p
 
 @pytest.mark.skipif(not _installed("crewai"), reason="crewai not installed")
 def test_crewai_run_replays_from_the_store(trace_store: TraceStore, tmp_path: Path) -> None:
-    import os
-
-    os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
     from pytracer_crewai import PyTracerEventListener, install_seams, uninstall_seams
 
     sink = InMemoryTransport()

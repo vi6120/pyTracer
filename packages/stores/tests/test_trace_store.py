@@ -268,3 +268,19 @@ def test_export_jsonl_roundtrips(trace_store: TraceStore) -> None:
     assert jsonl
     restored = Span.from_json(jsonl.splitlines()[0])
     assert restored.trace_id == tid
+
+
+def test_a_tag_shaped_value_round_trips_through_the_store_as_the_same_dict(
+    trace_store: TraceStore,
+) -> None:
+    # An end user's data shaped like an encoded enum is data, not a tag: the store
+    # returns the same dict, not the enum it names.
+    tag_shaped = {"__pytracer__": "enum", "v": 2, "cls": "re:RegexFlag"}
+    tid = new_trace_id()
+    span = _span(trace_id=tid)
+    span.input = {"payload": dict(tag_shaped)}
+    span.output = dict(tag_shaped)
+    trace_store.insert(span, project="tag-shaped")
+    (got,) = trace_store.get_trace(tid, project="tag-shaped")
+    assert got.input == {"payload": tag_shaped}
+    assert type(got.output) is dict and got.output == tag_shaped

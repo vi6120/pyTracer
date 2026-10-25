@@ -51,15 +51,25 @@ def _usage_messages(message: Any) -> list[dict[str, Any]]:
 
 
 class _ModelCallLogHandler(logging.Handler):
-    """Turns the model-call events AutoGen's clients log into pyTracer LLM spans."""
+    """Turns the model-call events AutoGen's clients log into pyTracer LLM spans.
+
+    Events go to the exporter of the global tracer provider when that is a
+    pyTracer one (the provider AutoGen traces through), else to the exporter the
+    handler was attached with.
+    """
 
     def __init__(self, exporter: PyTracerSpanExporter) -> None:
         super().__init__(logging.INFO)
         self._exporter = exporter
 
     def emit(self, record: logging.LogRecord) -> None:
+        from opentelemetry import trace as otel_trace
+
+        from .exporter import exporter_for
+
         try:
-            self._exporter.record_model_event(record.msg)
+            target = exporter_for(otel_trace.get_tracer_provider()) or self._exporter
+            target.record_model_event(record.msg)
         except Exception:  # noqa: BLE001 - capture must never break the agent
             _log.debug("pytracer could not record an AutoGen model event", exc_info=True)
 

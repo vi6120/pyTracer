@@ -25,7 +25,8 @@ from opentelemetry.sdk.trace import Span as OTelSpan
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
 from pytracer_sdk import Span, SpanKind, SpanStatus, Tracer, get_tracer, new_span_id, new_trace_id
-from pytracer_sdk.tracer import _current
+from pytracer_sdk.seam import active_seam
+from pytracer_sdk.tracer import SpanContext, _current
 
 # GenAI semantic-convention attribute keys.
 _OP = "gen_ai.operation.name"
@@ -566,6 +567,29 @@ class PyTracerSpanExporter(SpanExporter):
         # Streamed model calls: start time and request, keyed by the OTel span the
         # call runs under and the agent, until the stream's end event arrives.
         self._stream_starts: dict[tuple[int, str | None], tuple[int, Any]] = {}
+        # With replay seams installed (install(replayable=True)), model and tool
+        # calls are recorded by the seams; AutoGen's own spans and model events for
+        # the same calls are skipped instead of recorded twice.
+        self.seams = False
+
+    def _recorded_by_seam(self, kind: SpanKind) -> bool:
+        if not self.seams or kind not in (SpanKind.LLM, SpanKind.TOOL):
+            return False
+        seam = active_seam()
+        return seam is not None and seam.kind is kind
+
+    def seam_parent(self) -> SpanContext | None:
+        """The pyTracer span a seam call made in the current context nests under:
+        the agent turn (or other recorded span) AutoGen is running it in."""
+        from opentelemetry import trace as otel_trace
+
+        context = otel_trace.get_current_span().get_span_context()
+        if self._linker is None or not context.is_valid:
+            return None
+        placement = self._linker.place_child(context.trace_id, context.span_id, follow_links=False)
+        if placement is None or placement.parent_span_id is None:
+            return None
+        return SpanContext(placement.trace_id, placement.parent_span_id)
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
         tracer = self._explicit_tracer or get_tracer()
@@ -583,15 +607,17 @@ class PyTracerSpanExporter(SpanExporter):
                         self._results.resolve((run, call_id), content, is_error)
             # A model reply in a runtime message stands in for the model call when
             # the client logs no call events (e.g. a custom client).
-            if self._linker is not None:
+            if self._linker is not None and not self.seams:
                 for reply in _usage_messages(raw_attrs.get(_MESSAGE_ATTR)):
                     self._record_derived_call(span, reply, tracer)
             # Skip the runtime's internal messaging spans (no GenAI attributes), so
             # a run is the agent/model/tool calls, not dozens of unknown id-named spans.
             if not _has_genai(raw_attrs):
                 continue
-            safe_attrs = redactor.redact(raw_attrs)
             kind, agent_name, tool_name = _classify(raw_attrs)
+            if self._recorded_by_seam(kind):
+                continue  # the seam recording this call records it (and makes it replayable)
+            safe_attrs = redactor.redact(raw_attrs)
             event_input, event_output = _io_from_events(span)
             span_input = _first(safe_attrs, _INPUT_ATTRS)
             span_output = _first(safe_attrs, _OUTPUT_ATTRS)
@@ -661,6 +687,8 @@ class PyTracerSpanExporter(SpanExporter):
         kind = kwargs.get("type")
         if kind not in ("LLMCall", "LLMStreamStart", "LLMStreamEnd"):
             return
+        if self._recorded_by_seam(SpanKind.LLM):
+            return  # the model call's seam records it
         now = time.time_ns()
         agent_id = kwargs.get("agent_id")
         context = otel_trace.get_current_span().get_span_context()
@@ -776,15 +804,22 @@ def pytracer_tracer_provider(tracer: Tracer | None = None) -> TracerProvider:
     AutoGen puts between the per-message traces), nested under the pyTracer span
     that is open when the run starts, if any.
     """
+    return _build_provider(tracer)[0]
+
+
+def _build_provider(tracer: Tracer | None) -> tuple[TracerProvider, PyTracerSpanExporter]:
     linker = _RunLinker()
     exporter = PyTracerSpanExporter(tracer, linker=linker)
     provider = TracerProvider()
     provider.add_span_processor(_LinkingSpanProcessor(exporter, linker))
     _attach_model_call_handler(exporter)
-    return provider
+    return provider, exporter
 
 
-def install(tracer: Tracer | None = None) -> TracerProvider:
+_installed_seams: Any = None
+
+
+def install(tracer: Tracer | None = None, *, replayable: bool = False) -> TracerProvider:
     """Register a pyTracer TracerProvider as the global OpenTelemetry provider.
 
     AutoGen emits its GenAI model and tool spans through the *global* provider, so
@@ -793,11 +828,43 @@ def install(tracer: Tracer | None = None) -> TracerProvider:
     (adding a processor to the global LoggerProvider, or registering one), so an
     instrumented model call keeps its prompt and reply. Returns the provider. Call
     once per process, before any span is emitted.
+
+    With ``replayable=True``, AutoGen's model calls and tool calls are also routed
+    through pyTracer (see :mod:`pytracer_autogen.replay`), so a captured run can be
+    replayed without adding ``@op`` to anything.
     """
     from opentelemetry import trace as otel_trace
 
-    provider = pytracer_tracer_provider(tracer)
+    global _installed_seams
+    provider, exporter = _build_provider(tracer)
     otel_trace.set_tracer_provider(provider)
     # Model content from GenAI instrumentation arrives as log records (P7).
     _attach_genai_log_records()
+    uninstall_seams()
+    if replayable:
+        from .replay import Seams
+
+        exporter.seams = True
+        _installed_seams = Seams(exporter.seam_parent)
+        _installed_seams.install()
     return provider
+
+
+def install_seams(exporter: PyTracerSpanExporter) -> None:
+    """Install the replay seams for ``exporter`` (``install(replayable=True)``
+    does this; exposed for a provider registered by other means)."""
+    global _installed_seams
+    from .replay import Seams
+
+    uninstall_seams()
+    exporter.seams = True
+    _installed_seams = Seams(exporter.seam_parent)
+    _installed_seams.install()
+
+
+def uninstall_seams() -> None:
+    """Remove the replay seams installed by ``install(replayable=True)``."""
+    global _installed_seams
+    if _installed_seams is not None:
+        _installed_seams.uninstall()
+        _installed_seams = None

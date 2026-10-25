@@ -147,3 +147,54 @@ def test_pydantic_model_keeps_which_fields_were_set() -> None:
     explicit = _Item(name="weather", caller=None)
     again = decode_value(json.loads(json.dumps(encode_value(explicit))))
     assert again.model_fields_set == {"name", "caller"}
+
+
+# --- a recording cannot instantiate an arbitrary class ---------------------------
+
+GADGET_CALLS: list[object] = []
+
+
+class Gadget:
+    """A class with a side effect in its constructor, as an attacker would pick."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        GADGET_CALLS.append((args, kwargs))
+
+
+GADGET = f"{Gadget.__module__}:{Gadget.__qualname__}"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"__pytracer__": "path", "v": ["rm", "-rf", "/"], "cls": GADGET},
+        {"__pytracer__": "enum", "v": "x", "cls": GADGET},
+        {"__pytracer__": "model", "v": {"a": 1}, "cls": GADGET},
+        {"__pytracer__": "dataclass", "v": {"a": 1}, "cls": GADGET},
+    ],
+    ids=["path", "enum", "model", "dataclass"],
+)
+def test_a_tag_never_instantiates_a_class_of_the_wrong_kind(payload: dict[str, object]) -> None:
+    GADGET_CALLS.clear()
+    decoded = decode_value(json.loads(json.dumps(payload)))
+    assert GADGET_CALLS == []  # the named class was not called
+    assert not isinstance(decoded, Gadget)
+
+
+def test_a_crafted_popen_payload_decodes_to_plain_data() -> None:
+    payload = {"__pytracer__": "enum", "v": ["true"], "cls": "subprocess:Popen"}
+    assert decode_value(payload) == ["true"]
+    path = {"__pytracer__": "path", "v": ["true"], "cls": "subprocess:Popen"}
+    assert isinstance(decode_value(path), pathlib.PurePath)
+
+
+def test_store_only_decoding_keeps_class_values_tagged_and_writes_them_back() -> None:
+    # A store-only process (the gateway) imports nothing and stores the value as
+    # the client wrote it; a replay machine later rebuilds it.
+    tagged = encode_value(_Item(name="weather"))
+    kept = decode_value(json.loads(json.dumps(tagged)), rebuild_classes=False)
+    assert kept == tagged
+    assert encode_value(kept) == tagged  # written back unchanged, not re-escaped
+    assert decode_value(encode_value(kept)) == _Item(name="weather")
+    # Plain tagged values (no class) still decode, e.g. a Decimal.
+    assert decode_value(encode_value(Decimal("1.5")), rebuild_classes=False) == Decimal("1.5")

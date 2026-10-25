@@ -34,8 +34,31 @@ with pytracer.start_span("answer-question"):
 
 ## Replay
 
-This adapter **captures** runs. Replaying a captured run currently requires `@op`
-instrumentation, because the replay engine intercepts `@op` calls; replay through
-the adapter itself is on the roadmap. Attempting to replay an adapter-only trace
-is flagged (the run has recordings but hits no `@op` seam) rather than silently
-running live. See the main README for the replay workflow.
+Call `install_seams(listener)` and a captured run replays without adding `@op`
+to anything:
+
+```python
+from pytracer_crewai import PyTracerEventListener, install_seams
+
+listener = PyTracerEventListener()
+install_seams(listener)   # routes LLM calls and tools through pyTracer
+crew.kickoff(inputs={...})
+```
+
+CrewAI's model calls (`call` / `acall` on every `BaseLLM` class, including the
+native provider classes CrewAI loads lazily and custom LLMs) and tools
+(`BaseTool.run` for native function calling, and the structured-tool `invoke`
+used by the ReAct loop) then run through pyTracer, nested under the agent that
+made them, so the replay engine can return their recorded results: in full mode
+neither the model nor the tools run again, and in partial mode the tools stay
+frozen while the model runs live. A model call is matched on its messages, the
+tools offered and the response model. `uninstall_seams()` removes the routing
+again.
+
+CrewAI delivers events to listeners on a thread pool, so before a seam call the
+listener briefly waits (up to 2 seconds) for already-emitted events, to nest the
+call under the right agent.
+
+Without `install_seams` the adapter only captures, and replaying an
+adapter-only trace is flagged (the run has recordings but hits no `@op` seam)
+rather than silently running live. See the main README for the replay workflow.

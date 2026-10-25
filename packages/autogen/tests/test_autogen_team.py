@@ -16,6 +16,7 @@ import pytest
 import pytracer_sdk as pytracer
 from opentelemetry import trace as otel_trace
 from pytracer_sdk import SpanKind as K
+from pytracer_sdk import SpanStatus
 from pytracer_sdk.transport import InMemoryTransport
 
 from pytracer_autogen import pytracer_tracer_provider
@@ -30,7 +31,7 @@ def _lookup(q: str) -> str:
     return f"found {q}"
 
 
-def _team() -> Any:
+def _team(tool: Any = _lookup) -> Any:
     from autogen_agentchat.agents import AssistantAgent
     from autogen_agentchat.conditions import MaxMessageTermination
     from autogen_agentchat.teams import RoundRobinGroupChat
@@ -81,8 +82,8 @@ def _team() -> Any:
                 family="unknown", structured_output=False,
             )
 
-    call = FunctionCall(id="1", name="_lookup", arguments='{"q": "x"}')
-    writer = AssistantAgent("writer", model_client=Scripted([[call], "draft"]), tools=[_lookup])
+    call = FunctionCall(id="1", name=tool.__name__, arguments='{"q": "x"}')
+    writer = AssistantAgent("writer", model_client=Scripted([[call], "draft"]), tools=[tool])
     critic = AssistantAgent("critic", model_client=Scripted(["ok"]))
     return RoundRobinGroupChat([writer, critic], termination_condition=MaxMessageTermination(4))
 
@@ -121,6 +122,21 @@ def test_team_run_is_one_trace(recorded: tuple[InMemoryTransport, pytracer.Trace
     assert len({s.trace_id for s in run}) == 1
     tool = next(s for s in run if s.kind is K.TOOL)
     assert tool.parent_span_id in {s.span_id for s in run if s.agent_name == "writer"}
+    assert tool.output == "found x"  # joined from AutoGen's result message
+
+
+def _broken(q: str) -> str:
+    """A tool that fails."""
+    raise RuntimeError("index offline")
+
+
+def test_failed_tool_is_recorded_as_an_error(recorded: tuple[InMemoryTransport, pytracer.Tracer]) -> None:
+    sink, tracer = recorded
+    asyncio.run(_team(tool=_broken).run(task="write"))
+    tracer.flush()
+    tool = next(s for s in sink.spans if s.kind is K.TOOL)
+    assert tool.status is SpanStatus.ERROR
+    assert "index offline" in (tool.error_message or "")
 
 
 def test_team_run_nests_under_an_enclosing_span(

@@ -218,3 +218,61 @@ def test_run_nests_under_an_enclosing_pytracer_span() -> None:
     writer_span = next(s for s in sink.spans if s.agent_name == "writer")
     assert writer_span.trace_id == request_span.trace_id
     assert writer_span.parent_span_id == request.span.span_id
+
+
+# --- tool results (AutoGen sends them in a later runtime message) ---------------
+
+
+def _tool_call(ot: object, call_id: str) -> None:
+    with ot.start_as_current_span("execute_tool search") as tool:  # type: ignore[attr-defined]
+        _genai(tool, "execute_tool", **{"tool.name": "search", "tool.call.id": call_id})
+
+
+def _result_message(ot: object, call_id: str, content: str, *, is_error: bool = False) -> None:
+    import json
+
+    message = {
+        "message": {
+            "type": "ToolCallExecutionEvent",
+            "source": "planner",
+            "content": [{"content": content, "name": "search", "call_id": call_id, "is_error": is_error}],
+        }
+    }
+    with ot.start_as_current_span("autogen process manager") as span:  # type: ignore[attr-defined]
+        span.set_attribute("message", json.dumps(message))
+
+
+def test_tool_output_is_joined_from_the_result_message() -> None:
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("invoke_agent planner") as agent:  # type: ignore[attr-defined]
+        _genai(agent, "invoke_agent", **{"agent.name": "planner"})
+        _tool_call(ot, "c1")
+        _result_message(ot, "c1", "3 results")
+    tracer.flush()
+    (tool,) = [s for s in sink.spans if s.kind is K.TOOL]
+    assert tool.output == "3 results"
+    assert tool.status is SpanStatus.OK
+
+
+def test_tool_error_result_marks_the_span_failed() -> None:
+    ot, sink, tracer = _setup()
+    with ot.start_as_current_span("invoke_agent planner") as agent:  # type: ignore[attr-defined]
+        _genai(agent, "invoke_agent", **{"agent.name": "planner"})
+        _tool_call(ot, "c2")
+        _result_message(ot, "c2", "Error: index offline", is_error=True)
+    tracer.flush()
+    (tool,) = [s for s in sink.spans if s.kind is K.TOOL]
+    assert tool.status is SpanStatus.ERROR
+    assert tool.error_message == "Error: index offline"
+
+
+def test_tool_span_without_a_result_is_still_recorded_on_flush() -> None:
+    sink = InMemoryTransport()
+    tracer = pytracer.Tracer(sink, resource=pytracer.Resource(service_name="ag", branch="main", commit="c0"))
+    provider = pytracer_tracer_provider(tracer)
+    ot = provider.get_tracer("test")
+    _tool_call(ot, "never-answered")
+    provider.force_flush()
+    tracer.flush()
+    (tool,) = [s for s in sink.spans if s.kind is K.TOOL]
+    assert tool.output is None

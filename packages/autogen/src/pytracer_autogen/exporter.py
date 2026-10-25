@@ -10,6 +10,7 @@ GenAI-instrumented library, not just AutoGen.
 
 from __future__ import annotations
 
+import json
 import threading
 from collections import OrderedDict
 from collections.abc import Sequence
@@ -175,6 +176,15 @@ class _RunLinker:
         context = span.get_span_context()
         return _Run(f"{context.trace_id:032x}", None)
 
+    def run_trace_id(self, span: ReadableSpan) -> str | None:
+        """The pyTracer trace id of the run ``span`` belongs to, if known."""
+        context = span.get_span_context()
+        if context is None:
+            return None
+        with self._lock:
+            run = self._runs.get(context.trace_id)
+        return run.trace_id if run is not None else None
+
     def place(self, span: ReadableSpan) -> _Placement | None:
         """Where to record a finished span, or ``None`` if its start was not seen."""
         context = span.get_span_context()
@@ -207,16 +217,128 @@ class _RunLinker:
             store.popitem(last=False)
 
 
+# AutoGen's tool span carries the call id but not the result; the result travels
+# in a later runtime message (a ToolCallExecutionEvent) with the same call id.
+_TOOL_CALL_ID = "gen_ai.tool.call.id"
+_RESULT_EVENT = "ToolCallExecutionEvent"
+_MESSAGE_ATTR = "message"
+# How long a tool span waits for its result message before it is recorded without
+# one (e.g. a tool run outside AgentChat, where no such message is published).
+_RESULT_WAIT_SECONDS = 2.0
+
+
+def _tool_results(message: Any) -> list[tuple[str, Any, bool]]:
+    """``(call_id, content, is_error)`` for every tool result in a runtime message."""
+    if not isinstance(message, str) or _RESULT_EVENT not in message:
+        return []
+    try:
+        data = json.loads(message)
+    except ValueError:
+        return []
+    found: list[tuple[str, Any, bool]] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            if node.get("type") == _RESULT_EVENT and isinstance(node.get("content"), list):
+                for result in node["content"]:
+                    if isinstance(result, dict) and result.get("call_id") is not None:
+                        found.append(
+                            (str(result["call_id"]), result.get("content"), bool(result.get("is_error")))
+                        )
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(data)
+    return found
+
+
+class _ToolResultJoiner:
+    """Records each AutoGen tool span once its result message has been seen.
+
+    A tool span ends before the message carrying its result is delivered, so the
+    span is held (per run and call id) until that message is exported, then
+    recorded with the result as its output. A span whose result never arrives is
+    recorded without it after ``_RESULT_WAIT_SECONDS``, or on flush.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._pending: dict[tuple[str, str], tuple[Span, Tracer, threading.Timer]] = {}
+        # Results seen before their tool span ended (bounded; duplicates are common,
+        # since AutoGen forwards the same result to several recipients).
+        self._early: OrderedDict[tuple[str, str], tuple[Any, bool]] = OrderedDict()
+
+    def hold(self, key: tuple[str, str], span: Span, tracer: Tracer) -> None:
+        with self._lock:
+            early = self._early.pop(key, None)
+            if early is None:
+                timer = threading.Timer(_RESULT_WAIT_SECONDS, self._expire, args=(key,))
+                timer.daemon = True
+                self._pending[key] = (span, tracer, timer)
+                timer.start()
+                return
+        _record(tracer, _with_result(span, tracer, *early))
+
+    def resolve(self, key: tuple[str, str], content: Any, is_error: bool) -> None:
+        with self._lock:
+            entry = self._pending.pop(key, None)
+            if entry is None:
+                self._early[key] = (content, is_error)
+                self._early.move_to_end(key)
+                while len(self._early) > _MAX_TRACKED:
+                    self._early.popitem(last=False)
+                return
+        span, tracer, timer = entry
+        timer.cancel()
+        _record(tracer, _with_result(span, tracer, content, is_error))
+
+    def _expire(self, key: tuple[str, str]) -> None:
+        with self._lock:
+            entry = self._pending.pop(key, None)
+        if entry is not None:
+            _record(entry[1], entry[0])
+
+    def flush(self) -> None:
+        """Record every held span now, with or without its result."""
+        with self._lock:
+            entries = list(self._pending.values())
+            self._pending.clear()
+        for span, tracer, timer in entries:
+            timer.cancel()
+            _record(tracer, span)
+
+
+def _with_result(span: Span, tracer: Tracer, content: Any, is_error: bool) -> Span:
+    update: dict[str, Any] = {"output": tracer.redactor.redact(content)}
+    if is_error:
+        update["status"] = SpanStatus.ERROR
+        update["error_message"] = tracer.redactor.redact_text(str(content))
+    return span.model_copy(update=update)
+
+
+def _record(tracer: Tracer, span: Span) -> None:
+    tracer.buffer.record(Span.model_validate(span.model_dump()))
+
+
 class _LinkingSpanProcessor(SimpleSpanProcessor):
     """Exports each span when it ends, and feeds span starts to the run linker."""
 
     def __init__(self, exporter: PyTracerSpanExporter, linker: _RunLinker) -> None:
         super().__init__(exporter)
         self._linker = linker
+        self._pytracer_exporter = exporter
 
     def on_start(self, span: OTelSpan, parent_context: Context | None = None) -> None:
         self._linker.on_start(span)
         super().on_start(span, parent_context)
+
+    def force_flush(self, timeout_millis: int = 30_000) -> bool:
+        # SimpleSpanProcessor does not pass a flush on to its exporter; this one
+        # must, so tool spans still waiting for their result are recorded.
+        return self._pytracer_exporter.force_flush(timeout_millis)
 
 
 class PyTracerSpanExporter(SpanExporter):
@@ -229,6 +351,9 @@ class PyTracerSpanExporter(SpanExporter):
         # With a linker (see pytracer_tracer_provider), an AutoGen run's linked
         # traces are recorded as one trace; without one, OTel's ids are kept.
         self._linker = linker
+        # With a linker, tool spans are joined to the result AutoGen sends in a
+        # later message, so a tool's output is recorded.
+        self._results = _ToolResultJoiner() if linker is not None else None
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
         tracer = self._explicit_tracer or get_tracer()
@@ -238,6 +363,12 @@ class PyTracerSpanExporter(SpanExporter):
             if context is None:
                 continue
             raw_attrs = dict(span.attributes or {})
+            # A runtime message can carry tool results; hand them to the held tool spans.
+            if self._results is not None and self._linker is not None:
+                for call_id, content, is_error in _tool_results(raw_attrs.get(_MESSAGE_ATTR)):
+                    run = self._linker.run_trace_id(span)
+                    if run is not None:
+                        self._results.resolve((run, call_id), content, is_error)
             # Skip the runtime's internal messaging spans (no GenAI attributes), so
             # a run is the agent/model/tool calls, not dozens of unknown id-named spans.
             if not _has_genai(raw_attrs):
@@ -281,13 +412,25 @@ class PyTracerSpanExporter(SpanExporter):
                 attributes={"framework": "autogen", **safe_attrs},
                 resource=tracer.resource,
             )
-            tracer.buffer.record(Span.model_validate(pytracer_span.model_dump()))
+            tool_call_id = raw_attrs.get(_TOOL_CALL_ID)
+            if (
+                self._results is not None
+                and kind is SpanKind.TOOL
+                and span_output is None
+                and tool_call_id is not None
+            ):
+                # The result arrives in a later message; record the span then.
+                self._results.hold((trace_id, str(tool_call_id)), pytracer_span, tracer)
+                continue
+            _record(tracer, pytracer_span)
         return SpanExportResult.SUCCESS
 
     def shutdown(self) -> None:
-        pass
+        self.force_flush()
 
     def force_flush(self, timeout_millis: int = 30_000) -> bool:
+        if self._results is not None:
+            self._results.flush()
         return True
 
 

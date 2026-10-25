@@ -2,7 +2,7 @@
 
 Endpoints:
     POST /v1/spans   ingest a batch of spans (X-API-Key required)
-    GET  /healthz    liveness
+    GET  /healthz    liveness, with the gateway's version
     GET  /readyz     readiness (ingest worker running)
     GET  /v1/stats   ingest counters (JSON)
     GET  /metrics    Prometheus metrics (with the [metrics] extra)
@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
@@ -25,6 +27,13 @@ from .metrics import install_metrics
 from .ratelimit import TokenBucketLimiter
 
 _log = logging.getLogger("pytracer_gateway")
+
+try:
+    # The installed distribution's version, so /healthz, /openapi.json and /docs
+    # report the release actually deployed instead of a stale hardcoded value.
+    GATEWAY_VERSION = _pkg_version("pytracer-gateway")
+except PackageNotFoundError:  # running from a source tree without an installed dist
+    GATEWAY_VERSION = "0.0.0+unknown"
 
 
 def create_app(
@@ -49,7 +58,8 @@ def create_app(
         # Log the resolved config so an operator can confirm the deploy settings
         # actually reached the container (e.g. the managed key store is active).
         _log.info(
-            "pytracer gateway starting: auth=%s rate_limit_per_sec=%s queue_maxsize=%s",
+            "pytracer gateway %s starting: auth=%s rate_limit_per_sec=%s queue_maxsize=%s",
+            GATEWAY_VERSION,
             type(resolver).__name__,
             cfg.rate_limit_per_sec,
             cfg.queue_maxsize,
@@ -60,7 +70,7 @@ def create_app(
         finally:
             await pipeline.stop()
 
-    app = FastAPI(title="pyTracer Ingestion Gateway", version="0.0.1", lifespan=lifespan)
+    app = FastAPI(title="pyTracer Ingestion Gateway", version=GATEWAY_VERSION, lifespan=lifespan)
     app.state.pipeline = pipeline
 
     def require_project(x_api_key: str | None = Header(default=None, alias=API_KEY_HEADER)) -> str:
@@ -82,7 +92,9 @@ def create_app(
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
-        return {"status": "ok"}
+        # The version is public so an operator (or a client) can confirm which
+        # release a gateway runs, e.g. before upgrading the SDKs that send to it.
+        return {"status": "ok", "version": GATEWAY_VERSION}
 
     @app.get("/readyz")
     async def readyz() -> JSONResponse:

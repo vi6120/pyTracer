@@ -60,21 +60,22 @@ so `pip install pytracer-all` gives you the whole platform in one command (and
 
 Four framework adapter packages (`pytracer-langgraph`, `pytracer-openai-agents`,
 `pytracer-crewai`, `pytracer-autogen`) auto-instrument agents built on those
-frameworks for **capture**. Replaying a captured run currently requires `@op`
-instrumentation (the replay engine intercepts `@op` calls); replay through the
-adapters is on the roadmap. Twelve packages in all, published on PyPI; the full
-list is on the [docs site](https://pytracer.com/docs#packages).
+frameworks, so neither capture nor replay needs `@op` in the agent code: with
+replay switched on, the adapter routes the framework's own model and tool calls
+through pyTracer, so a captured run replays like an `@op`-instrumented one.
+Twelve packages in all, published on PyPI; the full list is on the
+[docs site](https://pytracer.com/docs#packages).
 
-An adapter captures only what its framework reports:
+What each adapter captures and replays:
 
 | | LangGraph | OpenAI Agents | CrewAI | AutoGen |
 |---|---|---|---|---|
 | Agent spans | Yes | Yes | Yes | Yes |
-| Model calls (model, tokens, output) | Yes | Yes | Yes | Not emitted by AutoGen 0.7.x; with a GenAI-instrumented model client, model and tokens but no output |
-| Tool calls with their output | Yes | Yes | Yes | Tool span only; AutoGen 0.7.x reports no result |
+| Model calls (model, tokens, output) | Yes | Yes | Yes | Yes, from the model client's call events (the `autogen_ext` clients log them); a client that logs none has its calls rebuilt from AutoGen's replies |
+| Tool calls with their output | Yes | Yes | Yes | Yes |
 | One trace per framework run | Yes | Yes | Yes | Yes |
 | Nests under an enclosing `pytracer.start_span(...)` | Yes | Yes | Yes | Yes |
-| Replay through the adapter | Not yet | Not yet | Not yet | Not yet |
+| Replay through the adapter, no `@op` | Yes, `install_seams()` | Yes, `install(replayable=True)` | Yes, `install_seams(listener)` | Yes, `install(replayable=True)` |
 
 Backing services (ClickHouse, PostgreSQL, and Redis for the durable ingest
 queue) run via [docker-compose.yml](docker-compose.yml).

@@ -503,14 +503,13 @@
               <li><b>Three replay modes</b> plus selective, per-step freeze</li>
               <li><b>Route, tools and step assertions</b>, not just output checks</li>
               <li><b>Fidelity:</b> streaming, concurrent calls, pinned clock / UUID / RNG, side-effect reporting</li>
-              <li><b>Four adapters</b> (LangGraph, CrewAI, AutoGen, OpenAI Agents), CI gate, PR trigger, pytest plugin</li>
+              <li><b>Four adapters</b> (LangGraph, CrewAI, AutoGen, OpenAI Agents) that capture and replay without <code>@op</code>, CI gate, PR trigger, pytest plugin</li>
             </ul>
           </div>
           <div class="road-col plan">
             <span class="road-tag next">On the roadmap</span>
             <h3>Near-term</h3>
             <ul>
-              <li><b>Replay through adapters</b> without hand-adding <code>@op</code> (adapters capture today; replay needs <code>@op</code>)</li>
               <li><b>Coexist with your observability</b> - reuse OpenTelemetry / Langfuse spans instead of double-instrumenting</li>
               <li><b>Published SDK overhead benchmark</b> for <code>@op</code></li>
               <li><b>Full retry-chain capture</b>, every attempt and its wasted spend</li>
@@ -610,15 +609,15 @@
           </details>
           <details class="item">
             <summary>Do I have to change my agent code?</summary>
-            <div class="body" style="max-width: 720px;">Add the <code>@op</code> decorator to the functions that call models and tools. One or two lines each, and it does not change their behavior.</div>
+            <div class="body" style="max-width: 720px;">With a framework adapter (LangGraph, CrewAI, AutoGen, OpenAI Agents), no: register the adapter and its model and tool calls are captured and replayable as they are. Otherwise, add the <code>@op</code> decorator to the functions that call models and tools. One or two lines each, and it does not change their behavior.</div>
           </details>
           <details class="item">
             <summary>Which frameworks are supported?</summary>
-            <div class="body" style="max-width: 720px;">LangGraph, CrewAI, AutoGen, and the OpenAI Agents SDK have dedicated adapters, and any Python agent works once you instrument it by hand. An adapter captures what its framework reports: LangGraph, CrewAI and OpenAI Agents give agent, model and tool spans with their outputs in one trace per run, while AutoGen 0.7.x reports agents and tool calls, also in one trace per team run, but no model calls or tool results. The <a href="/docs#adapter-capabilities">capability table</a> has the details.</div>
+            <div class="body" style="max-width: 720px;">LangGraph, CrewAI, AutoGen, and the OpenAI Agents SDK have dedicated adapters, and any Python agent works once you instrument it by hand. Each adapter records agent, model and tool calls with their outputs, one trace per run, and with replay switched on it makes a captured run replayable without <code>@op</code>. The <a href="/docs#adapter-capabilities">capability table</a> has the details.</div>
           </details>
           <details class="item">
             <summary>Can I replay a run captured through an adapter?</summary>
-            <div class="body" style="max-width: 720px;">Adapters <strong>capture</strong> a run; deterministic replay currently injects at the <code>@op</code> seam, so replaying a run needs <code>@op</code> on the functions that call your models and tools. An adapter-only run is flagged (not silently run live), and replay through the adapters themselves is on the roadmap.</div>
+            <div class="body" style="max-width: 720px;">Yes. Switch replay on in the adapter (<code>install_seams()</code> for LangGraph and CrewAI, <code>install(replayable=True)</code> for OpenAI Agents and AutoGen) and it routes the framework's own model and tool calls through pyTracer, so a captured run replays with recorded responses and no <code>@op</code> in your code. Without it, an adapter only captures, and an adapter-only run is flagged rather than silently run live. See <a href="/docs#adapter-replay">replaying an adapter-captured run</a>.</div>
           </details>
           <details class="item">
             <summary>Is there a JavaScript / TypeScript SDK?</summary>

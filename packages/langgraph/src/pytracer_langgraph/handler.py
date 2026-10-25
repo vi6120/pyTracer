@@ -32,6 +32,7 @@ from uuid import UUID
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
 from pytracer_sdk import SpanKind, SpanRecorder, Tracer, get_tracer
+from pytracer_sdk.tracer import SpanContext
 
 _MAX_DEPTH = 6
 
@@ -140,6 +141,10 @@ class PyTracerCallbackHandler(BaseCallbackHandler):
     def __init__(self, tracer: Tracer | None = None) -> None:
         self._recorder = SpanRecorder(tracer or get_tracer())
 
+    def context_of(self, run_id: str | None) -> SpanContext | None:
+        """The pyTracer span recording a LangChain run, for nesting a seam call."""
+        return self._recorder.context_of(run_id)
+
     # --- LLM / chat model -> LLM spans --------------------------------------
     def _llm_attributes(
         self, metadata: dict[str, Any] | None, invocation_params: dict[str, Any] | None
@@ -163,6 +168,8 @@ class PyTracerCallbackHandler(BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
+        if self._recorder.adopt(str(run_id), SpanKind.LLM):
+            return  # a replay seam records this call
         model, attributes = self._llm_attributes(metadata, kwargs.get("invocation_params"))
         self._recorder.start(
             str(run_id),
@@ -183,6 +190,8 @@ class PyTracerCallbackHandler(BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
+        if self._recorder.adopt(str(run_id), SpanKind.LLM):
+            return  # a replay seam records this call
         model, attributes = self._llm_attributes(metadata, kwargs.get("invocation_params"))
         self._recorder.start(
             str(run_id),
@@ -211,6 +220,8 @@ class PyTracerCallbackHandler(BaseCallbackHandler):
         inputs: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
+        if self._recorder.adopt(str(run_id), SpanKind.TOOL):
+            return  # a replay seam records this call
         name = _name(serialized, "tool")
         self._recorder.start(
             str(run_id),

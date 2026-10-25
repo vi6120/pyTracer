@@ -35,8 +35,26 @@ with pytracer.start_span("answer-question"):
 
 ## Replay
 
-This adapter **captures** runs. Replaying a captured run currently requires `@op`
-instrumentation, because the replay engine intercepts `@op` calls; replay through
-the adapter itself is on the roadmap. Attempting to replay an adapter-only trace
-is flagged (the run has recordings but hits no `@op` seam) rather than silently
-running live. See the main README for the replay workflow.
+Call `install_seams()` and a captured run replays without adding `@op` to
+anything:
+
+```python
+from pytracer_langgraph import PyTracerCallbackHandler, install_seams
+
+install_seams()   # routes chat models and tools through pyTracer
+app.invoke(inputs, config={"callbacks": [PyTracerCallbackHandler()]})
+```
+
+LangChain chat models (`invoke` / `ainvoke` / `stream` / `astream`, including a
+model bound with `bind_tools`) and tools (`BaseTool.run` / `arun`, which
+`ToolNode` and agents go through) then run through pyTracer, nested under the
+graph node that called them, so the replay engine can return their recorded
+results: in full mode neither the model nor the tools run again, in partial mode
+the tools stay frozen while the model runs live, and streamed replies replay
+chunk by chunk. A model call is matched on its messages (without the per-run
+message ids LangGraph assigns), its bound tools and stop words.
+`uninstall_seams()` removes the routing again.
+
+Without `install_seams()` the adapter only captures, and replaying an
+adapter-only trace is flagged (the run has recordings but hits no `@op` seam)
+rather than silently running live. See the main README for the replay workflow.

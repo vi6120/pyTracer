@@ -24,14 +24,15 @@ for recorder-based adapters. A seam call made inside another seam call of the
 same kind (a framework's ``invoke`` that calls its own ``stream``) runs directly,
 so only the outermost call is recorded.
 
-:class:`Patcher` installs wrappers on framework classes reversibly.
+:class:`ClassSeams` installs wrappers on framework classes reversibly, and
+:func:`key_data` / :func:`tool_names` help an adapter build a call's match key.
 """
 
 from __future__ import annotations
 
 import contextvars
-import functools
-from collections.abc import Callable
+import dataclasses
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -209,40 +210,119 @@ def _reset(token: contextvars.Token[SeamCall | None]) -> None:
         pass
 
 
-_PATCHED = "__pytracer_seam__"
+_SEAM_ATTR = "__pytracer_seam__"
+
+# Builds the seam wrapper for one method: (method name, original) -> wrapper.
+WrapperFactory = Callable[[str, Callable[..., Any]], Callable[..., Any]]
 
 
-class Patcher:
-    """Installs wrappers on framework attributes and can remove them again.
+class ClassSeams:
+    """Wraps framework methods on base classes and all their subclasses.
 
-    ``patch(owner, "invoke", make_wrapper)`` replaces ``owner.invoke`` with
-    ``make_wrapper(original)``. Patching an attribute that already carries a
-    pyTracer wrapper is a no-op, so installing twice never double-records.
+    ``ClassSeams({BaseTool: [("run", make)]})`` replaces ``run`` wherever a class
+    in ``BaseTool``'s family defines it with ``make("run", original)``. Abstract
+    methods and methods already wrapped are skipped, so installing twice never
+    double-records. Classes defined after :meth:`install` (a provider class a
+    framework imports lazily, a user's custom client) are wrapped too, through the
+    class-creation hook (pydantic's ``__pydantic_init_subclass__`` for pydantic
+    models, ``__init_subclass__`` otherwise). :meth:`uninstall` restores it all.
     """
 
-    def __init__(self) -> None:
-        self._originals: list[tuple[Any, str, Any]] = []
+    def __init__(self, wrappers: Mapping[type, Sequence[tuple[str, WrapperFactory]]]) -> None:
+        self._wrappers = wrappers
+        self._patched: list[tuple[type, str, Any]] = []
+        self._hooks: list[tuple[type, str, Any]] = []
 
-    def patch(
-        self, owner: Any, attr: str, make_wrapper: Callable[[Callable[..., Any]], Callable[..., Any]]
-    ) -> bool:
-        """Wrap ``owner.attr``; returns False when it was already wrapped or absent."""
-        original = owner.__dict__.get(attr) if isinstance(owner, type) else getattr(owner, attr, None)
-        if original is None or getattr(original, _PATCHED, False):
-            return False
-        wrapper = make_wrapper(original)
-        if callable(original):
-            functools.update_wrapper(wrapper, original)
-        setattr(wrapper, _PATCHED, True)
-        self._originals.append((owner, attr, original))
-        setattr(owner, attr, wrapper)
-        return True
+    def install(self) -> None:
+        for base in self._wrappers:
+            for cls in [base, *_subclasses(base)]:
+                self._wrap(base, cls)
+            self._hook_new_subclasses(base)
 
-    def unpatch_all(self) -> None:
-        """Restore every attribute this patcher replaced, newest first."""
-        while self._originals:
-            owner, attr, original = self._originals.pop()
-            setattr(owner, attr, original)
+    def uninstall(self) -> None:
+        while self._patched:
+            cls, attr, original = self._patched.pop()
+            setattr(cls, attr, original)
+        while self._hooks:
+            base, hook, previous = self._hooks.pop()
+            if previous is not None:
+                setattr(base, hook, previous)
+            elif hook in base.__dict__:
+                delattr(base, hook)
 
-    def __len__(self) -> int:
-        return len(self._originals)
+    def _wrap(self, base: type, cls: type) -> None:
+        for attr, make in self._wrappers[base]:
+            original = cls.__dict__.get(attr)
+            if (
+                original is None
+                or getattr(original, _SEAM_ATTR, False)
+                or getattr(original, "__isabstractmethod__", False)
+            ):
+                continue
+            wrapper = make(attr, original)
+            setattr(wrapper, _SEAM_ATTR, True)
+            setattr(cls, attr, wrapper)
+            self._patched.append((cls, attr, original))
+
+    def _hook_new_subclasses(self, base: type) -> None:
+        hook = "__pydantic_init_subclass__" if _is_pydantic(base) else "__init_subclass__"
+        previous = base.__dict__.get(hook)
+        seams = self
+
+        def on_subclass(cls: type, **kwargs: Any) -> None:
+            if previous is not None:
+                previous.__func__(cls, **kwargs)
+            else:
+                getattr(super(base, cls), hook)(**kwargs)
+            seams._wrap(base, cls)
+
+        setattr(base, hook, classmethod(on_subclass))
+        self._hooks.append((base, hook, previous))
+
+
+def _subclasses(base: type) -> list[type]:
+    found: list[type] = []
+    pending = list(base.__subclasses__())
+    while pending:
+        cls = pending.pop()
+        found.append(cls)
+        pending.extend(cls.__subclasses__())
+    return found
+
+
+def _is_pydantic(cls: type) -> bool:
+    from pydantic import BaseModel
+
+    return issubclass(cls, BaseModel)
+
+
+def key_data(value: Any) -> Any:
+    """JSON-friendly data for a seam call's match key: pydantic models and
+    dataclasses as their fields, classes by name, containers element by element."""
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {f.name: key_data(getattr(value, f.name)) for f in dataclasses.fields(value)}
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        try:
+            return dump(mode="json", exclude_none=True)
+        except Exception:  # noqa: BLE001 - fall back to a readable value
+            return str(value)
+    if isinstance(value, (list, tuple)):
+        return [key_data(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): key_data(v) for k, v in value.items()}
+    if isinstance(value, type):
+        return value.__name__
+    return value
+
+
+def tool_names(tools: Any) -> list[str]:
+    """Sorted names of the tools offered to a model call (objects or schema dicts)."""
+    names = []
+    for tool in tools or ():
+        if isinstance(tool, dict):
+            fn = tool.get("function")
+            names.append(str(fn.get("name") if isinstance(fn, dict) else tool.get("name", tool)))
+        else:
+            names.append(str(getattr(tool, "name", tool)))
+    return sorted(names)

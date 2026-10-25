@@ -22,6 +22,17 @@ the same principles scale up.
   `pytracer keys`. See [deploy/README.md](deploy/README.md#managing-api-keys).
 - **Per-key rate limiting.** A token bucket caps sustained per-key throughput so
   one noisy or abusive key cannot crowd out others.
+- **Recordings are data.** Span inputs and outputs keep their Python types by
+  naming them in the recording (for example an enum's or a pydantic model's
+  class). Only serialized data is decoded: a recording file, a trace-store row,
+  or the gateway's queue, never a live value, so data an end user sends that
+  happens to look like a tag is recorded as that data. A class is rebuilt only
+  when it is the kind the tag promises (an enum, a path, a pydantic model, a
+  dataclass) and lives in a package the process has already imported (the agent
+  under test and its dependencies); recorded exception types follow the same
+  rule. A recording therefore never makes the replay import a module or build an
+  arbitrary class; anything else comes back as plain data. The gateway decodes
+  nothing at all: it stores each payload exactly as the client sent it.
 - **Durable, non-lossy ingestion.** In-flight spans and the dead-letter list
   survive a restart (Redis Streams), so data is not silently dropped. On the
   sending side, a span the SDK cannot deliver (a full queue or a failed delivery)

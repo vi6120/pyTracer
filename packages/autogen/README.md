@@ -11,11 +11,11 @@ AutoGen reports less than the other frameworks:
 | Agent spans, with the agent's name | Yes |
 | Tool calls | Yes, as tool spans. AutoGen 0.7.x does not report the tool's result, so the output is empty |
 | Model calls | Not from AutoGen 0.7.x, which emits no model-call span. With a GenAI-instrumented model client (for example `opentelemetry-instrumentation-openai-v2`), each call is captured with its model and token counts, but not its output, because that library sends content to the OpenTelemetry logs API |
-| One trace per team run | No. AutoGen gives each agent its own OpenTelemetry trace, so a team run arrives as several traces |
-| Nesting under an enclosing `pytracer.start_span(...)` | No. Spans keep AutoGen's own trace ids |
+| One trace per team run | Yes. AutoGen delivers each message in a new OpenTelemetry trace linked to the sender's; the adapter follows those links (see [One trace per run](#one-trace-per-run)) |
+| Nesting under an enclosing `pytracer.start_span(...)` | Yes |
 | Replay | Not through the adapter (see [Replay](#replay)) |
 
-If you need full model and tool payloads or one trace per run today, add `@op` to
+If you need full model and tool payloads today, add `@op` to
 the model client wrapper and the tools; those spans are complete and replayable.
 
 AutoGen emits its GenAI model and tool spans through the **global** OpenTelemetry

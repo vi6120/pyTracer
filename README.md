@@ -77,6 +77,12 @@ What each adapter captures and replays:
 | Nests under an enclosing `pytracer.start_span(...)` | Yes | Yes | Yes | Yes |
 | Replay through the adapter, no `@op` | Yes, `install_seams()` | Yes, `install(replayable=True)` | Yes, `install_seams(listener)` | Yes, `install(replayable=True)` |
 
+All four frameworks can share one environment, with two constraints from their own
+dependencies: CrewAI caps the OpenAI Agents SDK at 0.20.0 (CrewAI requires
+`openai<3`), and AutoGen 0.7.5 needs `googleapis-common-protos<1.75.1`, which a
+single resolve picks for you but adding AutoGen to an existing environment may
+not. See [using several frameworks in one environment](https://pytracer.com/docs#framework-combinations).
+
 Backing services (ClickHouse, PostgreSQL, and Redis for the durable ingest
 queue) run via [docker-compose.yml](docker-compose.yml).
 

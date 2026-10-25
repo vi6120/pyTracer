@@ -12,12 +12,21 @@ instead of multiplying.
 them back. Plain JSON values (strings, numbers, booleans, null, string-keyed dicts,
 lists) are left exactly as they are, so a recording of plain data looks the same as
 before. A class-backed value (an enum, a pydantic model, a dataclass) is rebuilt
-from its importable class, the same trust model as rebuilding a recorded
-exception; when the class cannot be imported it falls back to its plain data.
+from its importable class; when the class cannot be imported it falls back to its
+plain data.
+
+A recording names the class to rebuild, so decoding is restricted to what the
+tag promises: an ``enum`` tag only rebuilds an ``Enum``, ``path`` a ``PurePath``,
+``model`` a pydantic model, ``dataclass`` a dataclass. Any other class falls back
+to plain data, so a crafted recording cannot instantiate an arbitrary class (such
+as ``subprocess.Popen``). A process that only stores spans, like the ingestion
+gateway, decodes with ``rebuild_classes=False``: it imports nothing and keeps
+class-backed values as their tagged JSON, which it stores unchanged.
 
 The key ``__pytracer__`` is reserved: an object consisting of exactly that key
-plus ``v`` (and optionally ``cls``) is read as a tagged value. Any other dict that
-uses the key is encoded unambiguously and kept as data.
+plus ``v`` (and optionally ``cls``) is read as a tagged value, and is written back
+as it is. Any other dict that uses the key is encoded unambiguously and kept as
+data.
 """
 
 from __future__ import annotations
@@ -44,6 +53,10 @@ def encode_value(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, dict):
+        if _is_tagged(value):
+            # Already encoded (a class-backed value a store-only process kept as
+            # JSON): write it back unchanged.
+            return value
         if all(isinstance(k, str) for k in value) and TAG not in value:
             return {k: encode_value(v) for k, v in value.items()}
         # Non-string keys (or a key that would read as our tag) keep their exact
@@ -91,36 +104,52 @@ def encode_value(value: Any) -> Any:
     return value
 
 
-def decode_value(value: Any) -> Any:
+def decode_value(value: Any, *, rebuild_classes: bool = True) -> Any:
     """Restore values produced by :func:`encode_value`; other values pass through.
 
     Containers are only rebuilt when something inside them was decoded, so live
-    (never serialized) values keep their identity.
+    (never serialized) values keep their identity. With ``rebuild_classes=False``
+    no module is imported and class-backed values (enum, path, model, dataclass)
+    stay as their tagged JSON; use it where the data is only stored.
     """
     if isinstance(value, dict):
-        tag = value.get(TAG)
-        if isinstance(tag, str) and set(value) <= _TAGGED_KEYS:
-            return _decode_tagged(tag, value)
-        decoded = {k: decode_value(v) for k, v in value.items()}
+        if _is_tagged(value):
+            return _decode_tagged(value[TAG], value, rebuild_classes)
+        decoded = {k: decode_value(v, rebuild_classes=rebuild_classes) for k, v in value.items()}
         return value if all(decoded[k] is value[k] for k in value) else decoded
     if isinstance(value, list):
-        items = [decode_value(v) for v in value]
+        items = [decode_value(v, rebuild_classes=rebuild_classes) for v in value]
         return value if all(a is b for a, b in zip(items, value)) else items
     return value
 
 
-def _decode_tagged(tag: str, value: dict[str, Any]) -> Any:
+def _is_tagged(value: dict[Any, Any]) -> bool:
+    return isinstance(value.get(TAG), str) and set(value) <= _TAGGED_KEYS
+
+
+# Tags whose value is rebuilt from a class the recording names, and the kind of
+# class each may rebuild.
+_CLASS_TAGS = frozenset({"path", "enum", "model", "dataclass"})
+
+
+def _decode_tagged(tag: str, value: dict[str, Any], rebuild_classes: bool) -> Any:
+    if tag in _CLASS_TAGS and not rebuild_classes:
+        return value  # stored as written; nothing is imported
     # Untyped JSON payload; a malformed one falls through to the except below.
     raw: Any = value.get("v")
+
+    def inner(v: Any) -> Any:
+        return decode_value(v, rebuild_classes=rebuild_classes)
+
     try:
         if tag == "dict":
-            return {decode_value(k): decode_value(v) for k, v in raw}
+            return {inner(k): inner(v) for k, v in raw}
         if tag == "tuple":
-            return tuple(decode_value(v) for v in raw)
+            return tuple(inner(v) for v in raw)
         if tag == "set":
-            return {decode_value(v) for v in raw}
+            return {inner(v) for v in raw}
         if tag == "frozenset":
-            return frozenset(decode_value(v) for v in raw)
+            return frozenset(inner(v) for v in raw)
         if tag == "decimal":
             return Decimal(raw)
         if tag == "datetime":
@@ -139,22 +168,24 @@ def _decode_tagged(tag: str, value: dict[str, Any]) -> Any:
         if tag == "bytearray":
             return bytearray(base64.b64decode(raw))
         if tag == "path":
-            cls = _resolve_class(value.get("cls"))
-            return cls(raw) if cls is not None else pathlib.PurePath(raw)
+            cls = _resolve_class(value.get("cls"), pathlib.PurePath)
+            return cls(str(raw)) if cls is not None else pathlib.PurePath(str(raw))
         if tag == "enum":
-            cls = _resolve_class(value.get("cls"))
-            inner = decode_value(raw)
-            return cls(inner) if cls is not None else inner
+            cls = _resolve_class(value.get("cls"), enum.Enum)
+            data = inner(raw)
+            return cls(data) if cls is not None else data
         if tag == "model":
-            cls = _resolve_class(value.get("cls"))
-            data = decode_value(raw)
+            cls = _resolve_class(value.get("cls"), _pydantic_base())
+            data = inner(raw)
             return cls.model_validate(data) if cls is not None else data
         if tag == "dataclass":
-            cls = _resolve_class(value.get("cls"))
-            data = {k: decode_value(v) for k, v in raw.items()}
-            return _build_dataclass(cls, data) if cls is not None else data
+            cls = _resolve_class(value.get("cls"), None)
+            data = {k: inner(v) for k, v in raw.items()}
+            if cls is not None and dataclasses.is_dataclass(cls):
+                return _build_dataclass(cls, data)
+            return data
     except Exception:  # noqa: BLE001 - a value that will not rebuild falls back, never crashes a load
-        return decode_value(raw)
+        return inner(raw)
     # An unknown tag (e.g. written by a newer SDK) is kept as-is rather than lost.
     return value
 
@@ -179,8 +210,9 @@ def _class_path(obj: Any) -> str:
     return f"{cls.__module__}:{cls.__qualname__}"
 
 
-def _resolve_class(path: Any) -> type[Any] | None:
-    """Import ``module:Qual.Name``; None when it cannot be resolved."""
+def _resolve_class(path: Any, required_base: type[Any] | None) -> type[Any] | None:
+    """Import ``module:Qual.Name``; None when it cannot be resolved, or when it is
+    not a subclass of ``required_base`` (the kind of class the tag promises)."""
     if not isinstance(path, str) or ":" not in path:
         return None
     module_name, qualname = path.split(":", 1)
@@ -192,7 +224,17 @@ def _resolve_class(path: Any) -> type[Any] | None:
             obj = getattr(obj, part)
     except Exception:  # noqa: BLE001 - not importable here: fall back to plain data
         return None
-    return obj if isinstance(obj, type) else None
+    if not isinstance(obj, type):
+        return None
+    if required_base is not None and not issubclass(obj, required_base):
+        return None
+    return obj
+
+
+def _pydantic_base() -> type[Any]:
+    from pydantic import BaseModel
+
+    return BaseModel
 
 
 def _build_dataclass(cls: type[Any], data: dict[str, Any]) -> Any:

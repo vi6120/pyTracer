@@ -146,16 +146,26 @@ def stream_through(
 ) -> Any:
     """Run a framework's sync streaming call through the op path.
 
-    The stream's items are recorded and replay chunk by chunk. The call is not
-    reported by :func:`active_seam` while it is being iterated (a context variable
-    cannot follow a generator across the caller's ``next`` calls safely), so an
-    adapter that streams marks its own dedupe around the stream it wraps.
+    The stream's items are recorded and replay chunk by chunk. While the live
+    stream is consumed, :func:`active_seam` reports it, so a call the stream makes
+    internally (a client whose ``stream`` calls its own ``create``) runs directly
+    instead of being recorded as a second call under the same key. The marker
+    holds between the stream's items too, which is harmless for the usual
+    consumer that only collects chunks.
     """
     kwargs = kwargs or {}
     if _nested(kind):
         return fn(*args, **kwargs)
+
+    def body(*a: Any, **k: Any) -> Any:
+        token = _active.set(SeamCall(kind, _current.get() or SpanContext("", "")))
+        try:
+            yield from fn(*a, **k)
+        finally:
+            _reset(token)
+
     return _resolve(tracer).call_gen_op(
-        fn, args, kwargs, _meta(kind, name, tool_name), op_input=input, parent=parent
+        body, args, kwargs, _meta(kind, name, tool_name), op_input=input, parent=parent
     )
 
 
@@ -175,9 +185,28 @@ def astream_through(
     kwargs = kwargs or {}
     if _nested(kind):
         return fn(*args, **kwargs)
+
+    async def body(*a: Any, **k: Any) -> Any:
+        token = _active.set(SeamCall(kind, _current.get() or SpanContext("", "")))
+        try:
+            async for item in fn(*a, **k):
+                yield item
+        finally:
+            _reset(token)
+
     return _resolve(tracer).call_async_gen_op(
-        fn, args, kwargs, _meta(kind, name, tool_name), op_input=input, parent=parent
+        body, args, kwargs, _meta(kind, name, tool_name), op_input=input, parent=parent
     )
+
+
+def _reset(token: contextvars.Token[SeamCall | None]) -> None:
+    """Clear a stream's marker. A stream finished from another context (closed by
+    the garbage collector, or iterated across tasks) cannot reset the token, and
+    there the marker never leaked into the caller's context anyway."""
+    try:
+        _active.reset(token)
+    except ValueError:
+        pass
 
 
 _PATCHED = "__pytracer_seam__"

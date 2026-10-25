@@ -38,7 +38,12 @@
   types the agent saw. A pydantic model or dataclass returned by a call is kept as
   that object (it was flattened to a dict before), and a rebuilt pydantic model
   keeps which fields were set. Recordings made before this release must be
-  re-recorded to benefit.
+  re-recorded to benefit. Only serialized data is decoded (a recording, a store
+  row, the gateway queue): a live value that looks like a tag, such as an end
+  user's dict, is recorded as that dict. Classes, and recorded exception types,
+  are only rebuilt from packages the process has already imported, so a recording
+  never imports a module; and the gateway stores payloads exactly as received,
+  including when it requeues dead letters.
 - **Client-side span loss is visible (L1).** A full SDK queue or a failed delivery
   is logged as a rate-limited warning and passed to an optional
   `on_drop(reason, count, error)` callback set through `configure()`.

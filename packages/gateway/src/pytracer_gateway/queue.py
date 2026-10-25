@@ -184,14 +184,23 @@ class RedisQueue:
 
     async def start(self) -> None:
         redis = _import_redis()
-        self._redis = redis.from_url(self._config.redis_url, decode_responses=True)
+        # Retry a command once over a fresh connection when Redis has closed the
+        # pooled one (a Redis restart), instead of failing that ingest request.
+        self._redis = redis.from_url(
+            self._config.redis_url,
+            decode_responses=True,
+            retry_on_error=[redis.ConnectionError, redis.TimeoutError],
+        )
+        await self._ensure_group()
+        await self._recover()
+
+    async def _ensure_group(self) -> None:
         # Create the stream and consumer group if they do not exist yet.
         try:
             await self._redis.xgroup_create(self._stream, self._group, id="0", mkstream=True)
         except Exception as exc:  # BUSYGROUP just means the group already exists.
             if "BUSYGROUP" not in str(exc):
                 raise
-        await self._recover()
 
     async def _recover(self) -> None:
         # Claim entries left pending by a previous consumer so in-flight spans
@@ -234,13 +243,21 @@ class RedisQueue:
             del self._recovered[:max_items]
             return batch
         block_ms = max(1, int(timeout * 1000))
-        resp = await self._redis.xreadgroup(
-            self._group,
-            self._consumer,
-            {self._stream: ">"},
-            count=max_items,
-            block=block_ms,
-        )
+        try:
+            resp = await self._redis.xreadgroup(
+                self._group,
+                self._consumer,
+                {self._stream: ">"},
+                count=max_items,
+                block=block_ms,
+            )
+        except Exception as exc:
+            # A Redis restarted without its data has lost the group; recreate it
+            # so the writer resumes instead of failing on every read.
+            if "NOGROUP" not in str(exc):
+                raise
+            await self._ensure_group()
+            return []
         if not resp:
             return []
         # resp is [[stream_name, [(id, {fields}), ...]]]; one stream requested.

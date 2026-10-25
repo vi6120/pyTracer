@@ -148,8 +148,9 @@ class SpanRecorder:
         elif span.status is SpanStatus.UNSET:
             span.status = SpanStatus.OK
 
-        # Re-validate to derive latency_ms from the timestamps, then buffer.
-        self._tracer.buffer.record(Span.model_validate(span.model_dump()))
+        # latency_ms was derived when end_time_ns was set; buffer the span as is, so
+        # an object output (a pydantic model, a dataclass) keeps its type.
+        self._tracer.buffer.record(span)
 
     def open_count(self) -> int:
         """Number of spans started but not yet ended (useful for diagnostics)."""

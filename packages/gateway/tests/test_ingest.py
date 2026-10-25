@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
+from typing import Any
 
 from fastapi.testclient import TestClient
-from helpers import FakeWriter, make_span
+from helpers import FailingWriter, FakeWriter, make_span
+from pytracer_sdk.codec import encode_value
+from pytracer_stores.hashing import canonical_json
 
-from pytracer_gateway import create_app
+from pytracer_gateway import GatewayConfig, create_app
 from pytracer_gateway.app import GATEWAY_VERSION
 
 API_KEYS = {"k": "proj"}
@@ -139,6 +143,8 @@ def test_requeue_re_enqueues_storage_dead_letters() -> None:
 def test_ingest_never_instantiates_a_class_named_in_a_payload() -> None:
     # A client controls the payload; the gateway only stores it. A tagged value
     # naming any class (here subprocess.Popen) must be kept as data, unimported.
+    from pytracer_sdk.codec import EncodedPayload
+
     from pytracer_gateway.ingest import validate_spans
 
     gadget = {"__pytracer__": "path", "v": ["true"], "cls": "subprocess:Popen"}
@@ -146,6 +152,40 @@ def test_ingest_never_instantiates_a_class_named_in_a_payload() -> None:
     span["output"] = gadget
     valid, errors = validate_spans([span])
     assert errors == []
-    assert valid[0].output == gadget  # kept as the client wrote it
+    assert valid[0].output == EncodedPayload(gadget)  # kept as the client wrote it
     stored = valid[0].model_dump(mode="json")["output"]
     assert stored == gadget  # and stored unchanged
+
+
+# A payload naming classes in a package nothing has imported ("this"), plus a
+# tag-shaped value: the gateway must store every byte as sent and import nothing.
+_UNTOUCHED = {
+    "cls": {"__pytracer__": "enum", "v": "a", "cls": "this:Anything"},
+    "plain": {"__pytracer__": "decimal", "v": "1.50"},
+    "nested": [{"__pytracer__": "model", "v": {"k": 1}, "cls": "this:Model"}],
+}
+
+
+def _stored(span: Any) -> str:
+    # What the trace store writes for the payload.
+    return canonical_json(encode_value(span.output))
+
+
+def test_ingest_and_requeue_store_the_payload_as_sent_and_import_nothing(
+    wait_until: Callable[..., bool],
+) -> None:
+    sys.modules.pop("this", None)
+    sent = make_span().model_dump(mode="json")
+    sent["output"] = _UNTOUCHED
+    # Storage fails once past the retry budget, so the span is dead-lettered and
+    # then requeued: ingest, the dead letter and the requeue all handle it.
+    writer = FailingWriter(fail_times=1)
+    cfg = GatewayConfig(max_write_retries=0, retry_backoff=0.01, flush_interval=0.05)
+    with TestClient(create_app(writer=writer, api_keys=API_KEYS, config=cfg)) as client:
+        assert client.post("/v1/spans", headers=HEADERS, json={"spans": [sent]}).status_code == 202
+        assert wait_until(lambda: client.get("/v1/stats").json()["dead_letters"] == 1)
+        assert client.post("/v1/dead-letters/requeue", headers=HEADERS).json()["requeued"] == 1
+        assert wait_until(lambda: writer.inner.count == 1)
+    ((_, span),) = writer.inner.records
+    assert _stored(span) == canonical_json(_UNTOUCHED)
+    assert "this" not in sys.modules

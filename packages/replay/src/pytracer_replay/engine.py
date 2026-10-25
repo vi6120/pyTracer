@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import builtins
 import importlib
+import sys
 import threading
 from collections.abc import Callable, Iterable
 from contextlib import AbstractContextManager, nullcontext
@@ -62,7 +63,9 @@ def _resolve_exception_type(module: str | None, name: str) -> type[BaseException
     builtin = getattr(builtins, name, None)
     if isinstance(builtin, type) and issubclass(builtin, BaseException):
         return builtin
-    if module and module != "builtins":
+    # Only a package the process already imported (the agent's dependencies): a
+    # recording never makes the replay import anything new.
+    if module and module != "builtins" and module.partition(".")[0] in sys.modules:
         try:
             mod = importlib.import_module(module)
         except Exception:  # noqa: BLE001 - the module may not be importable at replay

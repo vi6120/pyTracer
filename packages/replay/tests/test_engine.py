@@ -632,3 +632,26 @@ def test_a_seam_routed_framework_call_replays_without_running_live() -> None:
     assert replayed.return_value == recorded.return_value
     assert live == {"model": 1, "tool": 1}  # nothing ran live: both came from the recording
     assert replayed.uninstrumented is False
+
+
+def test_recorded_exception_from_an_unimported_package_is_not_imported() -> None:
+    # A recording names the exception's module; replay only looks in packages the
+    # process already imported, so it falls back instead of importing a new one.
+    import sys
+
+    from pytracer_replay.engine import ReplayedError, _rebuild_exception
+    from pytracer_replay.mocks import RecordedError
+
+    sys.modules.pop("this", None)
+    exc = _rebuild_exception(RecordedError("Boom", "failed", error_module="this"))
+    assert type(exc) is ReplayedError
+    assert "this" not in sys.modules
+    # A class from an imported module is still rebuilt as its real type.
+    exc = _rebuild_exception(
+        RecordedError("ImportedModuleError", "failed", error_module=__name__)
+    )
+    assert type(exc) is ImportedModuleError
+
+
+class ImportedModuleError(Exception):
+    """A non-builtin exception in a module the process has imported (this one)."""

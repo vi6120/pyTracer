@@ -7,9 +7,11 @@ span definition and map cleanly onto the OpenTelemetry / OTLP model.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import Enum
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
+from types import MappingProxyType
 from typing import Any
 
 from pydantic import (
@@ -22,16 +24,19 @@ from pydantic import (
     model_validator,
 )
 
-from .codec import decode_value, encode_value
+from .codec import EncodedPayload, decode_value, encode_value
 from .ids import is_valid_span_id, is_valid_trace_id
 
 NANOS_PER_MILLI = 1_000_000
 
-# Validation context for a process that only stores spans (the ingestion
-# gateway): class-backed input/output values stay as their tagged JSON, so
-# validating a client's span never imports or instantiates a class it names.
+# Validation contexts for span inputs and outputs (see ``Span._decode_payload``).
+# STORE_ONLY is for a process that only stores spans (the ingestion gateway): the
+# payloads are kept exactly as received, so validating a client's span never
+# imports or instantiates anything it names. SERIALIZED marks Python data that came
+# from JSON (a store row), so its payloads are decoded as a recording's are.
 # Use as ``Span.model_validate(data, context=STORE_ONLY)``.
-STORE_ONLY: dict[str, bool] = {"pytracer_rebuild_classes": False}
+STORE_ONLY: Mapping[str, str] = MappingProxyType({"pytracer_payload": "store_only"})
+SERIALIZED: Mapping[str, str] = MappingProxyType({"pytracer_payload": "serialized"})
 
 try:
     # Single source of truth: the installed distribution's version, so spans
@@ -144,7 +149,9 @@ class Span(BaseModel):
     # Inputs and outputs keep their real Python types through every JSON path
     # (recordings, the gateway wire, its queue): values JSON cannot carry, such as
     # Decimal or datetime, are tagged on the way out and restored on the way in,
-    # so a replay hands the agent the same types it got live.
+    # so a replay hands the agent the same types it got live. Only serialized data
+    # is decoded: a live value (``Span(...)``, an assignment) is kept as it is, so a
+    # tag-shaped dict an agent received is recorded as that dict.
     @field_serializer("input", "output", when_used="json")
     def _encode_payload(self, value: Any) -> Any:
         return encode_value(value)
@@ -152,8 +159,14 @@ class Span(BaseModel):
     @field_validator("input", "output", mode="before")
     @classmethod
     def _decode_payload(cls, value: Any, info: ValidationInfo) -> Any:
-        context = info.context or {}
-        return decode_value(value, rebuild_classes=context.get("pytracer_rebuild_classes", True))
+        payload = (info.context or {}).get("pytracer_payload")
+        if payload == "store_only":
+            if value is None or isinstance(value, EncodedPayload):
+                return value
+            return EncodedPayload(value)
+        if info.mode == "json" or payload == "serialized":
+            return decode_value(value)
+        return value
 
     # --- validation ---------------------------------------------------------
     @field_validator("trace_id")

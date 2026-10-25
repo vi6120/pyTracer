@@ -179,7 +179,8 @@ class IngestPipeline:
         for letter in letters:
             if letter.reason == "storage" and letter.span is not None and letter.project:
                 try:
-                    span = Span.model_validate(letter.span)
+                    # Store-only, like ingest: the payload is kept as received.
+                    span = Span.model_validate(letter.span, context=STORE_ONLY)
                 except ValidationError:
                     keep.append(letter)
                     continue

@@ -19,14 +19,15 @@ A recording names the class to rebuild, so decoding is restricted to what the
 tag promises: an ``enum`` tag only rebuilds an ``Enum``, ``path`` a ``PurePath``,
 ``model`` a pydantic model, ``dataclass`` a dataclass. Any other class falls back
 to plain data, so a crafted recording cannot instantiate an arbitrary class (such
-as ``subprocess.Popen``). A process that only stores spans, like the ingestion
-gateway, decodes with ``rebuild_classes=False``: it imports nothing and keeps
-class-backed values as their tagged JSON, which it stores unchanged.
+as ``subprocess.Popen``). A class is also only rebuilt from a package the process
+has already imported (the agent under test, its dependencies, the standard library
+modules in use): a recording never makes the process import anything new.
 
-The key ``__pytracer__`` is reserved: an object consisting of exactly that key
-plus ``v`` (and optionally ``cls``) is read as a tagged value, and is written back
-as it is. Any other dict that uses the key is encoded unambiguously and kept as
-data.
+Only serialized data is decoded (see ``Span``): a live value is never read as a
+tag. The key ``__pytracer__`` is reserved: a live dict that uses it is encoded
+unambiguously and kept as data, so a tag-shaped value an agent received comes back
+as the same dict. A process that only stores spans, like the ingestion gateway,
+holds payloads as :class:`EncodedPayload` and writes them back exactly as received.
 """
 
 from __future__ import annotations
@@ -37,12 +38,25 @@ import datetime as dt
 import enum
 import importlib
 import pathlib
+import sys
 import uuid
 from decimal import Decimal
 from typing import Any
 
 TAG = "__pytracer__"
 _TAGGED_KEYS = frozenset({TAG, "v", "cls"})
+
+
+@dataclasses.dataclass(frozen=True)
+class EncodedPayload:
+    """A payload already in its encoded JSON form, kept exactly as received.
+
+    A process that only stores spans (the ingestion gateway) holds inputs and
+    outputs this way: nothing in them is decoded, imported or instantiated, and
+    :func:`encode_value` writes ``value`` back unchanged.
+    """
+
+    value: Any
 
 
 def encode_value(value: Any) -> Any:
@@ -52,11 +66,9 @@ def encode_value(value: Any) -> Any:
         return _tag("enum", encode_value(value.value), cls=_class_path(value))
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
+    if isinstance(value, EncodedPayload):
+        return value.value
     if isinstance(value, dict):
-        if _is_tagged(value):
-            # Already encoded (a class-backed value a store-only process kept as
-            # JSON): write it back unchanged.
-            return value
         if all(isinstance(k, str) for k in value) and TAG not in value:
             return {k: encode_value(v) for k, v in value.items()}
         # Non-string keys (or a key that would read as our tag) keep their exact
@@ -104,21 +116,20 @@ def encode_value(value: Any) -> Any:
     return value
 
 
-def decode_value(value: Any, *, rebuild_classes: bool = True) -> Any:
+def decode_value(value: Any) -> Any:
     """Restore values produced by :func:`encode_value`; other values pass through.
 
-    Containers are only rebuilt when something inside them was decoded, so live
-    (never serialized) values keep their identity. With ``rebuild_classes=False``
-    no module is imported and class-backed values (enum, path, model, dataclass)
-    stay as their tagged JSON; use it where the data is only stored.
+    Only call this on serialized data (a recording, a store row): it reads any
+    tag-shaped dict as a tag. Containers are only rebuilt when something inside
+    them was decoded.
     """
     if isinstance(value, dict):
         if _is_tagged(value):
-            return _decode_tagged(value[TAG], value, rebuild_classes)
-        decoded = {k: decode_value(v, rebuild_classes=rebuild_classes) for k, v in value.items()}
+            return _decode_tagged(value[TAG], value)
+        decoded = {k: decode_value(v) for k, v in value.items()}
         return value if all(decoded[k] is value[k] for k in value) else decoded
     if isinstance(value, list):
-        items = [decode_value(v, rebuild_classes=rebuild_classes) for v in value]
+        items = [decode_value(v) for v in value]
         return value if all(a is b for a, b in zip(items, value)) else items
     return value
 
@@ -132,14 +143,12 @@ def _is_tagged(value: dict[Any, Any]) -> bool:
 _CLASS_TAGS = frozenset({"path", "enum", "model", "dataclass"})
 
 
-def _decode_tagged(tag: str, value: dict[str, Any], rebuild_classes: bool) -> Any:
-    if tag in _CLASS_TAGS and not rebuild_classes:
-        return value  # stored as written; nothing is imported
+def _decode_tagged(tag: str, value: dict[str, Any]) -> Any:
     # Untyped JSON payload; a malformed one falls through to the except below.
     raw: Any = value.get("v")
 
     def inner(v: Any) -> Any:
-        return decode_value(v, rebuild_classes=rebuild_classes)
+        return decode_value(v)
 
     try:
         if tag == "dict":
@@ -211,12 +220,17 @@ def _class_path(obj: Any) -> str:
 
 
 def _resolve_class(path: Any, required_base: type[Any] | None) -> type[Any] | None:
-    """Import ``module:Qual.Name``; None when it cannot be resolved, or when it is
-    not a subclass of ``required_base`` (the kind of class the tag promises)."""
+    """Find ``module:Qual.Name``; None when it cannot be resolved, or when it is
+    not a subclass of ``required_base`` (the kind of class the tag promises).
+
+    Only a package the process has already imported is looked in (a submodule of
+    it may still be imported), so a recording never makes the process import
+    anything new.
+    """
     if not isinstance(path, str) or ":" not in path:
         return None
     module_name, qualname = path.split(":", 1)
-    if "<locals>" in qualname:
+    if "<locals>" in qualname or module_name.partition(".")[0] not in sys.modules:
         return None
     try:
         obj: Any = importlib.import_module(module_name)

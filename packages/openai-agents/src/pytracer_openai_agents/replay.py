@@ -20,7 +20,6 @@ of the same conversation matches the recording.
 
 from __future__ import annotations
 
-import dataclasses
 import functools
 import inspect
 import json
@@ -31,32 +30,15 @@ from agents.models.interface import Model
 from agents.tool import FunctionTool
 from agents.tracing import get_current_span, get_current_trace
 from pytracer_sdk import SpanKind
-from pytracer_sdk.seam import acall_through, astream_through
+from pytracer_sdk.seam import ClassSeams, acall_through, astream_through, key_data
 from pytracer_sdk.tracer import SpanContext
 
 # Resolves the pyTracer span a seam call should nest under (set by install).
 ParentResolver = Callable[[], "SpanContext | None"]
 
-_SEAM_ATTR = "__pytracer_seam__"
 _TOOL_INVOKE = "on_invoke_tool"
 # Where a tool keeps its seam wrapper, so every read returns the same object.
 _SEAMED_INVOKE = "_pytracer_seamed_invoke"
-
-
-def _jsonable(value: Any) -> Any:
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return {f.name: _jsonable(getattr(value, f.name)) for f in dataclasses.fields(value)}
-    dump = getattr(value, "model_dump", None)
-    if callable(dump):
-        try:
-            return dump(mode="json", exclude_none=True)
-        except Exception:  # noqa: BLE001 - fall back to the plain value
-            return str(value)
-    if isinstance(value, (list, tuple)):
-        return [_jsonable(v) for v in value]
-    if isinstance(value, dict):
-        return {str(k): _jsonable(v) for k, v in value.items()}
-    return value
 
 
 def _model_key(bound: inspect.BoundArguments) -> dict[str, Any]:
@@ -67,11 +49,11 @@ def _model_key(bound: inspect.BoundArguments) -> dict[str, Any]:
     schema_name = getattr(output_schema, "name", None)
     return {
         "system": args.get("system_instructions"),
-        "input": _jsonable(args.get("input")),
+        "input": key_data(args.get("input")),
         "tools": sorted(str(getattr(t, "name", t)) for t in args.get("tools") or ()),
         "handoffs": sorted(str(getattr(h, "tool_name", h)) for h in args.get("handoffs") or ()),
         "output_schema": schema_name() if callable(schema_name) else None,
-        "settings": _jsonable(args.get("model_settings")),
+        "settings": key_data(args.get("model_settings")),
     }
 
 
@@ -97,7 +79,6 @@ def _wrap_get_response(original: Callable[..., Any], parent: ParentResolver) -> 
             input=_model_key(bound), parent=parent(),
         )
 
-    setattr(get_response, _SEAM_ATTR, True)
     return get_response
 
 
@@ -112,7 +93,6 @@ def _wrap_stream_response(original: Callable[..., Any], parent: ParentResolver) 
             input=_model_key(bound), parent=parent(),
         )
 
-    setattr(stream_response, _SEAM_ATTR, True)
     return stream_response
 
 
@@ -192,53 +172,23 @@ class Seams:
 
     def __init__(self, parent: ParentResolver) -> None:
         self._parent = parent
-        self._patched: list[tuple[type, str, Any]] = []
-        self._previous_init_subclass: Any = None
+        # Every Model class, including ones defined later (e.g. a custom model).
+        self._models = ClassSeams({
+            Model: [
+                ("get_response", lambda _, original: _wrap_get_response(original, parent)),
+                ("stream_response", lambda _, original: _wrap_stream_response(original, parent)),
+            ],
+        })
 
     def install(self) -> None:
-        for cls in _model_classes():
-            self._patch_model(cls)
-        # Model classes defined after install (e.g. a custom model) are patched too.
-        self._previous_init_subclass = Model.__dict__.get("__init_subclass__")
-        seams = self
-
-        def __init_subclass__(cls: type, **kwargs: Any) -> None:  # noqa: N807
-            super(Model, cls).__init_subclass__(**kwargs)  # type: ignore[misc]
-            seams._patch_model(cls)
-
-        Model.__init_subclass__ = classmethod(__init_subclass__)  # type: ignore[assignment]
+        self._models.install()
         # Tools: keep each existing instance's callable where the descriptor reads it.
         FunctionTool.on_invoke_tool = _ToolInvokeDescriptor(self._parent)  # type: ignore[assignment,misc]
 
-    def _patch_model(self, cls: type) -> None:
-        for attr, wrap in (("get_response", _wrap_get_response), ("stream_response", _wrap_stream_response)):
-            original = cls.__dict__.get(attr)
-            if original is None or getattr(original, _SEAM_ATTR, False) or getattr(original, "__isabstractmethod__", False):
-                continue
-            setattr(cls, attr, wrap(original, self._parent))
-            self._patched.append((cls, attr, original))
-
     def uninstall(self) -> None:
-        while self._patched:
-            cls, attr, original = self._patched.pop()
-            setattr(cls, attr, original)
-        if self._previous_init_subclass is None:
-            if "__init_subclass__" in Model.__dict__:
-                del Model.__init_subclass__
-        else:
-            Model.__init_subclass__ = self._previous_init_subclass  # type: ignore[method-assign]
+        self._models.uninstall()
         if isinstance(FunctionTool.__dict__.get(_TOOL_INVOKE), _ToolInvokeDescriptor):
             delattr(FunctionTool, _TOOL_INVOKE)
-
-
-def _model_classes() -> list[type]:
-    found: list[type] = []
-    pending = list(Model.__subclasses__())
-    while pending:
-        cls = pending.pop()
-        found.append(cls)
-        pending.extend(cls.__subclasses__())
-    return found
 
 
 def current_sdk_run_id() -> str | None:

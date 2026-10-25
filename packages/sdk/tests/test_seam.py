@@ -7,12 +7,14 @@ from typing import Any
 
 from pytracer_sdk import Resource, SpanKind, SpanRecorder, Tracer
 from pytracer_sdk.seam import (
-    Patcher,
+    ClassSeams,
     acall_through,
     active_seam,
     astream_through,
     call_through,
+    key_data,
     stream_through,
+    tool_names,
 )
 from pytracer_sdk.tracer import SpanContext
 from pytracer_sdk.transport import InMemoryTransport
@@ -121,27 +123,95 @@ def test_async_and_stream_variants_record() -> None:
     assert outputs == {"am": "async reply", "sm": ["a", "b"], "asm": ["c", "d"]}
 
 
-def test_patcher_wraps_once_and_restores() -> None:
-    class Model:
-        def invoke(self, x: int) -> int:
-            return x
-
-    calls: list[int] = []
-
-    def make(original: Any) -> Any:
-        def wrapper(self: Any, x: int) -> int:
-            calls.append(x)
-            return int(original(self, x))
+def _counting(calls: list[str]) -> Any:
+    def make(name: str, original: Any) -> Any:
+        def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+            calls.append(f"{type(self).__name__}.{name}")
+            return original(self, *args, **kwargs)
 
         return wrapper
 
-    patcher = Patcher()
-    assert patcher.patch(Model, "invoke", make)
-    assert not patcher.patch(Model, "invoke", make)  # already wrapped
-    assert Model().invoke(3) == 3 and calls == [3]
-    patcher.unpatch_all()
-    assert Model().invoke(4) == 4 and calls == [3]
-    assert len(patcher) == 0
+    return make
+
+
+def test_class_seams_wrap_a_family_and_restore_it() -> None:
+    import abc
+
+    class Base(abc.ABC):
+        @abc.abstractmethod
+        def run(self) -> str: ...
+
+    class Existing(Base):
+        def run(self) -> str:
+            return "existing"
+
+    calls: list[str] = []
+    seams = ClassSeams({Base: [("run", _counting(calls))]})
+    seams.install()
+    seams.install()  # a second install does not wrap twice
+
+    class Later(Base):  # defined after install
+        def run(self) -> str:
+            return "later"
+
+    assert Existing().run() == "existing" and Later().run() == "later"
+    assert calls == ["Existing.run", "Later.run"]  # the abstract Base.run is left alone
+    seams.uninstall()
+    seams.uninstall()
+    calls.clear()
+
+    class AfterUninstall(Base):
+        def run(self) -> str:
+            return "plain"
+
+    assert Existing().run() == "existing" and AfterUninstall().run() == "plain"
+    assert calls == []
+    assert "__init_subclass__" not in Base.__dict__
+
+
+def test_class_seams_hook_pydantic_subclasses() -> None:
+    from pydantic import BaseModel
+
+    class Model(BaseModel):
+        def call(self) -> str:
+            return "base"
+
+    calls: list[str] = []
+    seams = ClassSeams({Model: [("call", _counting(calls))]})
+    seams.install()
+    try:
+
+        class Provider(Model):  # a lazily imported provider class
+            x: int = 1
+
+            def call(self) -> str:
+                return f"provider {self.x}"
+
+        assert Provider(x=2).call() == "provider 2"  # pydantic setup still works
+        assert calls == ["Provider.call"]
+    finally:
+        seams.uninstall()
+    assert "__pydantic_init_subclass__" not in Model.__dict__
+
+
+def test_key_data_and_tool_names() -> None:
+    import dataclasses
+
+    from pydantic import BaseModel
+
+    @dataclasses.dataclass
+    class Settings:
+        temperature: float
+
+    class Message(BaseModel):
+        role: str
+        content: str | None = None
+
+    assert key_data([Message(role="user"), Settings(0.5), int]) == [
+        {"role": "user"}, {"temperature": 0.5}, "int",
+    ]
+    tools = [{"type": "function", "function": {"name": "b"}}, {"name": "a"}, Message(role="c")]
+    assert tool_names(tools)[:2] == ["a", "b"]
 
 
 def test_a_call_made_inside_a_stream_is_not_recorded_again() -> None:

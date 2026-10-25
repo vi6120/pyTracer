@@ -165,3 +165,19 @@ def test_a_call_made_inside_a_stream_is_not_recorded_again() -> None:
     tracer.flush()
     (span,) = sink.spans
     assert span.output == ["full", "reply"]
+
+
+def test_a_run_adopted_inside_a_stream_nests_under_the_stream_span() -> None:
+    tracer, sink = _tracer()
+    recorder = SpanRecorder(tracer)
+
+    def framework_stream() -> Any:
+        assert recorder.adopt("stream-run", SpanKind.LLM)
+        recorder.start("child-run", name="child", parent_run_id="stream-run")
+        recorder.end("child-run")
+        yield "token"
+
+    assert list(stream_through(framework_stream, kind=SpanKind.LLM, name="m", tracer=tracer)) == ["token"]
+    tracer.flush()
+    by_name = {s.name: s for s in sink.spans}
+    assert by_name["child"].parent_span_id == by_name["m"].span_id

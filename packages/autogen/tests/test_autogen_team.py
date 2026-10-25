@@ -29,12 +29,16 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+LIVE = {"model": 0, "tool": 0}
+
+
 def _lookup(q: str) -> str:
     """Look something up."""
+    LIVE["tool"] += 1
     return f"found {q}"
 
 
-def _team(tool: Any = _lookup, *, log_calls: bool = False) -> Any:
+def _team(tool: Any = _lookup, *, log_calls: bool = False, stream: bool = False) -> Any:
     from autogen_agentchat.agents import AssistantAgent
     from autogen_agentchat.conditions import MaxMessageTermination
     from autogen_agentchat.teams import RoundRobinGroupChat
@@ -49,6 +53,7 @@ def _team(tool: Any = _lookup, *, log_calls: bool = False) -> Any:
             self._log_calls = log_calls
 
         async def create(self, messages: Any, **kwargs: Any) -> CreateResult:
+            LIVE["model"] += 1
             reply = self._replies.pop(0)
             if self._log_calls:
                 # As the autogen_ext clients (OpenAI, Anthropic, Ollama, ...) do.
@@ -71,8 +76,12 @@ def _team(tool: Any = _lookup, *, log_calls: bool = False) -> Any:
                 cached=False,
             )
 
-        def create_stream(self, *args: Any, **kwargs: Any) -> Any:
-            raise NotImplementedError
+        async def create_stream(self, messages: Any, **kwargs: Any) -> Any:
+            result = await self.create(messages, **kwargs)
+            if isinstance(result.content, str):
+                for word in result.content.split(" "):
+                    yield word
+            yield result
 
         async def close(self) -> None:
             pass
@@ -102,9 +111,12 @@ def _team(tool: Any = _lookup, *, log_calls: bool = False) -> Any:
 
     call = FunctionCall(id="1", name=tool.__name__, arguments='{"q": "x"}')
     writer = AssistantAgent(
-        "writer", model_client=Scripted([[call], "draft"], log_calls=log_calls), tools=[tool]
+        "writer", model_client=Scripted([[call], "draft"], log_calls=log_calls), tools=[tool],
+        model_client_stream=stream,
     )
-    critic = AssistantAgent("critic", model_client=Scripted(["ok"], log_calls=log_calls))
+    critic = AssistantAgent(
+        "critic", model_client=Scripted(["ok"], log_calls=log_calls), model_client_stream=stream
+    )
     return RoundRobinGroupChat([writer, critic], termination_condition=MaxMessageTermination(4))
 
 
@@ -216,3 +228,95 @@ def test_model_calls_are_derived_when_the_client_logs_nothing(
     assert _model_calls_by_agent(sink) == {"writer": 2, "critic": 1}
     assert all(s.attributes.get("pytracer.derived") is True for s in llm)
     assert {str(s.output) for s in llm} >= {"draft", "ok"}
+
+
+# --- C2: replaying a captured AutoGen run without @op -----------------------------
+
+
+@pytest.fixture
+def seams(recorded: tuple[InMemoryTransport, pytracer.Tracer]) -> Iterator[InMemoryTransport]:
+    from pytracer_autogen import install_seams, uninstall_seams
+
+    sink, _ = recorded
+    assert _EXPORTER is not None
+    install_seams(_EXPORTER)
+    try:
+        yield sink
+    finally:
+        uninstall_seams()
+        _EXPORTER.seams = False
+
+
+def _run_team(*, stream: bool = False) -> Any:
+    def run() -> str:
+        result = asyncio.run(_team(stream=stream).run(task="write"))
+        return " | ".join(f"{m.source}: {m.to_text()}" for m in result.messages)
+
+    return run
+
+
+def _capture(sink: InMemoryTransport, run: Any) -> tuple[str, list[pytracer.Span]]:
+    LIVE.update(model=0, tool=0)
+    output = run()
+    pytracer.get_tracer().flush()
+    return output, [pytracer.Span.from_json(s.to_json()) for s in sink.spans]
+
+
+def test_capture_records_each_call_once_under_its_agent_turn(seams: InMemoryTransport) -> None:
+    _, spans = _capture(seams, _run_team())
+    llm = [s for s in spans if s.kind is K.LLM]
+    tools = [s for s in spans if s.kind is K.TOOL]
+    assert len(llm) == 3 and len(tools) == 1  # no derived or duplicate AutoGen spans
+    assert not any(s.attributes.get("pytracer.derived") for s in llm)
+    agents = {s.span_id: s.agent_name for s in spans if s.kind is K.AGENT}
+    assert sorted(agents[s.parent_span_id] for s in llm) == ["critic", "writer", "writer"]
+    assert agents[tools[0].parent_span_id] == "writer"
+    assert tools[0].output == "found x"
+    assert type(llm[0].output).__name__ == "CreateResult"  # real type after the codec
+
+
+def test_full_replay_runs_nothing_live(seams: InMemoryTransport) -> None:
+    from pytracer_replay import MockSet, ReplayEngine, ReplayMode
+
+    output, spans = _capture(seams, _run_team())
+    before = dict(LIVE)
+    result = ReplayEngine(ReplayMode.FULL).replay(_run_team(), MockSet.from_trace(spans))
+    assert result.error_message is None
+    assert result.return_value == output
+    assert LIVE == before  # neither a model nor the tool ran again
+    assert result.uninstrumented is False
+    assert not result.side_effects.effects
+
+
+def test_a_changed_recording_changes_the_replay(seams: InMemoryTransport) -> None:
+    from pytracer_replay import MockSet, ReplayEngine, ReplayMode
+
+    _, spans = _capture(seams, _run_team())
+    for span in spans:
+        if span.kind is K.TOOL:
+            span.output = "nothing found"
+    strict = ReplayEngine(ReplayMode.FULL, strict=True).replay(_run_team(), MockSet.from_trace(spans))
+    assert strict.failed  # the writer's next model call was recorded after "found x"
+    assert "no recording" in (strict.error_message or "")
+
+
+def test_partial_replay_freezes_the_tool_and_runs_the_models(seams: InMemoryTransport) -> None:
+    from pytracer_replay import MockSet, ReplayEngine, ReplayMode
+
+    output, spans = _capture(seams, _run_team())
+    before = dict(LIVE)
+    result = ReplayEngine(ReplayMode.PARTIAL).replay(_run_team(), MockSet.from_trace(spans))
+    assert result.return_value == output
+    assert LIVE["tool"] == before["tool"]
+    assert LIVE["model"] == before["model"] + 3
+
+
+def test_streamed_team_run_replays(seams: InMemoryTransport) -> None:
+    from pytracer_replay import MockSet, ReplayEngine, ReplayMode
+
+    output, spans = _capture(seams, _run_team(stream=True))
+    before = dict(LIVE)
+    result = ReplayEngine(ReplayMode.FULL).replay(_run_team(stream=True), MockSet.from_trace(spans))
+    assert result.error_message is None
+    assert result.return_value == output
+    assert LIVE == before

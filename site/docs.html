@@ -397,30 +397,40 @@ pytest -v
 pip install pytracer-openai-agents    # OpenAI Agents SDK
 pip install pytracer-crewai           # CrewAI
 pip install pytracer-autogen          # AutoGen</code></pre>
-    <p id="adapter-capabilities">What each adapter captures today:</p>
+    <p id="adapter-capabilities">What each adapter captures and replays:</p>
     <table>
       <thead><tr><th></th><th>LangGraph</th><th>OpenAI Agents</th><th>CrewAI</th><th>AutoGen</th></tr></thead>
       <tbody>
         <tr><td>Agent spans</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
-        <tr><td>Model calls (model, tokens, output)</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Not emitted by AutoGen 0.7.x; with a GenAI-instrumented model client, model and tokens but no output</td></tr>
-        <tr><td>Tool calls with their output</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Tool span only; AutoGen 0.7.x reports no result</td></tr>
+        <tr><td>Model calls (model, tokens, output)</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes, from the model client's call events (the <code>autogen_ext</code> clients log them); a client that logs none has its calls rebuilt from AutoGen's replies</td></tr>
+        <tr><td>Tool calls with their output</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
         <tr><td>One trace per framework run</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
         <tr><td>Nests under an enclosing <code>pytracer.start_span(...)</code></td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
-        <tr><td>Replay through the adapter</td><td colspan="4">Not yet, for any adapter: replay needs <code>@op</code> (see below)</td></tr>
+        <tr><td>Replay through the adapter, no <code>@op</code></td><td>Yes, <code>install_seams()</code></td><td>Yes, <code>install(replayable=True)</code></td><td>Yes, <code>install_seams(listener)</code></td><td>Yes, <code>install(replayable=True)</code></td></tr>
       </tbody>
     </table>
-    <p>An adapter captures only what its framework reports. The LangGraph adapter sees
+    <p id="adapter-replay"><strong>Replaying an adapter-captured run.</strong> Switch replay on
+    and the adapter routes the framework's own model and tool calls through pyTracer:
+    LangChain chat models and tools, OpenAI Agents models and function tools, CrewAI
+    LLMs and tools, AutoGen model clients and tools. The replay engine then returns
+    their recorded results exactly as it does for <code>@op</code>: in full mode neither
+    the model nor the tools run again, in partial mode the tools stay frozen while the
+    model runs live, and streamed replies replay chunk by chunk. A model call is matched
+    on what was asked (its messages, the tools offered, the output format), not on ids
+    the framework generates per run. Without replay switched on, an adapter only
+    captures, and an adapter-only run is flagged rather than replayed live.</p>
+    <pre><code>from pytracer_langgraph import PyTracerCallbackHandler, install_seams
+
+install_seams()                     # LangGraph / LangChain
+app.invoke(inputs, config={"callbacks": [PyTracerCallbackHandler()]})</code></pre>
+    <p>An adapter sees only what goes through its framework. The LangGraph adapter sees
     calls made through LangChain, so a model call on a raw provider client, or a tool
     that is a plain Python function, is not captured; instrument those with
     <code>@op</code>. For the OpenAI Agents SDK, use the adapter's <code>install()</code>
     helper, which makes pyTracer the only trace processor; adding it with the SDK's
     <code>add_trace_processor</code> instead leaves OpenAI's own exporter in place, so
-    runs would also upload to OpenAI when a key is set. Adapters capture only:
-    replaying a captured run still needs <code>@op</code>, and an adapter-only run is
-    flagged rather than replayed live. A framework's model call has no <code>@op</code>
-    seam, so putting <code>@op</code> on your tools does not make that model call
-    replayable; full-mode replay also blocks the network, loopback included, so a
-    replay cannot reach a local model server.</p>
+    runs would also upload to OpenAI when a key is set. Full-mode replay blocks the
+    network, loopback included, so a replay cannot reach a local model server.</p>
     <p id="one-trace"><strong>One trace per request.</strong> Each framework run starts its
     own trace, so a request that uses two frameworks (or calls the same one twice)
     arrives as several traces. To get one trace, wrap the request in a pyTracer span:

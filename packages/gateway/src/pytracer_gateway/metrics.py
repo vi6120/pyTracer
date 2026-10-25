@@ -7,7 +7,8 @@ it is, the gateway mounts ``GET /metrics`` exposing:
   status code, recorded by an HTTP middleware, and
 - ``pytracer_spans_*`` counters (accepted, written, validation_failed,
   backpressured, storage_dlq) read live from the pipeline's ``Stats`` at scrape
-  time, plus ``process_*`` metrics for the gateway's CPU and memory.
+  time, ``pytracer_ingest_writer_errors_total`` (queue errors the background
+  writer logged and retried), plus ``process_*`` metrics for the gateway's CPU and memory.
 
 When the dependency is absent the mount is a no-op stub that returns 501, so the
 base install stays lean and nothing else about the gateway changes. Each app
@@ -98,9 +99,13 @@ def install_metrics(app: FastAPI, pipeline: IngestPipeline) -> None:
 
         def collect(self) -> Iterator[CounterMetricFamily]:
             for key, value in pipeline.stats.snapshot().items():
-                yield CounterMetricFamily(
-                    f"pytracer_spans_{key}", _STATS_DOCS.get(key, ""), value=value
-                )
+                if key in _STATS_DOCS:
+                    yield CounterMetricFamily(f"pytracer_spans_{key}", _STATS_DOCS[key], value=value)
+            yield CounterMetricFamily(
+                "pytracer_ingest_writer_errors",
+                "Queue or dead-letter errors the ingest writer logged and retried.",
+                value=pipeline.stats.writer_errors,
+            )
 
     registry.register(_StatsCollector())
 

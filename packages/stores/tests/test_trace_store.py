@@ -4,8 +4,10 @@ correctness, concurrency integrity, retention purge, and required git context.
 
 from __future__ import annotations
 
+import datetime as dt
 import threading
 import time
+from decimal import Decimal
 from pathlib import Path
 
 from pytracer_sdk import new_span_id, new_trace_id
@@ -126,6 +128,30 @@ def test_captured_failure_survives_gateway_store_record_and_replays_as_real_type
     # Replay: the real exception is re-raised, so the agent's except path fires.
     replayed = ReplayEngine(ReplayMode.FULL).replay(agent, MockSet.from_trace(reloaded))
     assert replayed.return_value == "handled"
+
+
+def test_typed_inputs_and_outputs_round_trip_through_the_store(trace_store: TraceStore) -> None:
+    # A span captured through the gateway and read back for `record` keeps its
+    # Decimal / date / tuple values, so the replay gets the types it had live.
+    tid = new_trace_id()
+    span = Span(
+        trace_id=tid,
+        span_id=new_span_id(),
+        name="get_item",
+        kind=SpanKind.TOOL,
+        status=SpanStatus.OK,
+        start_time_ns=NOW_NS,
+        end_time_ns=NOW_NS + 1_000_000,
+        input={"since": dt.date(2026, 1, 1)},
+        output={"price": Decimal("19.99"), "ids": (1, 2)},
+        resource=RES,
+    )
+    trace_store.insert(span, project="types")
+    (got,) = trace_store.get_trace(tid, project="types")
+    assert got.input == {"since": dt.date(2026, 1, 1)}
+    assert got.output == {"price": Decimal("19.99"), "ids": (1, 2)}
+    assert type(got.output["price"]) is Decimal
+    assert type(got.output["ids"]) is tuple
 
 
 def test_branch_and_commit_are_required(trace_store: TraceStore) -> None:

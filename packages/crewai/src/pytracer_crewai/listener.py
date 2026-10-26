@@ -121,10 +121,8 @@ class PyTracerEventListener(BaseEventListener):
 
         CrewAI delivers events to listeners on a thread pool, after the fact, so
         the agent's start event may not have been handled yet when its first model
-        call begins. Wait for the events already emitted, then use the innermost
-        open agent. The wait is normally negligible (measured at a 0.01 ms median
-        and 0.13 ms worst case per call on CrewAI 1.15); the cap only bounds a
-        stuck handler, so it cannot stall the agent noticeably.
+        call begins. Wait (at most 0.25 s, for a stuck handler) for the events
+        already emitted, then use the innermost open agent.
         """
         from crewai.events import crewai_event_bus
 

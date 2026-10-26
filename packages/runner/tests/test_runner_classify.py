@@ -59,3 +59,34 @@ def test_cannot_reproduce_when_both_miss_recordings() -> None:
     base = _run([{"name": "s", "passed": False, "error_type": "MissingMockError"}])
     cand = _run([{"name": "s", "passed": False, "error_type": "MissingMockError"}])
     assert classify_reproduction(base, cand) == {"s": Outcome.CANNOT_REPRODUCE}
+
+
+def _assertion_failure(detail: str, *, name: str = "contains") -> dict[str, Any]:
+    # A wrong answer: nothing raised (no fingerprint), an assertion failed.
+    return {
+        "name": "s", "passed": False, "fingerprint": None, "error_type": None,
+        "assertions": [
+            {"name": "no_errors", "passed": True, "detail": ""},
+            {"name": name, "passed": False, "detail": detail},
+        ],
+    }
+
+
+def test_still_failing_when_the_same_assertion_fails_the_same_way() -> None:
+    baseline = _run([_assertion_failure("'Reviewed 3 sources' not found")])
+    candidate = _run([_assertion_failure("'Reviewed 3 sources' not found")])
+    assert classify_reproduction(baseline, candidate) == {"s": Outcome.STILL_FAILING}
+
+
+def test_diverged_when_a_different_assertion_fails_or_fails_differently() -> None:
+    baseline = _run([_assertion_failure("'Reviewed 3 sources' not found")])
+    other_detail = _run([_assertion_failure("expected 'a', got 'b'")])
+    other_assertion = _run([_assertion_failure("'Reviewed 3 sources' not found", name="exact_match")])
+    assert classify_reproduction(baseline, other_detail) == {"s": Outcome.DIVERGED}
+    assert classify_reproduction(baseline, other_assertion) == {"s": Outcome.DIVERGED}
+
+
+def test_diverged_when_the_candidate_now_raises_instead() -> None:
+    baseline = _run([_assertion_failure("'Reviewed 3 sources' not found")])
+    candidate = _run([{"name": "s", "passed": False, "fingerprint": "fp1", "error_type": "KeyError"}])
+    assert classify_reproduction(baseline, candidate) == {"s": Outcome.DIVERGED}

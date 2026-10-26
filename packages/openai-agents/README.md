@@ -28,10 +28,12 @@ the SDK's own span tree.
 
 ## Alongside other frameworks
 
-CrewAI requires `openai<3`, so with CrewAI in the same environment pip installs
-OpenAI Agents 0.20.0, the last release that accepts `openai` 2.x; this adapter
-supports it. For a newer OpenAI Agents SDK, run it in an environment without
-CrewAI. See
+CrewAI requires `openai<3`, so with CrewAI in the same environment pip and uv
+install OpenAI Agents 0.20.0, the last release that accepts `openai` 2.x; this
+adapter supports it (0.20.0 is also its minimum). Asking for a newer OpenAI Agents
+SDK beside pyTracer's CrewAI adapter is reported as a conflict, not settled by
+installing an old CrewAI. For a newer OpenAI Agents SDK, run it in an environment
+without CrewAI. See
 [using several frameworks in one environment](https://pytracer.com/docs#framework-combinations).
 
 ## One trace per request

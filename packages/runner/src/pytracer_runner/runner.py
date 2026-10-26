@@ -138,8 +138,10 @@ def classify_reproduction(
     """Per-scenario cross-branch verdicts from two `pytracer run --json` outputs.
 
     For each scenario in the candidate run: if it now passes it is FIXED; if it
-    still fails with the same failure fingerprint as the baseline it is
-    STILL_FAILING; otherwise it is DIVERGED (a new, different failure).
+    still fails with the same failure fingerprint as the baseline, or (for a
+    failure that raised nothing, only failed assertions) with the same assertions
+    failing the same way, it is STILL_FAILING; otherwise it is DIVERGED (a new,
+    different failure).
     """
     base_by_name = {s["name"]: s for s in baseline.get("scenarios", [])}
     verdicts: dict[str, Outcome] = {}
@@ -160,17 +162,31 @@ def classify_reproduction(
         if scenario.get("changed_models"):
             verdicts[name] = Outcome.CANNOT_JUDGE
             continue
-        fingerprint = scenario.get("fingerprint")
-        if (
-            base is not None
-            and not base.get("passed")
-            and fingerprint is not None
-            and base.get("fingerprint") == fingerprint
-        ):
+        if base is not None and not base.get("passed") and _same_failure(scenario, base):
             verdicts[name] = Outcome.STILL_FAILING
         else:
             verdicts[name] = Outcome.DIVERGED
     return verdicts
+
+
+def _same_failure(candidate: Mapping[str, Any], baseline: Mapping[str, Any]) -> bool:
+    """Whether two failed runs of a scenario failed the same way."""
+    fingerprint = candidate.get("fingerprint")
+    if fingerprint is not None or baseline.get("fingerprint") is not None:
+        return fingerprint == baseline.get("fingerprint")
+    # Nothing raised (a fingerprint identifies an error), so the failure is the
+    # assertions: the same ones failing with the same detail is the same failure.
+    # With the recordings frozen, the same bug produces the same detail.
+    failed = _failed_assertions(candidate)
+    return bool(failed) and failed == _failed_assertions(baseline)
+
+
+def _failed_assertions(scenario: Mapping[str, Any]) -> list[tuple[Any, Any]]:
+    return sorted(
+        (str(a.get("name")), str(a.get("detail")))
+        for a in scenario.get("assertions", [])
+        if not a.get("passed")
+    )
 
 
 def _unmatched(scenario: Mapping[str, Any]) -> bool:

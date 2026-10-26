@@ -33,6 +33,12 @@
 
 ### Fixed
 
+- **`/pytracer try` and `pytracer reproduce` say "still failing" for a wrong
+  answer.** A scenario that fails only on its assertions (nothing raised) has no
+  failure fingerprint, so a branch that had not fixed it was reported as
+  "diverged", a new failure, even against identical code. The verdict now treats
+  the same assertions failing the same way as the same failure. Found by running
+  the GitHub Action templates on a real pull request.
 - **Several gateways on one Redis stream recover a crashed peer's spans.** A
   gateway reclaimed unacknowledged entries only when it started, so spans a
   crashed peer held stayed unwritten until some gateway restarted. With

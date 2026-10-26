@@ -24,6 +24,7 @@ class _Runner(Protocol):
         env_file: str | None = None,
         env_dest: str = ".env",
         evaluate_changed_prompts: bool = False,
+        install: bool | None = None,
     ) -> Any: ...
 
 
@@ -45,6 +46,7 @@ def run_reproduction(
     env_file: str | None = None,
     env_dest: str = ".env",
     evaluate_changed_prompts: bool = False,
+    install: bool | None = None,
 ) -> tuple[Any, Any, dict[str, Any]]:
     """Reproduce the collection on both refs and classify each scenario.
 
@@ -60,6 +62,7 @@ def run_reproduction(
         env_file=env_file,
         env_dest=env_dest,
         evaluate_changed_prompts=evaluate_changed_prompts,
+        install=install,
     )
     candidate = runner.reproduce(
         candidate_ref,
@@ -69,6 +72,7 @@ def run_reproduction(
         env_file=env_file,
         env_dest=env_dest,
         evaluate_changed_prompts=evaluate_changed_prompts,
+        install=install,
     )
     if baseline.results is None:
         raise RuntimeError(

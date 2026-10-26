@@ -1,7 +1,8 @@
 """OpenTelemetry span exporter that records pyTracer spans.
 
-AutoGen (0.4+) instruments agents, tool calls, and model calls with OpenTelemetry
-using the GenAI semantic conventions. Rather than hooking framework internals,
+AutoGen instruments agents, tool calls, and model calls with OpenTelemetry using
+the GenAI semantic conventions (fully from 0.7.2; older releases are captured
+through seams, see :mod:`pytracer_autogen.versions`). Rather than hooking framework internals,
 this adapter plugs a pyTracer exporter into an OpenTelemetry ``TracerProvider`` that
 AutoGen's runtime uses, and maps each finished OTel span to a pyTracer span. Because
 it keys off the standard GenAI attributes, it also works for any other
@@ -39,6 +40,7 @@ from .genai_logs import _GENAI_CONTENT, _attach_genai_log_records
 from .linking import _LinkingSpanProcessor, _RunLinker
 from .model_calls import _attach_model_call_handler, _model_output, _usage_messages
 from .tool_results import _MESSAGE_ATTR, _TOOL_CALL_ID, _tool_results, _ToolResultJoiner
+from .versions import captures_by_seams, seams_agent_turns
 
 
 class PyTracerSpanExporter(SpanExporter):
@@ -73,6 +75,9 @@ class PyTracerSpanExporter(SpanExporter):
         the agent turn (or other recorded span) AutoGen is running it in."""
         from opentelemetry import trace as otel_trace
 
+        seam = active_seam()
+        if seam is not None and seam.kind is SpanKind.AGENT and seam.span is not None:
+            return seam.span  # the agent turn recorded by its seam (older AutoGen)
         context = otel_trace.get_current_span().get_span_context()
         if self._linker is None or not context.is_valid:
             return None
@@ -339,7 +344,10 @@ def install(tracer: Tracer | None = None, *, replayable: bool = False) -> Tracer
 
     With ``replayable=True``, AutoGen's model calls and tool calls are also routed
     through pyTracer (see :mod:`pytracer_autogen.replay`), so a captured run can be
-    replayed without adding ``@op`` to anything.
+    replayed without adding ``@op`` to anything. On AutoGen releases before 0.7.2,
+    which do not report a tool's result (or, before 0.6.2, any agent or tool span),
+    the calls are always routed this way, since that is how they are captured (see
+    :mod:`pytracer_autogen.versions`).
     """
     from opentelemetry import trace as otel_trace
 
@@ -347,7 +355,7 @@ def install(tracer: Tracer | None = None, *, replayable: bool = False) -> Tracer
     otel_trace.set_tracer_provider(provider)
     # Model content from GenAI instrumentation arrives as log records (P7).
     _attach_genai_log_records()
-    if replayable:
+    if replayable or captures_by_seams():
         install_seams(exporter)
     else:
         uninstall_seams()
@@ -362,7 +370,7 @@ def install_seams(exporter: PyTracerSpanExporter) -> None:
 
     uninstall_seams()
     exporter.seams = True
-    seams = Seams(exporter.seam_parent)
+    seams = Seams(exporter.seam_parent, agent_turns=seams_agent_turns())
     seams.install()
     _installed_seams = (seams, exporter)
 

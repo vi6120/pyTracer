@@ -1,0 +1,54 @@
+# Two gateways on one Redis stream, behind Caddy's load balancer.
+#
+# Layer it over the base stack (Docker Compose 2.24 or later):
+#
+#   PYTRACER_DOMAIN=gateway.example.com docker compose \
+#     -f deploy/docker-compose.yml -f deploy/docker-compose.scale.yml \
+#     --profile tls up -d --build
+#
+# Both gateways share the durable queue (one stream, one consumer group), so a
+# span accepted by either is written once by whichever writer reads it. With
+# more than one gateway, PYTRACER_REDIS_RECLAIM_MIN_IDLE_MS must be above zero:
+# a gateway then writes, within that time, what a crashed peer took off the
+# stream but never acknowledged. Set it above the longest a write can take,
+# storage retries included (the defaults retry for under a minute).
+#
+# Caddy spreads requests over both, retries one a gateway refused (it never
+# reached that gateway, so it is not ingested twice), and stops sending to a
+# gateway whose /readyz fails until it recovers.
+
+x-reclaim: &reclaim
+  PYTRACER_REDIS_RECLAIM_MIN_IDLE_MS: ${PYTRACER_REDIS_RECLAIM_MIN_IDLE_MS:-60000}
+
+services:
+  gateway:
+    environment:
+      <<: *reclaim
+
+  gateway-2:
+    extends:
+      file: docker-compose.yml
+      service: gateway
+    container_name: pytracer-gateway-2
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *reclaim
+    # Reached only through Caddy.
+    ports: !reset []
+
+  caddy:
+    depends_on:
+      gateway:
+        condition: service_healthy
+      gateway-2:
+        condition: service_healthy
+    volumes:
+      - ./Caddyfile.scale:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config

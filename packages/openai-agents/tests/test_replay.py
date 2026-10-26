@@ -33,7 +33,9 @@ if importlib.util.find_spec("agents") is not None:
         ResponseFunctionToolCall,
         ResponseOutputMessage,
         ResponseOutputText,
+        ResponseUsage,
     )
+    from openai.types.responses.response_usage import InputTokensDetails, OutputTokensDetails
 
     @function_tool
     def weather(city: str) -> str:
@@ -74,6 +76,12 @@ if importlib.util.find_spec("agents") is not None:
                 id="resp_1", created_at=0, model="scripted", object="response",
                 output=[self.replies.pop(0)], tool_choice="auto", tools=[],
                 parallel_tool_calls=False,
+                usage=ResponseUsage(
+                    input_tokens=3, output_tokens=2, total_tokens=5,
+                    # Every detail field zeroed; which are required differs by openai release.
+                    input_tokens_details=InputTokensDetails(**dict.fromkeys(InputTokensDetails.model_fields, 0)),
+                    output_tokens_details=OutputTokensDetails(**dict.fromkeys(OutputTokensDetails.model_fields, 0)),
+                ),
             )
             yield ResponseCompletedEvent(type="response.completed", response=response, sequence_number=0)
 
@@ -131,6 +139,14 @@ def test_capture_records_model_and_tool_calls_once_under_the_agent(seams: InMemo
     assert all(s.parent_span_id == agent.span_id for s in llm + tools)
     assert tools[0].output == "sunny in Paris"
     assert type(llm[0].output).__name__ == "ModelResponse"  # real type after the codec
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_captured_model_calls_carry_their_token_counts(seams: InMemoryTransport, stream: bool) -> None:
+    # The seam records the call; the usage the model reported must still reach it.
+    _, spans = _capture(seams, _agent_fn(stream=stream))
+    llm = [s for s in spans if s.kind is SpanKind.LLM]
+    assert len(llm) == 2 and all(s.token_count == 5 for s in llm)
 
 
 def test_full_replay_runs_nothing_live(seams: InMemoryTransport) -> None:

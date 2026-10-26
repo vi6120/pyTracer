@@ -37,10 +37,16 @@ if importlib.util.find_spec("langgraph") is not None:
         LIVE["tool"] += 1
         return f"sunny in {city}"
 
+    # Each scripted reply reports its usage, as a provider's does.
+    USAGE = {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
+
     def _script() -> list[AIMessage]:
         return [
-            AIMessage(content="", tool_calls=[{"name": "lookup", "args": {"city": "Paris"}, "id": "call_1"}]),
-            AIMessage(content="It is sunny in Paris."),
+            AIMessage(
+                content="", tool_calls=[{"name": "lookup", "args": {"city": "Paris"}, "id": "call_1"}],
+                usage_metadata=USAGE,
+            ),
+            AIMessage(content="It is sunny in Paris.", usage_metadata=USAGE),
         ]
 
     class ScriptedChat(BaseChatModel):
@@ -66,10 +72,13 @@ if importlib.util.find_spec("langgraph") is not None:
                 yield ChatGenerationChunk(message=AIMessageChunk(content="", tool_call_chunks=[
                     {"name": c["name"], "args": '{"city": "Paris"}', "id": c["id"], "index": 0}
                     for c in reply.tool_calls
-                ]))
+                ], usage_metadata=USAGE))
                 return
-            for word in str(reply.content).split(" "):
-                yield ChatGenerationChunk(message=AIMessageChunk(content=word + " "))
+            words = str(reply.content).split(" ")
+            for i, word in enumerate(words):
+                # The usage arrives with the last chunk, as providers stream it.
+                last = {"usage_metadata": USAGE} if i == len(words) - 1 else {}
+                yield ChatGenerationChunk(message=AIMessageChunk(content=word + " ", **last))
 
 
 def _graph(*, stream: bool = False) -> Any:
@@ -136,6 +145,17 @@ def test_capture_records_each_call_once_under_its_node(capture: tuple[InMemoryTr
     assert [nodes.get(s.parent_span_id or "") for s in llm] == ["agent", "agent"]
     assert nodes.get(tools[0].parent_span_id or "") == "tools"
     assert type(llm[0].output).__name__ == "AIMessage"  # real type after the codec
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_captured_model_calls_carry_their_token_counts(
+    capture: tuple[InMemoryTransport, Any], stream: bool
+) -> None:
+    # The seam records the call; the usage the model reported must still reach it.
+    sink, handler = capture
+    _, spans = _recorded(sink, _run(handler, stream=stream))
+    llm = [s for s in spans if s.kind is SpanKind.LLM]
+    assert len(llm) == 2 and all(s.token_count == 5 for s in llm)
 
 
 def test_full_replay_runs_nothing_live(capture: tuple[InMemoryTransport, Any]) -> None:

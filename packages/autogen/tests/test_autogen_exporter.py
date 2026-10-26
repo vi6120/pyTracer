@@ -6,6 +6,8 @@ needed, only opentelemetry-sdk, a runtime dependency) and assert the mapping.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 import pytracer_sdk as pytracer
 from opentelemetry.trace import Status, StatusCode
@@ -363,6 +365,18 @@ def test_a_malformed_model_event_never_raises() -> None:
 # --- P7: model content sent as GenAI log records -------------------------------
 
 
+def _event_name(name: str) -> dict[str, Any]:
+    """The log record's event name in the form this OpenTelemetry supports: the
+    ``event_name`` field (1.35 and later) or the ``event.name`` attribute (before)."""
+    import inspect
+
+    from opentelemetry._logs import LogRecord
+
+    if "event_name" in inspect.signature(LogRecord.__init__).parameters:
+        return {"event_name": name}
+    return {"attributes": {"event.name": name}}
+
+
 def test_model_content_from_genai_log_records_fills_the_llm_span() -> None:
     # opentelemetry-instrumentation-openai-v2 leaves the chat span empty and sends
     # the prompt and reply as log records carrying the span's id.
@@ -383,7 +397,7 @@ def test_model_content_from_genai_log_records_fills_the_llm_span() -> None:
             ("gen_ai.user.message", {"content": "weather?"}),
             ("gen_ai.choice", {"index": 0, "message": {"role": "assistant", "content": "sunny"}}),
         ):
-            logger.emit(LogRecord(span_id=span_id, event_name=name, body=body))
+            logger.emit(LogRecord(span_id=span_id, body=body, **_event_name(name)))
     tracer.flush()
     (llm,) = [s for s in sink.spans if s.kind is K.LLM]
     assert llm.input == [

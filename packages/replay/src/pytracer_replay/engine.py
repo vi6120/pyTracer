@@ -196,6 +196,9 @@ class ReplayEngine:
         se_lock = threading.Lock()
         # Frozen model ops whose input no longer matched a recording (a prompt edit).
         model_input_changes: list[str] = []
+        # Strict-mode misses, kept so the replay fails even when the agent or its
+        # framework catches the error (an AutoGen runtime swallows a handler's).
+        strict_misses: list[MissingMockError] = []
         # Numbers each (identifier, input) call so concurrent/repeat calls resolve
         # to their recording in order; thread-safe for concurrent tool execution.
         ledger = ConcurrencyLedger()
@@ -275,12 +278,15 @@ class ReplayEngine:
                     if self.evaluate_changed_prompts:
                         return None  # fall through to a live model call
                 if self.strict:
-                    raise MissingMockError(
+                    miss = MissingMockError(
                         f"no recording for {kind.value} {tool_name or name!r} "
                         f"(occurrence {occurrence}): its input did not match any recorded "
                         f"call, so there is nothing to replay. Re-record the trace, or run "
                         f"this scenario in partial/live mode."
                     )
+                    with se_lock:
+                        strict_misses.append(miss)
+                    raise miss
             # Not mocked (or a non-strict mock miss): the op runs live. A live tool
             # call is a real external side effect; record it for the safety checks,
             # as a WRITE when the tool was declared a writer, else as an
@@ -329,6 +335,12 @@ class ReplayEngine:
             tracer.flush()
             tracer.shutdown()
             pytracer.set_tracer(previous)
+        if strict_misses and status is SpanStatus.OK:
+            # Strict means a missing recording fails the replay, even if something
+            # in the agent caught the error and the run went on.
+            status = SpanStatus.ERROR
+            error_type = type(strict_misses[0]).__name__
+            error_message = str(strict_misses[0])
 
         spans = sorted(sink.spans, key=lambda s: s.start_time_ns)
         # The run's verdict is the agent's own outcome (the value it returned or the

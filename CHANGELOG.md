@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.1.4
+
+Fixes every verdict issue an outside study on tau2-bench found in 0.1.3, captures
+every AutoGen release from 0.4.0, and hardens the gateway (it keeps writing through
+a Redis outage, and several gateways can share one stream). All 12 packages move to
+0.1.4 together. Upgrade a self-hosted gateway before the SDKs that send to it.
+
+### Behaviour changes
+
+- `reproduce` verdicts are stricter: a branch whose run left its recording is
+  `cannot_judge` even if it passed, a baseline that left it is `cannot_reproduce`,
+  and failing exactly as the baseline did is `still_failing`. Some verdicts that
+  were `fixed` or `cannot_reproduce` on 0.1.3 change.
+- With `strict: false`, a model call whose input changed no longer runs live as a
+  fallback; it fails the run unless `evaluate_changed_prompts` is set.
+- `pytracer reproduce --isolation local` installs nothing into your environment;
+  pass `--install` for the old behaviour.
+
 ### Added
 
 - **AutoGen 0.4 and later, captured in full.** AutoGen before 0.7.2 does not
@@ -147,6 +165,17 @@
   accurate description of what the AutoGen adapter captures.
 - One trace per request with `pytracer.start_span(...)`, for every adapter.
 - Queue sizing guidance in the deploy guide.
+
+### Known limitations
+
+- Replays serve the redacted recording (masked values reach the agent), and a
+  replay cannot choose its redactor.
+- `reproduce` checks out local branches only; fetch a collaborator's branch first.
+- `run --json` does not include the agent's return value or the replayed spans.
+- `fixed` means no visible failure: a side effect that never happened (a write the
+  agent skipped) fails only if an assertion checks for it (`tools_used` can).
+- ClickHouse's own system logs grow without limit in the deploy stack (about 2.8 GB
+  in six weeks with no traffic); cap them in its server config if disk matters.
 
 ## 0.1.3
 

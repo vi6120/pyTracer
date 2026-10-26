@@ -154,7 +154,10 @@ pytracer.configure(
 
 ## Operations
 
-- **Updates:** `git pull && docker compose -f deploy/docker-compose.yml --profile tls up -d --build`.
+- **Updates:** pull, then rebuild with the same env file (without `--env-file` the
+  stack restarts on its default, non-secret settings):
+  `git pull && docker compose --env-file deploy/prod.env -f deploy/docker-compose.yml --profile tls up -d --build`.
+  Upgrade the gateway before the SDKs that send to it.
 - **Backups:** back up the `clickhouse-data`, `postgres-data`, and `redis-data`
   volumes; removing them wipes the data.
 - **Hardening:** enable at-rest disk encryption on the volumes, keep the stores

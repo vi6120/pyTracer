@@ -6,4 +6,4 @@ from .listener import PyTracerEventListener, install_seams, uninstall_seams
 
 __all__ = ["PyTracerEventListener", "install_seams", "uninstall_seams"]
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"

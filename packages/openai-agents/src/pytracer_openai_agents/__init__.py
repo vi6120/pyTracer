@@ -6,4 +6,4 @@ from .processor import PyTracerTracingProcessor, install, uninstall_seams
 
 __all__ = ["PyTracerTracingProcessor", "install", "uninstall_seams"]
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"

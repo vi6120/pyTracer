@@ -40,6 +40,12 @@
   them within that time, and never reclaims its own in-flight entries. Reads from
   the trace store return each span once, since such a retry can store a span
   twice. `deploy/docker-compose.scale.yml` runs two gateways behind Caddy.
+- **The k6 load test measures ingestion.** Its spans had no `branch` or `commit`,
+  so the gateway rejected every one (answering 202, as it does for a partly
+  rejected batch) and the script counted them as accepted. Spans now carry the git
+  context, acceptance is counted from the gateway's answer, and any rejected span
+  fails the run. A `MODE=soak` constant-rate profile was added; a 30-minute soak
+  at 3,600 spans/s wrote every span exactly once (benchmarks README).
 - **Model calls keep their token counts with replay switched on.** With the
   replay routing installed (`install_seams()` for LangGraph and CrewAI,
   `install(replayable=True)` for OpenAI Agents), a model call recorded through it

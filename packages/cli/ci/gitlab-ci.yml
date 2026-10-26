@@ -1,8 +1,18 @@
 # pyTracer agent-tests GitLab CI template - a thin wrapper around `pytracer run`.
 # Include this job in your .gitlab-ci.yml. JUnit output is surfaced in the
 # merge-request test report.
+#
+# The job runs in merge-request pipelines and in branch pipelines, once per
+# change: for a branch with an open merge request it runs in the merge-request
+# pipeline only, so it never runs twice for the same commit. On gitlab.com,
+# shared runners start pipelines only for a verified account.
 pytracer-agent-tests:
   image: python:3.12
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
   script:
     - pip install pytracer-cli
     - pytracer run tests/collection.yaml --junit pytracer-results.xml --comment pytracer-comment.md

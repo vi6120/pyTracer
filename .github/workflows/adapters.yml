@@ -7,8 +7,10 @@ name: adapters
 # installs the four together, at the versions pip resolves for them jointly
 # (CrewAI's openai<3 caps OpenAI Agents at 0.20.0, and AutoGen's protobuf pin
 # selects googleapis-common-protos 1.75.0); the other groups cover each framework
-# at newer versions than that combination allows. Framework versions are pinned to
-# the ones the adapters were verified against; bump them deliberately.
+# at newer versions than that combination allows, and minimum-versions at the
+# oldest versions the adapters declare. Framework versions are pinned to the ones
+# the adapters were verified against; bump them deliberately, and move an adapter's
+# floor and the minimum-versions pins together.
 
 on:
   push:
@@ -48,6 +50,19 @@ jobs:
               langgraph==1.2.17 langgraph-prebuilt==1.1.1 httpx
             store_tests: "langgraph or autogen or crewai or openai_agents"
             # The openai-v2 instrumentation test runs in the langgraph-autogen group.
+            pytest_args: "--deselect tests/test_genai_instrumentation.py"
+          # The oldest versions the adapters declare, installed exactly, so the lower
+          # bound of every supported range is tested, not only the newest versions.
+          # CrewAI's floor (1.15.20) is the crewai group's pin; it cannot join this
+          # group because it requires a newer OpenTelemetry than AutoGen's floor.
+          - group: minimum-versions
+            adapters: "packages/langgraph packages/autogen packages/openai-agents"
+            frameworks: >-
+              langgraph==1.2.11 langgraph-prebuilt==1.1.0 langchain-core==1.4.7
+              autogen-agentchat==0.7.5 autogen-core==0.7.5
+              opentelemetry-sdk==1.34.1 opentelemetry-api==1.34.1
+              openai-agents==0.20.0 httpx==0.28.1
+            store_tests: "langgraph or autogen or openai_agents"
             pytest_args: "--deselect tests/test_genai_instrumentation.py"
     name: acceptance (${{ matrix.group }})
     services:

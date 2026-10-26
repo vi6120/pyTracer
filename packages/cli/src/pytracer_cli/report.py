@@ -49,6 +49,7 @@ def to_json(result: CollectionResult) -> dict[str, Any]:
                 # live; cross-branch verdicts never trust a run that left it.
                 "unrecorded_calls": s.replay.unrecorded_calls,
                 "live_fallbacks": s.replay.live_fallbacks,
+                "divergences": s.replay.divergences,
                 "evaluated_changed_prompts": s.replay.evaluated_changed_prompts,
                 "concurrency_ambiguities": s.replay.concurrency_ambiguities,
                 "assertions": [

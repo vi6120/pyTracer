@@ -22,6 +22,7 @@ class FakeRunner:
         self._by_ref = by_ref
         self.calls: list[tuple[str, str, Any, Any, Any, Any]] = []
         self.evaluate_flags: list[bool] = []
+        self.install_flags: list[bool | None] = []
 
     def reproduce(
         self,
@@ -33,9 +34,11 @@ class FakeRunner:
         env_file: Any = None,
         env_dest: Any = ".env",
         evaluate_changed_prompts: bool = False,
+        install: bool | None = None,
     ) -> _Result:
         self.calls.append((ref, collection_path, frozen_trace, trace_dest, env_file, env_dest))
         self.evaluate_flags.append(evaluate_changed_prompts)
+        self.install_flags.append(install)
         return _Result(self._by_ref[ref])
 
 
@@ -112,6 +115,17 @@ def test_evaluate_changed_prompts_is_passed_to_both_refs() -> None:
         classify=classify_reproduction, evaluate_changed_prompts=True,
     )
     assert runner.evaluate_flags == [True, True]
+
+
+def test_install_choice_is_passed_to_both_refs() -> None:
+    same = _run([{"name": "s", "passed": True}])
+    for choice in (None, True, False):
+        runner = FakeRunner({"main": same, "feature": same})
+        run_reproduction(
+            runner, collection_path="c.yaml", baseline_ref="main", candidate_ref="feature",
+            classify=classify_reproduction, install=choice,
+        )
+        assert runner.install_flags == [choice, choice]
 
 
 def test_missing_results_error_shows_full_stderr() -> None:

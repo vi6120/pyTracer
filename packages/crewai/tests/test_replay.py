@@ -59,6 +59,8 @@ def _crew_fn() -> Any:
 
         def call(self, messages: Any, *args: Any, **kwargs: Any) -> str:
             LIVE["model"] += 1
+            # Report usage as CrewAI's provider LLMs do.
+            self._track_token_usage_internal({"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5})
             return REPLIES[self._turn()]
 
         def _turn(self) -> int:
@@ -104,6 +106,14 @@ def test_capture_records_each_call_once_under_the_agent(capture: tuple[InMemoryT
     agent = next(s for s in spans if s.kind is SpanKind.AGENT and s.name == "forecaster")
     assert all(s.parent_span_id == agent.span_id for s in llm + tools)
     assert tools[0].output == "sunny in Paris"
+
+
+def test_captured_model_calls_carry_their_token_counts(capture: tuple[InMemoryTransport, Any]) -> None:
+    # The seam records the call; the usage the LLM reported must still reach it.
+    sink, run = capture
+    _, spans = _recorded(sink, run)
+    llm = [s for s in spans if s.kind is SpanKind.LLM]
+    assert len(llm) == 2 and all(s.token_count == 5 for s in llm)
 
 
 def test_full_replay_runs_nothing_live(capture: tuple[InMemoryTransport, Any]) -> None:

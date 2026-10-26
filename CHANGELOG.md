@@ -33,6 +33,13 @@
 
 ### Fixed
 
+- **Model calls keep their token counts with replay switched on.** With the
+  replay routing installed (`install_seams()` for LangGraph and CrewAI,
+  `install(replayable=True)` for OpenAI Agents), a model call recorded through it
+  had no token count: the framework's own report of the usage was dropped. It now
+  reaches the call's span (LangGraph from its callback, CrewAI from its usage tally,
+  OpenAI Agents from the response), for streamed calls too. Adapters can credit
+  usage with the new `pytracer_sdk.seam.add_tokens`.
 - **The GitLab template runs in merge-request pipelines.** Its job had no `rules:`,
   so a project using merge-request pipelines got an empty pipeline. It now runs in
   merge-request and branch pipelines, once per change (only in the merge-request

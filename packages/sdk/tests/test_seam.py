@@ -295,3 +295,40 @@ def test_a_token_reader_that_fails_never_fails_the_call() -> None:
     tracer.flush()
     (span,) = sink.spans
     assert span.token_count is None
+
+
+def test_tokens_reported_during_a_seam_call_are_credited_to_it() -> None:
+    from pytracer_sdk.seam import add_tokens
+
+    tracer, sink = _tracer()
+
+    def model() -> str:
+        add_tokens(3)  # e.g. a callback or a running usage tally
+        add_tokens(2)
+        return "reply"
+
+    def counted() -> dict[str, int]:
+        add_tokens(99)  # ignored: the seam's own reader found a count in the result
+        return {"usage": 4}
+
+    call_through(model, kind=SpanKind.LLM, name="m", tracer=tracer)
+    call_through(counted, kind=SpanKind.LLM, name="m", tokens=lambda out: out["usage"], tracer=tracer)
+    tracer.flush()
+    assert [s.token_count for s in sink.spans] == [5, 4]
+    assert add_tokens(7) is False  # no seam call running here
+
+
+def test_an_adopted_run_hands_its_token_count_to_the_seam_span() -> None:
+    tracer, sink = _tracer()
+    recorder = SpanRecorder(tracer)
+
+    def model() -> str:
+        # The framework's callback sees the call, adopts the seam, and reports usage.
+        assert recorder.adopt("run-1", SpanKind.LLM)
+        recorder.end("run-1", output="ignored", token_count=11)
+        return "reply"
+
+    call_through(model, kind=SpanKind.LLM, name="m", tracer=tracer)
+    tracer.flush()
+    (span,) = sink.spans
+    assert span.token_count == 11 and span.output == "reply"

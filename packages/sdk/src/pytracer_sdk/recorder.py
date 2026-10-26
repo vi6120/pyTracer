@@ -126,9 +126,15 @@ class SpanRecorder:
         """
         with self._lock:
             span = self._open.pop(run_id, None)
-            if span is None:
-                self._adopted.pop(run_id, None)  # a seam span closes itself
+            adopted = self._adopted.pop(run_id, None) if span is None else None
         if span is None:
+            if adopted is not None and token_count:
+                # The seam span closes itself; the usage reported here belongs on it.
+                from .seam import active_seam, add_tokens  # late: seam imports the tracer
+
+                seam = active_seam()
+                if seam is not None and seam.span == adopted:
+                    add_tokens(token_count)
             return
 
         redactor = self._tracer.redactor

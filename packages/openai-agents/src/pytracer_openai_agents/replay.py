@@ -62,6 +62,30 @@ def _model_name(model: Any) -> str:
     return str(name) if isinstance(name, str) and name else type(model).__name__
 
 
+def _usage_tokens(usage: Any) -> int | None:
+    """Total tokens of an Agents SDK ``Usage`` or an OpenAI ``ResponseUsage``."""
+    if usage is None:
+        return None
+    total = getattr(usage, "total_tokens", None)
+    if total:
+        return int(total)
+    count = int(getattr(usage, "input_tokens", 0) or 0) + int(getattr(usage, "output_tokens", 0) or 0)
+    return count or None
+
+
+def _response_tokens(output: Any) -> int | None:
+    """A model call's tokens: ``ModelResponse.usage``, or for a stream the usage on
+    its ``response.completed`` event."""
+    if isinstance(output, list):
+        for event in reversed(output):
+            response = getattr(event, "response", None)
+            found = _usage_tokens(getattr(response, "usage", None))
+            if found:
+                return found
+        return None
+    return _usage_tokens(getattr(output, "usage", None))
+
+
 # Bind against the Model interface, not the subclass: a subclass may declare
 # ``(*args, **kwargs)``, and the key must name the same arguments either way.
 _GET_RESPONSE = inspect.signature(Model.get_response)
@@ -76,7 +100,7 @@ def _wrap_get_response(original: Callable[..., Any], parent: ParentResolver) -> 
         bound = signature.bind(self, *args, **kwargs)
         return await acall_through(
             original, (self, *args), kwargs, kind=SpanKind.LLM, name=_model_name(self),
-            input=_model_key(bound), parent=parent(),
+            tokens=_response_tokens, input=_model_key(bound), parent=parent(),
         )
 
     return get_response
@@ -90,7 +114,7 @@ def _wrap_stream_response(original: Callable[..., Any], parent: ParentResolver) 
         bound = signature.bind(self, *args, **kwargs)
         return astream_through(
             original, (self, *args), kwargs, kind=SpanKind.LLM, name=_model_name(self),
-            input=_model_key(bound), parent=parent(),
+            tokens=_response_tokens, input=_model_key(bound), parent=parent(),
         )
 
     return stream_response

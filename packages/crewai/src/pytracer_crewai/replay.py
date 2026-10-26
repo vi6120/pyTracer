@@ -13,6 +13,10 @@ boundaries are routed through pyTracer's op path (``pytracer_sdk.seam``):
 A model call's recorded input is what was asked: the messages, the tools
 offered, and the response model, without CrewAI's callbacks, agent and task
 objects, or the functions it passes for native tool calls.
+
+A model call's token count comes from CrewAI's own usage tally: each provider LLM
+adds a call's usage through ``BaseLLM._track_token_usage_internal`` while the call
+runs, and that increment is credited to the call's seam span.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from __future__ import annotations
 import functools
 import inspect
 import json
+import threading
 from collections.abc import Callable
 from typing import Any
 
@@ -27,7 +32,14 @@ from crewai.llms.base_llm import BaseLLM
 from crewai.tools import BaseTool
 from crewai.tools.structured_tool import CrewStructuredTool
 from pytracer_sdk import SpanKind
-from pytracer_sdk.seam import ClassSeams, acall_through, call_through, key_data, tool_names
+from pytracer_sdk.seam import (
+    ClassSeams,
+    acall_through,
+    add_tokens,
+    call_through,
+    key_data,
+    tool_names,
+)
 from pytracer_sdk.tracer import SpanContext
 
 # Resolves the pyTracer span a seam call should nest under (set by install).
@@ -123,6 +135,24 @@ def _wrap_tool(name: str, original: Callable[..., Any], parent: ParentResolver) 
     return wrapper
 
 
+# Held only around CrewAI's own tally update, so concurrent calls on one LLM each
+# credit exactly their own increment.
+_TALLY = threading.Lock()
+
+
+def _wrap_track_usage(original: Callable[..., Any]) -> Callable[..., Any]:
+    @functools.wraps(original)
+    def track(self: Any, *args: Any, **kwargs: Any) -> Any:
+        with _TALLY:
+            before = int(self._token_usage.get("total_tokens", 0))
+            result = original(self, *args, **kwargs)
+            added = int(self._token_usage.get("total_tokens", 0)) - before
+        add_tokens(added)  # to the model call's seam span running here
+        return result
+
+    return track
+
+
 class Seams:
     """The installed CrewAI seams: every BaseLLM, BaseTool and CrewStructuredTool
     class, including the native provider LLM classes CrewAI imports lazily (when
@@ -136,7 +166,11 @@ class Seams:
             return _wrap_tool(name, original, parent)
 
         self._classes = ClassSeams({
-            BaseLLM: [("call", call), ("acall", call)],
+            BaseLLM: [
+                ("call", call),
+                ("acall", call),
+                ("_track_token_usage_internal", lambda _, original: _wrap_track_usage(original)),
+            ],
             BaseTool: [("run", tool), ("arun", tool)],
             CrewStructuredTool: [("invoke", tool), ("ainvoke", tool)],
         })

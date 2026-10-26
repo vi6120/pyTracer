@@ -48,6 +48,8 @@ class SeamCall:
 
     kind: SpanKind
     span: SpanContext | None  # the span recording this call
+    # Token counts the framework reported while the call ran (see add_tokens).
+    tokens: list[int] = dataclasses.field(default_factory=list, compare=False)
 
 
 _active: contextvars.ContextVar[SeamCall | None] = contextvars.ContextVar(
@@ -58,6 +60,33 @@ _active: contextvars.ContextVar[SeamCall | None] = contextvars.ContextVar(
 def active_seam() -> SeamCall | None:
     """The seam call running in this context, if any."""
     return _active.get()
+
+
+def add_tokens(count: int | None) -> bool:
+    """Credit ``count`` tokens to the seam call running in this context.
+
+    For a framework that reports a call's usage somewhere other than its result (a
+    callback, an event, a running tally): the seam span records the sum, unless the
+    seam's own ``tokens`` reader found a count in the result. Returns False when no
+    seam call is running here.
+    """
+    seam = _active.get()
+    if seam is None or not count:
+        return False
+    seam.tokens.append(int(count))
+    return True
+
+
+def _token_reader(
+    read: Callable[[Any], int | None] | None, tally: list[int]
+) -> Callable[[Any], int | None]:
+    """The seam's token count: from its result if ``read`` finds one, else the tally."""
+
+    def count(output: Any) -> int | None:
+        found = read(output) if read is not None else None
+        return found if found else (sum(tally) or None)
+
+    return count
 
 
 def _meta(
@@ -102,18 +131,19 @@ def call_through(
 ) -> Any:
     """Run a framework's sync call through the op path (recordable, replayable)."""
     kwargs = kwargs or {}
+    tally: list[int] = []
     if _nested(kind):
         return fn(*args, **kwargs)
 
     def body(*a: Any, **k: Any) -> Any:
-        token = _active.set(SeamCall(kind, _current.get()))
+        token = _active.set(SeamCall(kind, _current.get(), tally))
         try:
             return fn(*a, **k)
         finally:
             _active.reset(token)
 
     return _resolve(tracer).call_op(
-        body, args, kwargs, _meta(kind, name, tool_name, agent_name, tokens), op_input=input, parent=parent
+        body, args, kwargs, _meta(kind, name, tool_name, agent_name, _token_reader(tokens, tally)), op_input=input, parent=parent
     )
 
 
@@ -133,18 +163,19 @@ async def acall_through(
 ) -> Any:
     """Async counterpart of :func:`call_through`."""
     kwargs = kwargs or {}
+    tally: list[int] = []
     if _nested(kind):
         return await fn(*args, **kwargs)
 
     async def body(*a: Any, **k: Any) -> Any:
-        token = _active.set(SeamCall(kind, _current.get()))
+        token = _active.set(SeamCall(kind, _current.get(), tally))
         try:
             return await fn(*a, **k)
         finally:
             _active.reset(token)
 
     return await _resolve(tracer).acall_op(
-        body, args, kwargs, _meta(kind, name, tool_name, agent_name, tokens), op_input=input, parent=parent
+        body, args, kwargs, _meta(kind, name, tool_name, agent_name, _token_reader(tokens, tally)), op_input=input, parent=parent
     )
 
 
@@ -172,18 +203,19 @@ def stream_through(
     consumer that only collects chunks.
     """
     kwargs = kwargs or {}
+    tally: list[int] = []
     if _nested(kind):
         return fn(*args, **kwargs)
 
     def body(*a: Any, **k: Any) -> Any:
-        token = _active.set(SeamCall(kind, _current.get()))
+        token = _active.set(SeamCall(kind, _current.get(), tally))
         try:
             yield from fn(*a, **k)
         finally:
             _reset(token)
 
     return _resolve(tracer).call_gen_op(
-        body, args, kwargs, _meta(kind, name, tool_name, agent_name, tokens), op_input=input, parent=parent
+        body, args, kwargs, _meta(kind, name, tool_name, agent_name, _token_reader(tokens, tally)), op_input=input, parent=parent
     )
 
 
@@ -203,11 +235,12 @@ def astream_through(
 ) -> Any:
     """Async-generator counterpart of :func:`stream_through`."""
     kwargs = kwargs or {}
+    tally: list[int] = []
     if _nested(kind):
         return fn(*args, **kwargs)
 
     async def body(*a: Any, **k: Any) -> Any:
-        token = _active.set(SeamCall(kind, _current.get()))
+        token = _active.set(SeamCall(kind, _current.get(), tally))
         try:
             async for item in fn(*a, **k):
                 yield item
@@ -215,7 +248,7 @@ def astream_through(
             _reset(token)
 
     return _resolve(tracer).call_async_gen_op(
-        body, args, kwargs, _meta(kind, name, tool_name, agent_name, tokens), op_input=input, parent=parent
+        body, args, kwargs, _meta(kind, name, tool_name, agent_name, _token_reader(tokens, tally)), op_input=input, parent=parent
     )
 
 

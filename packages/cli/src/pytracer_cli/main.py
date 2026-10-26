@@ -339,7 +339,8 @@ def reproduce(
     """Reproduce a captured failure on another branch.
 
     Reports fixed / still failing / diverged, or an honest non-verdict: cannot
-    judge (a model input changed) or cannot reproduce (recordings did not match).
+    judge (the branch left its recordings, so its outcome is not frozen) or cannot
+    reproduce (the baseline left them, so it never reproduced the failure).
     """
     try:
         from pytracer_runner import (

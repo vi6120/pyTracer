@@ -208,7 +208,7 @@ def test_concurrent_writes_no_loss_or_duplication(trace_store: TraceStore) -> No
 
     def worker() -> None:
         # Each thread uses its own client/store instance.
-        store = TraceStore(cfg, table=trace_store._table)  # type: ignore[attr-defined]
+        store = TraceStore(cfg, table=trace_store.table)
         try:
             store.insert([_span(name="c") for _ in range(per_thread)], project="conc")
         except Exception as exc:  # noqa: BLE001

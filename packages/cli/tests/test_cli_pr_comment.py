@@ -8,7 +8,9 @@ network.
 from __future__ import annotations
 
 import json
+import re
 import urllib.parse
+from pathlib import Path
 from typing import Any
 
 from pytracer_cli.github import CommentRef, GitHubClient
@@ -216,3 +218,33 @@ def test_post_updates_when_present() -> None:
     assert client.updated and not client.created
     assert client.updated[0][0] == 99
     assert url == "https://gh/c/99"
+
+
+# Emoji (pictographs, dingbats such as check and cross marks, warning signs) and
+# GitHub emoji shortcodes such as :white_check_mark: (not Sphinx roles such as
+# :func:`name`, which a backtick follows).
+_EMOJI = re.compile(
+    "[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F]|:[a-z0-9_+-]+:(?![`0-9])"
+)
+
+
+def test_verdicts_are_plain_words_without_emoji() -> None:
+    every_outcome = {f"s{i}": outcome for i, outcome in enumerate(Outcome)}
+    for verdicts in (every_outcome, {"a": Outcome.FIXED}):
+        body = render_comment(
+            candidate_ref="fix", baseline_ref="main", verdicts=verdicts,
+            changed_models={"s0": ["agent_llm"]},
+        )
+        assert not _EMOJI.search(body.replace(COMMENT_MARKER, "")), body
+
+
+def test_no_package_source_contains_emoji() -> None:
+    # Verdicts, replay results and CLI output stay plain text everywhere.
+    packages = Path(__file__).resolve().parents[2]
+    found = [
+        f"{path.relative_to(packages)}:{number}"
+        for path in packages.glob("*/src/**/*.py")
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if _EMOJI.search(line)
+    ]
+    assert found == []

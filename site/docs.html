@@ -455,31 +455,38 @@ app.invoke(inputs, config={"callbacks": [PyTracerCallbackHandler()]})</code></pr
     <h3 id="framework-combinations">Using several frameworks in one environment</h3>
     <p>All four frameworks install and run together in one Python environment, and
     every pyTracer adapter works there: CI installs them side by side and runs each
-    adapter's capture and replay tests. Two constraints come from the frameworks' own
-    dependencies, not from pyTracer:</p>
+    adapter's capture and replay tests. Each adapter requires at least the oldest
+    framework version CI tests (CrewAI 1.15.20, OpenAI Agents 0.20.0, langchain-core
+    1.4.7), and CI runs the adapters at those minimums as well as at current releases.
+    Two constraints come from the frameworks' own dependencies, not from pyTracer:</p>
     <table>
       <thead><tr><th>Combination</th><th>What happens</th><th>What to do</th></tr></thead>
       <tbody>
         <tr><td>CrewAI with the OpenAI Agents SDK</td>
           <td>CrewAI (through 1.15.30) requires <code>openai&lt;3</code>; OpenAI Agents
           0.21 and later require <code>openai&gt;=3</code>. Installed together, pip
-          settles on OpenAI Agents <strong>0.20.0</strong>, the last release that
-          accepts <code>openai</code> 2.x, without saying so.</td>
+          and uv settle on OpenAI Agents <strong>0.20.0</strong>, the last release
+          that accepts <code>openai</code> 2.x, without saying so. Asking for a newer
+          OpenAI Agents SDK beside pyTracer's CrewAI adapter is reported as a
+          conflict: the adapter requires CrewAI 1.15.20 or later, the oldest it is
+          tested with, so the installer cannot settle it by picking an old CrewAI
+          (without that floor, both pick CrewAI 1.6.1).</td>
           <td>Use OpenAI Agents 0.20.0 alongside CrewAI (the pyTracer adapter supports
           it), or run the two in separate environments if you need a newer OpenAI
           Agents SDK.</td></tr>
         <tr><td>AutoGen with anything that brings in <code>googleapis-common-protos</code>
-          (CrewAI does, through <code>chromadb</code>)</td>
-          <td>AutoGen 0.7.5, its latest release (September 2025), pins <code>protobuf~=5.29.3</code>, and
-          <code>googleapis-common-protos</code> 1.75.1 and later need
-          <code>protobuf&gt;=6.33.5</code>. Resolved together, pip picks 1.75.0 and all
+          (CrewAI does, through <code>opentelemetry-exporter-otlp-proto-http</code>
+          and <code>chromadb</code>)</td>
+          <td>AutoGen 0.7.5, its latest release (September 2025), pins <code>protobuf~=5.29.3</code>.
+          AutoGen does not use <code>googleapis-common-protos</code> itself, but
+          1.75.1 and later need <code>protobuf&gt;=6.33.5</code>, which the pin rules out. Resolved together, pip picks 1.75.0 and all
           is well. But adding AutoGen to an environment that already has a newer
           <code>googleapis-common-protos</code> downgrades protobuf and leaves the newer
           package behind; pip only warns, and the next import fails with
           <code>VersionError: Detected incompatible Protobuf Gencode/Runtime
           versions</code>.</td>
           <td>Install all frameworks in one command or from one lock file
-          (<code>uv lock</code>, <code>pip-compile</code>), or repair an existing
+          (<code>uv lock</code>, <code>pip-compile</code>; verified with pip and uv), or repair an existing
           environment with <code>pip install "googleapis-common-protos&lt;1.75.1"</code>.
           AutoGen is in maintenance mode, so the pin is unlikely to change soon.</td></tr>
       </tbody>

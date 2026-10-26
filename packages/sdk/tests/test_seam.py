@@ -251,3 +251,47 @@ def test_a_run_adopted_inside_a_stream_nests_under_the_stream_span() -> None:
     tracer.flush()
     by_name = {s.name: s for s in sink.spans}
     assert by_name["child"].parent_span_id == by_name["m"].span_id
+
+
+def test_a_seam_call_records_its_agent_name_and_the_tokens_its_output_reports() -> None:
+    tracer, sink = _tracer()
+
+    async def turn(task: str) -> dict[str, Any]:
+        return {"reply": "done", "usage": 7}
+
+    async def stream(task: str) -> Any:
+        yield {"chunk": "do"}
+        yield {"reply": "done", "usage": 9}
+
+    def usage(output: Any) -> int | None:
+        last = output[-1] if isinstance(output, list) else output
+        return last.get("usage")
+
+    asyncio.run(acall_through(
+        turn, ("t",), kind=SpanKind.AGENT, name="invoke_agent writer", agent_name="writer",
+        tokens=usage, tracer=tracer,
+    ))
+
+    async def consume() -> None:
+        async for _ in astream_through(
+            stream, ("t",), kind=SpanKind.LLM, name="model", tokens=usage, tracer=tracer
+        ):
+            pass
+
+    asyncio.run(consume())
+    tracer.flush()
+    agent, model = sink.spans
+    assert agent.agent_name == "writer" and agent.token_count == 7
+    assert model.token_count == 9  # from the stream's last item
+
+
+def test_a_token_reader_that_fails_never_fails_the_call() -> None:
+    tracer, sink = _tracer()
+
+    def broken(output: Any) -> int | None:
+        raise KeyError("usage")
+
+    assert call_through(lambda: "ok", kind=SpanKind.LLM, name="m", tokens=broken, tracer=tracer) == "ok"
+    tracer.flush()
+    (span,) = sink.spans
+    assert span.token_count is None

@@ -17,12 +17,14 @@ from .github import CommentRef
 # Hidden HTML comment used to find and update our own comment on re-runs.
 COMMENT_MARKER = "<!-- pytracer:try-on-branch -->"
 
+# Plain words, no emoji: a verdict reads the same in a PR, a log, an email or a
+# screen reader.
 _LABELS = {
-    "fixed": ":white_check_mark: fixed",
-    "still_failing": ":x: still failing",
-    "diverged": ":warning: diverged",
-    "cannot_judge": ":grey_question: cannot judge (a model input changed)",
-    "cannot_reproduce": ":grey_question: cannot reproduce (recordings did not match)",
+    "fixed": "fixed",
+    "still_failing": "still failing",
+    "diverged": "diverged",
+    "cannot_judge": "cannot judge (a model input changed)",
+    "cannot_reproduce": "cannot reproduce (recordings did not match)",
 }
 
 
@@ -72,7 +74,7 @@ def render_comment(
     if total == 0:
         summary = "No scenarios ran."
     elif fixed == total:
-        summary = f"**All {total} scenario(s) fixed on this branch.** :tada:"
+        summary = f"**All {total} scenario(s) fixed on this branch.**"
     else:
         parts: list[str] = []
         if counts.get("still_failing"):

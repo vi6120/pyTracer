@@ -63,7 +63,8 @@ services:
     ports:
       - "8080:8080"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      # Readiness: the ingest writer is running (as in deploy/docker-compose.yml).
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/readyz')"]
       interval: 10s
       timeout: 3s
       retries: 10

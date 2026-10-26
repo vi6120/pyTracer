@@ -146,3 +146,60 @@ def test_a_model_change_evaluated_live_on_request_is_judged() -> None:
 def test_a_tool_miss_is_not_excused_by_evaluating_model_changes() -> None:
     cand = _run([_scenario(passed=True, unrecorded=["tool 'exchange'", "llm 'agent'"], evaluated=True)])
     assert classify_reproduction(BASE, cand) == {"s": Outcome.CANNOT_JUDGE}
+
+
+# --- Why there is no verdict (partner study, gap 2) ------------------------------
+
+def _diverged(*first: tuple[str, str, str, bool]) -> dict[str, Any]:
+    divergences = [
+        {"call": f"{kind} {op!r}", "kind": kind, "op": op, "reason": reason, "ran_live": live}
+        for kind, op, reason, live in first
+    ]
+    return _run([{
+        **_scenario(passed=False, fp="other", error="MissingMockError",
+                    unrecorded=[d["call"] for d in divergences]),
+        "divergences": divergences,
+    }])
+
+
+def test_a_changed_tool_call_is_named_and_not_blamed_on_a_prompt() -> None:
+    # The fix changes the exchange call's arguments; the model input changes only
+    # because the agent fed it the miss. The reason must name the tool.
+    from pytracer_runner import explain_reproduction
+
+    cand = _diverged(("tool", "exchange_items", "changed_input", False),
+                     ("llm", "agent_llm", "changed_input", False))
+    verdicts = classify_reproduction(BASE, cand)
+    assert verdicts == {"s": Outcome.CANNOT_JUDGE}
+    reason = explain_reproduction(BASE, cand, verdicts)["s"]
+    assert "tool 'exchange_items' with arguments the recording does not have" in reason
+    assert "re-record" in reason and "evaluate-changed-prompts" not in reason
+    assert "1 later call(s)" in reason
+
+
+def test_a_changed_model_input_first_gets_the_prompt_advice() -> None:
+    from pytracer_runner import explain_reproduction
+
+    cand = _diverged(("llm", "agent_llm", "changed_input", False))
+    verdicts = classify_reproduction(BASE, cand)
+    reason = explain_reproduction(BASE, cand, verdicts)["s"]
+    assert "model 'agent_llm'" in reason and "--evaluate-changed-prompts" in reason
+
+
+def test_a_baseline_that_left_its_recording_is_explained() -> None:
+    from pytracer_runner import explain_reproduction
+
+    base = _diverged(("llm", "user_llm", "changed_input", True))
+    cand = _run([_scenario(passed=True)])
+    verdicts = classify_reproduction(base, cand)
+    assert verdicts == {"s": Outcome.CANNOT_REPRODUCE}
+    reason = explain_reproduction(base, cand, verdicts)["s"]
+    assert reason.startswith("The baseline sends model 'user_llm'") and "(it ran live)" in reason
+    assert "--env-file" in reason
+
+
+def test_only_non_verdicts_get_a_reason() -> None:
+    from pytracer_runner import explain_reproduction
+
+    fixed = _run([_scenario(passed=True)])
+    assert explain_reproduction(BASE, fixed, classify_reproduction(BASE, fixed)) == {}

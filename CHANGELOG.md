@@ -40,6 +40,14 @@
   pyTracer itself. Local runs now install nothing and use the interpreter running
   `pytracer`; Docker runs still install in their container. `--install/--no-install`
   overrides either (`--no-install` also suits environments without pip, such as uv's).
+- **`cannot_judge` and `cannot_reproduce` say why.** Every non-verdict now names
+  the first call that left the recording and how (different arguments, more calls
+  than recorded, or a call never recorded), in the terminal and the PR comment, and
+  only a changed model input gets the `--evaluate-changed-prompts` advice; a changed
+  tool call is told to re-record. Before, every `cannot_judge` blamed a prompt edit,
+  even when the branch had only changed a tool call. `ReplayResult.divergences` and
+  `run --json` carry each miss with its reason; `explain_reproduction` turns them
+  into the message.
 - **Cross-branch verdicts never trust a run that left its recording.** A branch
   that passed was reported `fixed` even when its calls had run live, while one that
   failed the same way was reported as an abstention, so a broken branch could be

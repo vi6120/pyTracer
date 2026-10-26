@@ -160,3 +160,10 @@ def test_format_verdicts_hints_the_inconclusive_outcomes() -> None:
     table = format_verdicts({"a": Outcome.CANNOT_REPRODUCE, "b": Outcome.CANNOT_JUDGE})
     assert "cannot_reproduce" in table and "--env-file" in table
     assert "cannot_judge" in table and "--evaluate-changed-prompts" in table
+
+
+def test_format_verdicts_prints_each_reason_instead_of_the_generic_hint() -> None:
+    reason = "The branch calls tool 'exchange' with arguments the recording does not have."
+    table = format_verdicts({"s": Outcome.CANNOT_JUDGE}, {"s": reason})
+    assert f"s: {reason}" in table
+    assert "evaluate-changed-prompts" not in table  # the generic prompt hint is not added

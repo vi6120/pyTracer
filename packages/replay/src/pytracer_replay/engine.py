@@ -16,6 +16,7 @@ from collections.abc import Callable, Iterable
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 import pytracer_sdk as pytracer
 from pytracer_sdk import InMemoryTransport, Intercept, Resource, Span, SpanKind, SpanStatus, Tracer
@@ -117,6 +118,11 @@ class ReplayResult:
     # The frozen calls among those that then ran live instead (a tool when strict is
     # off, a model with evaluate_changed_prompts), so the outcome was not frozen.
     live_fallbacks: list[str] = field(default_factory=list)
+    # The same misses with why each happened, in order: ``{"call", "kind", "op",
+    # "reason", "ran_live"}``, where ``reason`` is ``extra_call``, ``changed_input``
+    # or ``not_recorded`` (see ``MockSet.miss_reason``). The first is where the run
+    # left its recording, which is what a cross-branch verdict reports.
+    divergences: list[dict[str, Any]] = field(default_factory=list)
     # Identifiers of ops called concurrently from different OS threads with the same
     # input, under the same caller (or no caller op), but differing recorded
     # responses: nothing distinguishes those calls, so the match may be swapped
@@ -208,6 +214,7 @@ class ReplayEngine:
         strict_misses: list[MissingMockError] = []
         unrecorded_calls: list[str] = []
         live_fallbacks: list[str] = []
+        divergences: list[dict[str, Any]] = []
         # Numbers each (identifier, input) call so concurrent/repeat calls resolve
         # to their recording in order; thread-safe for concurrent tool execution.
         ledger = ConcurrencyLedger()
@@ -280,8 +287,16 @@ class ReplayEngine:
                     return Intercept(output, match=match)
                 # Miss on a frozen op: the run left its recording here.
                 label = f"{kind.value} {tool_name or name!r}"
+                divergence: dict[str, Any] = {
+                    "call": label,
+                    "kind": kind.value,
+                    "op": tool_name or name,
+                    "reason": mocks.miss_reason(identifier, inp),
+                    "ran_live": False,
+                }
                 with se_lock:
                     unrecorded_calls.append(label)
+                    divergences.append(divergence)
                 # A frozen model op that misses means the model input changed: the
                 # recorded response does not apply. It runs live only when asked
                 # (evaluate_changed_prompts), never as a silent fallback, since a
@@ -292,6 +307,7 @@ class ReplayEngine:
                     if self.evaluate_changed_prompts:
                         with se_lock:
                             live_fallbacks.append(label)
+                            divergence["ran_live"] = True
                         return None  # fall through to a live model call
                 if self.strict or kind is SpanKind.LLM:
                     advice = (
@@ -309,6 +325,7 @@ class ReplayEngine:
                     raise miss
                 with se_lock:
                     live_fallbacks.append(label)
+                    divergence["ran_live"] = True
             # Not mocked (or a non-strict mock miss): the op runs live. A live tool
             # call is a real external side effect; record it for the safety checks,
             # as a WRITE when the tool was declared a writer, else as an
@@ -391,6 +408,7 @@ class ReplayEngine:
             model_input_changes=model_input_changes,
             unrecorded_calls=unrecorded_calls,
             live_fallbacks=live_fallbacks,
+            divergences=divergences,
             concurrency_ambiguities=concurrency_ambiguities,
             uninstrumented=(len(mocks) > 0 and not seen_op["any"]),
             evaluated_changed_prompts=self.evaluate_changed_prompts,

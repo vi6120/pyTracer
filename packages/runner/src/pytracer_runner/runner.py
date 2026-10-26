@@ -198,6 +198,78 @@ def classify_reproduction(
     return verdicts
 
 
+def explain_reproduction(
+    baseline: Mapping[str, Any], candidate: Mapping[str, Any], verdicts: Mapping[str, Any]
+) -> dict[str, str]:
+    """Why each scenario has no verdict, in words a developer can act on.
+
+    For ``cannot_judge`` it names where the candidate first left its recording and
+    what kind of change that was; for ``cannot_reproduce``, where the baseline did.
+    Only a changed model input gets the ``--evaluate-changed-prompts`` advice: a
+    changed tool call, or one the recording never made, needs a re-recording.
+    """
+    base_by_name = {s["name"]: s for s in baseline.get("scenarios", [])}
+    cand_by_name = {s["name"]: s for s in candidate.get("scenarios", [])}
+    reasons: dict[str, str] = {}
+    for name, verdict in verdicts.items():
+        value = getattr(verdict, "value", verdict)
+        if value == "cannot_judge":
+            reasons[name] = _why(cand_by_name.get(name, {}), "the branch")
+        elif value == "cannot_reproduce":
+            reasons[name] = _why(base_by_name.get(name, {}), "the baseline") + (
+                " The baseline never reproduced the captured failure: pass the run's "
+                "settings with --env-file, or re-record from the baseline."
+            )
+    return reasons
+
+
+_WHAT = {
+    ("tool", "changed_input"): "calls tool '{op}' with arguments the recording does not have",
+    ("tool", "extra_call"): "calls tool '{op}' more often than the recording does",
+    ("tool", "not_recorded"): "calls tool '{op}', which the recording never called",
+    ("llm", "changed_input"): "sends model '{op}' an input the recording does not have",
+    ("llm", "extra_call"): "calls model '{op}' more often than the recording does",
+    ("llm", "not_recorded"): "calls model '{op}', which the recording never called",
+}
+
+
+def _why(scenario: Mapping[str, Any], who: str) -> str:
+    divergences = scenario.get("divergences") or []
+    if not divergences:
+        # Runs reported before divergences were recorded.
+        changed = scenario.get("changed_models") or []
+        if changed:
+            return (
+                f"A model input changed on {who} ({', '.join(changed)}). If it edits a "
+                "prompt, re-run with --evaluate-changed-prompts to judge it live."
+            )
+        return f"{who[0].upper()}{who[1:]} left its recording, so its result is not frozen."
+    first = divergences[0]
+    kind, reason = str(first.get("kind")), str(first.get("reason"))
+    what = _WHAT.get((kind, reason), "makes call {op}, which the recording cannot serve")
+    sentence = f"{who[0].upper()}{who[1:]} {what.format(op=first.get('op'))}"
+    if first.get("ran_live"):
+        sentence += " (it ran live)"
+    sentence += "."
+    later = len(divergences) - 1
+    if later:
+        sentence += (
+            f" {later} later call(s) left it too, after that one."
+        )
+    if who == "the branch":
+        if (kind, reason) == ("llm", "changed_input"):
+            sentence += (
+                " If the branch edits that prompt, re-run with --evaluate-changed-prompts "
+                "to judge it live."
+            )
+        else:
+            sentence += (
+                " A frozen replay cannot judge a change to the calls themselves; "
+                "re-record the scenario on this branch to judge it."
+            )
+    return sentence
+
+
 def _missed(scenario: Mapping[str, Any]) -> bool:
     """True when the run failed on a missing recording (not on the agent's bug)."""
     return scenario.get("error_type") == "MissingMockError"

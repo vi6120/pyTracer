@@ -45,8 +45,12 @@ def render_comment(
     verdicts: dict[str, Any],
     changed_models: dict[str, list[str]] | None = None,
     evaluate_changed_prompts: bool = False,
+    reasons: dict[str, str] | None = None,
 ) -> str:
     """Render the verdicts as a Markdown PR comment carrying the dedup marker.
+
+    ``reasons`` (from ``explain_reproduction``) says why each scenario without a
+    verdict has none: where the run left its recording and what to do about it.
 
     ``changed_models`` maps a scenario to the model ops whose input changed on the
     candidate (a prompt edit). Those cannot be judged by a frozen replay, so the
@@ -88,7 +92,18 @@ def render_comment(
         parts.append(f"{fixed} fixed")
         summary = "**" + ", ".join(parts) + " on this branch.**"
 
-    if changed:
+    reasons = reasons or {}
+    if reasons and not evaluate_changed_prompts:
+        # The reasons name the actual divergence (a changed tool call, a new call,
+        # or a changed model input); the generic prompt-edit note would mislead.
+        changed = {}
+    if reasons:
+        intro = (
+            f"Reproduced the captured failure on `{candidate_ref}` (baseline "
+            f"`{baseline_ref}`) with the recorded responses frozen; where a run left its "
+            f"recording, there is no verdict and the reason is given below."
+        )
+    elif changed:
         intro = (
             f"Reproduced the captured failure on `{candidate_ref}` (baseline "
             f"`{baseline_ref}`) with the recorded responses frozen - except where a model "
@@ -130,7 +145,13 @@ def render_comment(
             heading,
             *(f"- `{name}`: {', '.join(changed[name])}" for name in sorted(changed)),
         ]
-    if any(_value(v) == "cannot_reproduce" for v in verdicts.values()):
+    if reasons:
+        lines += [
+            "",
+            "**Why there is no verdict:**",
+            *(f"- `{name}`: {reasons[name]}" for name in sorted(reasons)),
+        ]
+    elif any(_value(v) == "cannot_reproduce" for v in verdicts.values()):
         lines += [
             "",
             "**Could not reproduce the baseline failure (the baseline left its recordings: "
@@ -155,11 +176,13 @@ def post_reproduction_comment(
     verdicts: dict[str, Any],
     changed_models: dict[str, list[str]] | None = None,
     evaluate_changed_prompts: bool = False,
+    reasons: dict[str, str] | None = None,
 ) -> str:
     """Upsert the verdict comment on PR ``number``; return the comment URL."""
     body = render_comment(
         candidate_ref=candidate_ref, baseline_ref=baseline_ref, verdicts=verdicts,
         changed_models=changed_models, evaluate_changed_prompts=evaluate_changed_prompts,
+        reasons=reasons,
     )
     existing = client.find_comment_by_marker(number, COMMENT_MARKER)
     if existing is None:

@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from .executor import DockerExecutor, ExecResult, Executor, LocalExecutor
-from .runner import CrossBranchRunner, ReproduceResult, classify_reproduction
+from .runner import (
+    CrossBranchRunner,
+    ReproduceResult,
+    classify_reproduction,
+    explain_reproduction,
+)
 from .source import CheckoutError, GitSourceProvider, SourceProvider
 
 __all__ = [
@@ -17,6 +22,7 @@ __all__ = [
     "ReproduceResult",
     "SourceProvider",
     "classify_reproduction",
+    "explain_reproduction",
 ]
 
 __version__ = "0.1.3"

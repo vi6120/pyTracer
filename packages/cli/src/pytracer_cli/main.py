@@ -350,6 +350,7 @@ def reproduce(
             GitSourceProvider,
             LocalExecutor,
             classify_reproduction,
+            explain_reproduction,
         )
     except ImportError as exc:
         typer.echo(
@@ -367,7 +368,7 @@ def reproduce(
         executor = LocalExecutor()
     runner = CrossBranchRunner(GitSourceProvider(repo), executor)
     try:
-        _, candidate, verdicts = run_reproduction(
+        baseline_run, candidate, verdicts = run_reproduction(
             runner,
             collection_path=str(collection),
             baseline_ref=baseline,
@@ -383,7 +384,12 @@ def reproduce(
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
 
-    typer.echo(format_verdicts(verdicts))
+    reasons = explain_reproduction(
+        getattr(baseline_run, "results", None) or {},
+        getattr(candidate, "results", None) or {},
+        verdicts,
+    )
+    typer.echo(format_verdicts(verdicts, reasons))
 
     if pr is not None:
         from .pr_comment import post_reproduction_comment, render_comment
@@ -400,6 +406,7 @@ def reproduce(
                     candidate_ref=branch, baseline_ref=baseline, verdicts=verdicts,
                     changed_models=changed_models,
                     evaluate_changed_prompts=evaluate_changed_prompts,
+                    reasons=reasons,
                 )
             )
         else:
@@ -422,6 +429,7 @@ def reproduce(
                     verdicts=verdicts,
                     changed_models=changed_models,
                     evaluate_changed_prompts=evaluate_changed_prompts,
+                    reasons=reasons,
                 )
             except (urllib.error.HTTPError, urllib.error.URLError) as exc:
                 typer.echo(f"error: could not post the PR comment: {exc}", err=True)

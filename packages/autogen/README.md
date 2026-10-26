@@ -1,6 +1,7 @@
 # pytracer-autogen
 
-pyTracer adapter for AutoGen (0.4+). AutoGen emits OpenTelemetry spans using the
+pyTracer adapter for AutoGen (0.4+; the separate AutoGen 0.2 API is not
+supported). AutoGen emits OpenTelemetry spans using the
 GenAI semantic conventions; this adapter plugs a pyTracer exporter into an
 OpenTelemetry tracer provider, so the spans AutoGen emits are captured as pyTracer
 spans with no `@op` in the agent code. AutoGen's own spans carry less than the
@@ -105,3 +106,19 @@ format). `uninstall_seams()` removes the routing again.
 Without `replayable=True` the adapter only captures, and replaying an
 adapter-only trace is flagged (the run has recordings but hits no `@op` seam)
 rather than silently running live. See the main README for the replay workflow.
+
+## AutoGen versions
+
+Every AutoGen release from 0.4.0 is captured in full (the table above), but older
+releases report less about a run, so `install()` fills the gap differently:
+
+| AutoGen | What it reports | How the adapter captures the rest |
+|---|---|---|
+| 0.7.2 and later | GenAI agent, tool and model-call data, and each tool's result | From AutoGen's own spans and events |
+| 0.6.2 to 0.7.1 | The GenAI spans, but no tool results | Model and tool calls go through pyTracer (the routing `replayable=True` uses), which records their output |
+| 0.4.0 to 0.6.1 | No agent or tool spans (before 0.4.9, no spans at all) | As above, plus each agent turn and each team run go through pyTracer, so a run is one trace with its turns, calls and tool output |
+
+On releases before 0.7.2 that routing is always on, since it is how the calls
+are captured; `uninstall_seams()` would stop it. Streamed replies replay chunk by
+chunk wherever AgentChat streams them (0.4.5 and later). CI runs the adapter's
+tests on 0.4.0, 0.4.9, 0.6.2, 0.7.2 and the latest release.

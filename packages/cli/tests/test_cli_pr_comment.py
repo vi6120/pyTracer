@@ -248,3 +248,13 @@ def test_no_package_source_contains_emoji() -> None:
         if _EMOJI.search(line)
     ]
     assert found == []
+
+
+def test_reasons_replace_the_generic_prompt_edit_note() -> None:
+    reason = "The branch calls tool 'exchange' with arguments the recording does not have."
+    body = render_comment(
+        candidate_ref="fix", baseline_ref="main", verdicts={"s": Outcome.CANNOT_JUDGE},
+        changed_models={"s": ["agent_llm"]}, reasons={"s": reason},
+    )
+    assert "**Why there is no verdict:**" in body and reason in body
+    assert "prompt edit" not in body  # the actual cause was a tool call

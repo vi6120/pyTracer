@@ -83,6 +83,12 @@ class MockStore:
         self._table = table
         self._conn = conn or psycopg.connect(self._config.conninfo(), autocommit=True)
 
+    @property
+    def table(self) -> str:
+        """The mocks table this store reads and writes (e.g. to open a second
+        store on the same table from another thread)."""
+        return self._table
+
     # --- schema -------------------------------------------------------------
     def migrate(self) -> None:
         """Create the mocks table + index if absent (idempotent)."""

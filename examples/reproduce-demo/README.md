@@ -55,7 +55,7 @@ cites-every-source           fixed
 ```
 
 By default the demo uses `--isolation local` (no Docker, runs in the current
-virtualenv). For full container isolation - each ref in its own
+virtualenv with the interpreter running `pytracer`, and installs nothing into it). For full container isolation - each ref in its own
 `python:3.12-slim` - run it with Docker instead:
 
 ```bash

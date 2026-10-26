@@ -12,7 +12,9 @@ license = "Apache-2.0"
 authors = [{ name = "Vikas Ramaswamy" }, { name = "Nagesha Sheshadri" }]
 dependencies = [
     "pytracer-sdk==0.1.3",
-    "crewai>=0.100",
+    # The oldest CrewAI CI verifies; a lower bound keeps a resolver from quietly
+    # choosing an untested CrewAI to settle a conflict with another package.
+    "crewai>=1.15.20",
 ]
 
 [project.urls]

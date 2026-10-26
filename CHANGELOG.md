@@ -21,6 +21,12 @@
 
 ### Fixed
 
+- **Adapters require the framework versions they are tested with.** The CrewAI,
+  OpenAI Agents and LangGraph adapters now require CrewAI 1.15.20, OpenAI Agents
+  0.20.0 and langchain-core 1.4.7 or later (they allowed far older releases), and
+  CI tests the adapters at those minimums too. Asking for CrewAI beside OpenAI
+  Agents 0.21 or later is now reported as a conflict by pip and uv, instead of
+  being settled by quietly installing CrewAI 1.6.1.
 - **The gateway keeps writing after a Redis outage.** One error from the ingest
   queue (for example Redis restarting) ended the gateway's background writer for
   good: ingest kept answering 202 while nothing reached storage until the gateway

@@ -63,7 +63,7 @@ def test_concurrent_records_assign_contiguous_versions(mock_store: MockStore) ->
     errors: list[Exception] = []
 
     def worker(i: int) -> None:
-        store = MockStore(cfg, table=mock_store._table)  # type: ignore[attr-defined]
+        store = MockStore(cfg, table=mock_store.table)
         try:
             store.record("busy", {"k": "same"}, i)
         except Exception as exc:  # noqa: BLE001

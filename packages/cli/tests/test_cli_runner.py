@@ -117,8 +117,10 @@ def test_full_mode_fails_on_unrecorded_call_instead_of_going_live(tmp_path: Path
 
 
 def test_scenario_strict_false_allows_live_fallback(tmp_path: Path) -> None:
-    # With strict and sandbox turned off in the scenario, an unrecorded call runs
-    # live instead of failing (the sample tool is pure Python, so it just runs).
+    # With strict and sandbox turned off in the scenario, an unrecorded tool call
+    # runs live instead of failing (the sample tool is pure Python, so it just
+    # runs). The new task also changes the model's input, and a changed model call
+    # runs live only when asked (evaluate_changed_prompts), never as a fallback.
     record_trace(cli_sample_agent.agent, {"task": "find cats"}, tmp_path / "trace.jsonl")
     collection = write_collection(
         tmp_path,
@@ -135,7 +137,13 @@ def test_scenario_strict_false_allows_live_fallback(tmp_path: Path) -> None:
             }
         ],
     )
-    assert run_path(collection).passed
+    (fallback,) = run_path(collection).scenarios
+    assert not fallback.passed
+    assert fallback.replay.live_fallbacks == ["tool 'search'"]
+    assert "llm 'summarize'" in (fallback.replay.error_message or "")
+    (evaluated,) = run_path(collection, evaluate_changed_prompts=True).scenarios
+    assert evaluated.passed
+    assert evaluated.replay.live_fallbacks == ["tool 'search'", "llm 'summarize'"]
 
 
 def test_run_path_strict_override_beats_full_mode_default(tmp_path: Path) -> None:
@@ -155,7 +163,10 @@ def test_run_path_strict_override_beats_full_mode_default(tmp_path: Path) -> Non
         ],
     )
     assert not run_path(collection).passed  # full-mode default is strict
-    assert run_path(collection, strict=False, sandbox=False).passed  # override allows live
+    # The override lets the tool run live (the changed model call needs its own flag).
+    assert run_path(
+        collection, strict=False, sandbox=False, evaluate_changed_prompts=True
+    ).passed
 
 
 def test_structural_assertions_pass_from_a_collection(tmp_path: Path) -> None:

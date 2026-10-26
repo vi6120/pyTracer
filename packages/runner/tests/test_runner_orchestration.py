@@ -165,3 +165,58 @@ def test_reproduce_injects_env_file(tmp_path: Path) -> None:
     runner = CrossBranchRunner(Source(), Executor())
     runner.reproduce("main", "tests/collection.yaml", env_file=env)
     assert seen["env"] == "API_KEY=xyz\n"  # the run's settings reached the clean checkout
+
+
+def _command_for(isolated: bool, **kwargs: object) -> str:
+    """The command reproduce builds for an executor that is (or is not) isolated."""
+    captured: dict[str, str] = {}
+
+    class Source:
+        def checkout(self, ref: str, dest: Path) -> None:
+            dest.mkdir(parents=True, exist_ok=True)
+
+    class Executor:
+        def run(
+            self, workdir: Path, command: str, *, artifacts: list[str] | None = None
+        ) -> ExecResult:
+            captured["cmd"] = command
+            return ExecResult(0, "", "", artifacts={"pytracer-out.json": '{"scenarios":[]}'})
+
+    executor = Executor()
+    executor.isolated = isolated  # type: ignore[attr-defined]
+    CrossBranchRunner(Source(), executor).reproduce("main", "c.yaml", **kwargs)  # type: ignore[arg-type]
+    return captured["cmd"]
+
+
+def test_a_local_reproduction_installs_nothing_and_uses_this_interpreter() -> None:
+    # Local runs happen in the caller's own environment: installing there would
+    # re-point an editable install or downgrade pyTracer to a pin.
+    import shlex
+    import sys
+
+    from pytracer_runner import LocalExecutor
+
+    assert LocalExecutor.isolated is False
+    command = _command_for(False)
+    assert "pip install" not in command
+    assert command.startswith(f"{shlex.quote(sys.executable)} -m pytracer_cli run c.yaml")
+
+
+def test_a_docker_reproduction_installs_in_its_container() -> None:
+    from pytracer_runner import DockerExecutor
+
+    assert DockerExecutor.isolated is True
+    command = _command_for(True)
+    assert command.startswith("python -m pip install -e . -q && python -m pip install -q 'pytracer-cli")
+    assert command.endswith("python -m pytracer_cli run c.yaml --json pytracer-out.json")
+
+
+def test_install_can_be_forced_or_skipped_either_way() -> None:
+    import shlex
+    import sys
+
+    assert "pip install" not in _command_for(True, install=False, provision_cli=False)
+    local = _command_for(False, install=True)
+    assert local.startswith(f"{shlex.quote(sys.executable)} -m pip install -e . -q && ")
+    assert "pytracer-cli" not in local  # provisioning follows isolation unless asked
+    assert _command_for(True, install="uv pip install -e .").startswith("uv pip install -e . && ")

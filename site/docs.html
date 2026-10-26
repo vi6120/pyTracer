@@ -373,9 +373,14 @@ pytest -v
     <p>It checks out each ref in its own isolated workspace, replays, and prints a
     per-scenario verdict of <strong>fixed</strong>, <strong>still failing</strong>,
     or <strong>diverged</strong> (a new, different failure), exiting non-zero unless
-    every scenario is fixed. Each workspace installs the project under test and
-    pyTracer itself, so your project does <strong>not</strong> need to depend on
-    <code>pytracer-cli</code>. If the agent needs secrets or endpoints to run, pass
+    every scenario is fixed. With <code>--isolation docker</code> (the default) each ref
+    runs in a throwaway container that installs the project under test and pyTracer
+    itself, so your project does <strong>not</strong> need to depend on
+    <code>pytracer-cli</code>. With <code>--isolation local</code> each ref runs in your
+    current environment with the interpreter running <code>pytracer</code>, and nothing
+    is installed, since that environment is yours: it must already have the project's
+    dependencies (<code>--install</code> installs them anyway; <code>--no-install</code>
+    skips installing in a container too). If the agent needs secrets or endpoints to run, pass
     them with <code>--env-file .env</code> so the replay reaches the bug instead of
     failing on configuration (and a real fix is not reported still-failing).</p>
     <p><strong>Inconclusive verdicts.</strong> A verdict is drawn only from runs that

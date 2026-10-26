@@ -57,7 +57,13 @@ def _read_artifacts(workdir: Path, artifacts: list[str]) -> dict[str, str]:
 
 
 class LocalExecutor:
-    """Runs the command in a subprocess in ``workdir`` (no container isolation)."""
+    """Runs the command in a subprocess in ``workdir`` (no container isolation).
+
+    It runs in the caller's own environment, so a reproduction through it installs
+    nothing by default (see ``CrossBranchRunner.reproduce``).
+    """
+
+    isolated = False
 
     def __init__(self, *, timeout: float = 600.0) -> None:
         self._timeout = timeout
@@ -92,6 +98,8 @@ class DockerExecutor:
     there are read back from the host after the container exits. ``--rm`` means
     every run starts from a clean container.
     """
+
+    isolated = True
 
     def __init__(
         self,

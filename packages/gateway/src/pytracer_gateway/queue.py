@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import uuid4
@@ -166,7 +167,11 @@ class RedisQueue:
     """Durable backend backed by two Redis Streams: the work queue and the DLQ.
 
     The work queue uses a consumer group so unacknowledged entries left by a
-    crashed process are reclaimed on the next start and replayed. Acknowledged
+    crashed process are reclaimed on the next start and replayed. With
+    ``reclaim_min_idle_ms`` above zero (several gateways on one stream), a running
+    gateway also reclaims, as often as that idle time, the entries a stopped or
+    crashed peer left pending that long, so they are written without waiting for
+    a restart. Acknowledged
     entries are deleted from the stream to reclaim memory, so the stream length
     reflects the live backlog and doubles as the backpressure signal.
     """
@@ -181,6 +186,10 @@ class RedisQueue:
         # consumer's pending entries from a live one's.
         self._consumer = f"gw-{os.getpid()}-{uuid4().hex[:8]}"
         self._recovered: list[Reserved] = []
+        # Entries this gateway holds (reserved, not yet acknowledged): never
+        # reclaimed from itself, even while a slow write keeps them idle.
+        self._inflight: set[str] = set()
+        self._next_reclaim = 0.0
 
     async def start(self) -> None:
         redis = _import_redis()
@@ -219,7 +228,9 @@ class RedisQueue:
             # redis-py returns (next_cursor, messages) or (next_cursor, messages,
             # deleted_ids) depending on version; the first two are all we need.
             cursor, messages = result[0], result[1]
-            self._recovered.extend(await self._parse(messages))
+            fresh = await self._parse([m for m in messages if m[0] not in self._inflight])
+            self._inflight.update(item.receipt for item in fresh)
+            self._recovered.extend(fresh)
             if cursor == "0-0":
                 break
 
@@ -237,6 +248,11 @@ class RedisQueue:
         return len(accepted), backpressured
 
     async def reserve(self, max_items: int, timeout: float) -> list[Reserved]:
+        idle_ms = self._config.reclaim_min_idle_ms
+        if idle_ms > 0 and time.monotonic() >= self._next_reclaim:
+            # Several gateways: pick up what a stopped or crashed peer left pending.
+            self._next_reclaim = time.monotonic() + idle_ms / 1000
+            await self._recover()
         # Serve reclaimed entries before reading new ones.
         if self._recovered:
             batch = self._recovered[:max_items]
@@ -261,7 +277,9 @@ class RedisQueue:
         if not resp:
             return []
         # resp is [[stream_name, [(id, {fields}), ...]]]; one stream requested.
-        return await self._parse(resp[0][1])
+        batch = await self._parse(resp[0][1])
+        self._inflight.update(item.receipt for item in batch)
+        return batch
 
     async def _parse(self, messages: Any) -> list[Reserved]:
         reserved: list[Reserved] = []
@@ -293,6 +311,7 @@ class RedisQueue:
         pipe.xack(self._stream, self._group, *ids)
         pipe.xdel(self._stream, *ids)
         await pipe.execute()
+        self._inflight.difference_update(ids)
 
     async def push_dead_letters(self, letters: list[DeadLetter]) -> None:
         if not letters:

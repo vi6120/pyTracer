@@ -284,3 +284,16 @@ def test_a_tag_shaped_value_round_trips_through_the_store_as_the_same_dict(
     (got,) = trace_store.get_trace(tid, project="tag-shaped")
     assert got.input == {"payload": tag_shaped}
     assert type(got.output) is dict and got.output == tag_shaped
+
+
+def test_a_span_stored_twice_is_read_once(trace_store: TraceStore) -> None:
+    # Ingestion is at least once: after a gateway crash a peer can write a batch
+    # the crashed gateway had already written. Reads must still show each span once.
+    tid = new_trace_id()
+    spans = [_span(trace_id=tid, name=f"s{i}", start_time_ns=NOW_NS + i) for i in range(3)]
+    trace_store.insert(spans, project="dup")
+    trace_store.insert(spans[:2], project="dup")  # the retried part of the batch
+    assert trace_store.count(project="dup") == 5  # physically stored twice
+    assert [s.name for s in trace_store.get_trace(tid, project="dup")] == ["s0", "s1", "s2"]
+    (summary,) = trace_store.list_traces(project="dup")
+    assert summary.span_count == 3

@@ -1,0 +1,16 @@
+# TLS termination and load balancing over two gateways (docker-compose.scale.yml).
+#
+# Same as Caddyfile, but spread over both gateways: a request a gateway refuses
+# is retried on the other, and a gateway whose /readyz fails is left out until it
+# passes again.
+{$PYTRACER_DOMAIN} {
+    reverse_proxy gateway:8080 gateway-2:8080 {
+        lb_policy round_robin
+        lb_retries 2
+        lb_try_duration 5s
+        health_uri /readyz
+        health_interval 5s
+        health_timeout 2s
+        fail_duration 10s
+    }
+}

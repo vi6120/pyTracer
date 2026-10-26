@@ -226,7 +226,12 @@ class TraceStore:
         project: str | None = None,
         limit: int = 1000,
     ) -> list[Span]:
-        """Filter spans by trace id, agent, failure status, and date range."""
+        """Filter spans by trace id, agent, failure status, and date range.
+
+        Each span is returned once. Ingestion is at least once (a gateway that
+        crashes after writing a batch but before acknowledging it has the batch
+        written again by a peer), so a span can be stored twice; reads keep one.
+        """
         where: list[str] = []
         params: dict[str, Any] = {}
         if project is not None:
@@ -253,7 +258,7 @@ class TraceStore:
         clause = f" WHERE {' AND '.join(where)}" if where else ""
         sql = (
             f"SELECT {', '.join(_COLUMNS)} FROM {self.qualified_table}{clause} "
-            f"ORDER BY start_time_ns, span_id LIMIT {int(limit)}"
+            f"ORDER BY start_time_ns, span_id LIMIT 1 BY project, trace_id, span_id LIMIT {int(limit)}"
         )
         result = self._client.query(sql, parameters=params)
         return [
@@ -295,7 +300,8 @@ class TraceStore:
         sql = (
             "SELECT trace_id, project, "
             "anyIf(agent_name, kind = 'agent') AS root_agent, "
-            "any(branch) AS root_branch, any(commit) AS root_commit, count() AS span_count, "
+            "any(branch) AS root_branch, any(commit) AS root_commit, "
+            "uniqExact(span_id) AS span_count, "
             "max(status = 'error') AS failed, min(start_time) AS started_at "
             f"FROM {self.qualified_table}{clause} "
             f"GROUP BY trace_id, project{having} ORDER BY started_at DESC LIMIT {int(limit)}"
@@ -354,6 +360,7 @@ class TraceStore:
         )
 
     def count(self, *, project: str | None = None) -> int:
+        """Rows stored (a span written twice by an at-least-once retry counts twice)."""
         clause = " WHERE project = {project:String}" if project else ""
         params = {"project": project} if project else {}
         result = self._client.query(

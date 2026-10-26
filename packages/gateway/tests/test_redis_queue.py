@@ -13,6 +13,7 @@ repo root or inside this package (the two use different pytest-asyncio modes).
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import time
 import uuid
 
@@ -301,3 +302,57 @@ def test_queue_read_keeps_the_payload_as_sent_and_imports_nothing() -> None:
     sys.modules.pop("this", None)
     asyncio.run(scenario())
     assert "this" not in sys.modules
+
+
+def _multi_config() -> GatewayConfig:
+    # Several gateways on one stream: reclaim only entries idle this long.
+    return dataclasses.replace(_config(), reclaim_min_idle_ms=300)
+
+
+def test_a_running_gateway_writes_what_a_crashed_peer_left_pending() -> None:
+    # Gateway A takes a batch off the stream and dies before acknowledging it.
+    # Gateway B, already running, must write those spans once they have been idle
+    # long enough, without waiting for a restart, and write each exactly once.
+    async def scenario() -> None:
+        cfg = _multi_config()
+        writer = FakeWriter()
+        survivor = IngestPipeline(writer, cfg, queue=RedisQueue(cfg))
+        crashed = RedisQueue(cfg)
+        try:
+            await survivor.start()
+            await crashed.start()
+            await crashed.enqueue("proj", [make_span(f"s{i}") for i in range(5)])
+            taken = await crashed.reserve(10, 1.0)
+            if len(taken) < 5:  # the survivor may have read some of them first
+                taken += await crashed.reserve(10, 0.1)
+            await crashed.close()  # gone without acknowledging what it held
+            await _wait_written(writer, 5)
+            names = sorted(span.name for _, span in writer.records)
+            assert names == [f"s{i}" for i in range(5)]  # each once, none lost
+        finally:
+            await survivor.stop()
+            await _drop(cfg)
+
+    asyncio.run(scenario())
+
+
+def test_a_gateway_never_reclaims_its_own_in_flight_entries() -> None:
+    # A slow write keeps a batch idle past the threshold; the gateway holding it
+    # must not take it again (that would write it twice).
+    async def scenario() -> None:
+        cfg = _multi_config()
+        queue = RedisQueue(cfg)
+        try:
+            await queue.start()
+            await queue.enqueue("proj", [make_span("slow")])
+            held = await queue.reserve(10, 1.0)
+            assert [item.span.name for item in held] == ["slow"]
+            await asyncio.sleep(0.5)  # longer than the reclaim idle time
+            assert await queue.reserve(10, 0.2) == []
+            await queue.ack(held)
+            assert await queue.is_drained()
+        finally:
+            await queue.close()
+            await _drop(cfg)
+
+    asyncio.run(scenario())

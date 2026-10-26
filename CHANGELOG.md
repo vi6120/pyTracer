@@ -33,6 +33,13 @@
 
 ### Fixed
 
+- **Several gateways on one Redis stream recover a crashed peer's spans.** A
+  gateway reclaimed unacknowledged entries only when it started, so spans a
+  crashed peer held stayed unwritten until some gateway restarted. With
+  `PYTRACER_REDIS_RECLAIM_MIN_IDLE_MS` above zero a running gateway now writes
+  them within that time, and never reclaims its own in-flight entries. Reads from
+  the trace store return each span once, since such a retry can store a span
+  twice. `deploy/docker-compose.scale.yml` runs two gateways behind Caddy.
 - **The k6 load test measures ingestion.** Its spans had no `branch` or `commit`,
   so the gateway rejected every one (answering 202, as it does for a partly
   rejected batch) and the script counted them as accepted. Spans now carry the git

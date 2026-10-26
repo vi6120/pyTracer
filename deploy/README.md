@@ -206,10 +206,35 @@ default); its overflow is reported the same way, as `dropped` and through
 ## Scaling
 
 The gateway is stateless, so the first scaling step is running several gateway
-instances behind the load balancer. They already share one durable queue (the
-Redis stream), so this mostly works out of the box; when running more than one
-instance, raise `PYTRACER_REDIS_RECLAIM_MIN_IDLE_MS` above zero so a healthy
-instance does not reclaim a busy peer's in-flight entries. The trace store
+instances behind the load balancer. They share one durable queue (the Redis
+stream and its consumer group), so a span accepted by any gateway is written once
+by whichever writer reads it. `docker-compose.scale.yml` runs two gateways behind
+Caddy:
+
+```bash
+PYTRACER_DOMAIN=gateway.example.com docker compose \
+  -f deploy/docker-compose.yml -f deploy/docker-compose.scale.yml \
+  --profile tls up -d --build
+```
+
+With more than one gateway, set `PYTRACER_REDIS_RECLAIM_MIN_IDLE_MS` above zero
+(the override sets 60000). A running gateway then checks that often for entries a
+stopped or crashed peer took off the stream but never acknowledged, and writes
+them; it never takes its own in-flight entries. Set it above the longest a write
+can take, storage retries included. A gateway stopped normally drains what it
+holds before it exits; only a crash leaves entries for a peer to reclaim. Caddy
+retries a request a gateway refused on the other one, and leaves out a gateway
+whose `/readyz` fails until it recovers.
+
+Measured on 2026-10-26 (laptop, Docker Desktop): two gateways behind Caddy at a
+constant 100 requests/s (2,000 spans/s) for 4 minutes, with one gateway stopped
+normally and restarted, then the other killed (`SIGKILL`) and restarted, mid-run.
+p95 stayed at 4.4 ms. 480,000 spans were accepted and all 480,000 are in the trace
+store; the Redis stream and its pending list were empty afterwards. The normal
+stop failed no request. The kill failed one, the request in flight on the killed
+gateway, which the SDK retries. The killed gateway had written part of a batch
+without acknowledging it, so its peer wrote that part again: delivery is at least
+once, and reads (`traces show`, `record`, exports) return each span once. The trace store
 shards by project or organization once single-node ClickHouse write throughput
 becomes the bottleneck, and the single Redis node grows into a cluster (or is
 swapped for NATS JetStream) at much higher ingest volumes.

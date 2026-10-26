@@ -335,6 +335,14 @@ def reproduce(
         help="Run a model op whose input changed live instead of failing the frozen "
         "replay, so a fix that also edits a prompt can be evaluated.",
     ),
+    install: bool | None = typer.Option(
+        None,
+        "--install/--no-install",
+        help="Install the project and pytracer-cli in each ref's environment before "
+        "running it. Default: yes with docker (a throwaway container), no with local "
+        "(it is your own environment, which must already have the project's "
+        "dependencies; installing would change it).",
+    ),
 ) -> None:
     """Reproduce a captured failure on another branch.
 
@@ -378,6 +386,7 @@ def reproduce(
             env_file=str(env_file) if env_file else None,
             env_dest=env_dest,
             evaluate_changed_prompts=evaluate_changed_prompts,
+            install=install,
         )
     except (RuntimeError, OSError) as exc:
         typer.echo(f"error: {exc}", err=True)

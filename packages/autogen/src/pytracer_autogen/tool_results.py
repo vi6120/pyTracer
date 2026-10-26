@@ -58,11 +58,16 @@ class _ToolResultJoiner:
     recorded with the result as its output. A span whose result has not arrived
     within ``_RESULT_WAIT_SECONDS`` is recorded without it by :meth:`sweep`, which
     the exporter runs on every export (AutoGen exports continuously during a run),
-    or by :meth:`flush` at flush and shutdown.
+    by :meth:`flush` at flush and shutdown, and by one background thread that runs
+    only while spans are held, so a span is never held indefinitely in a process
+    that goes idle.
     """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
+        # Wakes the sweeper; it shares the lock that guards ``_pending``.
+        self._wake = threading.Condition(self._lock)
+        self._sweeper: threading.Thread | None = None
         # Held tool spans, oldest first, with the time each stops waiting.
         self._pending: OrderedDict[tuple[str, str], tuple[Span, Tracer, float]] = OrderedDict()
         # Results seen before their tool span ended (bounded; duplicates are common,
@@ -74,6 +79,12 @@ class _ToolResultJoiner:
             early = self._early.pop(key, None)
             if early is None:
                 self._pending[key] = (span, tracer, time.monotonic() + _RESULT_WAIT_SECONDS)
+                if self._sweeper is None:
+                    # One thread per joiner, started on the first held span.
+                    self._sweeper = threading.Thread(
+                        target=self._run_sweeper, name="pytracer-autogen-tool-results", daemon=True
+                    )
+                    self._sweeper.start()
                 return
         _record(tracer, _with_result(span, tracer, *early))
 
@@ -108,8 +119,22 @@ class _ToolResultJoiner:
         with self._lock:
             entries = list(self._pending.values())
             self._pending.clear()
+            self._wake.notify()  # nothing is held now, so the sweeper stops
         for span, tracer, _ in entries:
             _record(tracer, span)
+
+    def _run_sweeper(self) -> None:
+        """Sweep at each held span's deadline; stop once nothing is held."""
+        while True:
+            with self._wake:
+                if not self._pending:
+                    self._sweeper = None
+                    return
+                delay = next(iter(self._pending.values()))[2] - time.monotonic()
+                if delay > 0:
+                    self._wake.wait(delay)
+                    continue
+            self.sweep()
 
 
 def _with_result(span: Span, tracer: Tracer, content: Any, is_error: bool) -> Span:

@@ -17,7 +17,9 @@
   from AutoGen's result message; model calls are recorded from the call events
   the model clients log (or rebuilt from AutoGen's replies for a client that logs
   none); a GenAI-instrumented client keeps its prompt and reply, read from the
-  OpenTelemetry log records it sends them as (P7).
+  OpenTelemetry log records it sends them as (P7). A tool span waiting for its
+  result is recorded within the wait even if the process goes idle (one background
+  thread runs only while spans are waiting).
 
 ### Fixed
 

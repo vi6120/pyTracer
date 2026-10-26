@@ -6,6 +6,7 @@ needed, only opentelemetry-sdk, a runtime dependency) and assert the mapping.
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 import pytest
@@ -433,6 +434,52 @@ def test_a_tool_span_whose_result_never_comes_is_swept_on_a_later_export(
     tracer.flush()
     (tool,) = [s for s in sink.spans if s.kind is K.TOOL]
     assert tool.output is None
+
+
+def test_a_held_tool_span_is_recorded_when_the_process_goes_idle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # No later export comes (an idle process): the background sweep records the
+    # span once its wait is over, without the result.
+    import time
+
+    import pytracer_autogen.tool_results as tool_results
+
+    monkeypatch.setattr(tool_results, "_RESULT_WAIT_SECONDS", 0.3)
+    ot, sink, tracer = _setup()
+    _tool_call(ot, "never-answered")
+    deadline = time.monotonic() + 0.3 + 0.5
+    tools: list[pytracer.Span] = []
+    while time.monotonic() < deadline and not tools:
+        time.sleep(0.02)
+        tracer.flush()
+        tools = [s for s in sink.spans if s.kind is K.TOOL]
+    assert len(tools) == 1 and tools[0].output is None
+
+
+def test_one_sweeper_thread_runs_only_while_tool_spans_are_held(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import pytracer_autogen.tool_results as tool_results
+    from pytracer_autogen import exporter_for
+
+    monkeypatch.setattr(tool_results, "_RESULT_WAIT_SECONDS", 30.0)
+    tracer = pytracer.Tracer(InMemoryTransport(), resource=pytracer.Resource(service_name="ag"))
+    provider = pytracer_tracer_provider(tracer)
+    ot = provider.get_tracer("test")
+    exporter = exporter_for(provider)
+    assert exporter is not None and exporter._results is not None
+    joiner = exporter._results
+    assert joiner._sweeper is None  # no thread before any span is held
+    for call_id in ("a", "b", "c"):
+        _tool_call(ot, call_id)
+    sweeper = joiner._sweeper
+    assert sweeper is not None and sweeper.is_alive()
+    names = [t.name for t in threading.enumerate() if t is sweeper]
+    assert names == ["pytracer-autogen-tool-results"]  # one for all held spans
+    joiner.flush()  # flush records them and the thread stops
+    sweeper.join(timeout=2.0)
+    assert not sweeper.is_alive() and joiner._sweeper is None
 
 
 def test_exporter_for_finds_only_pytracer_providers() -> None:

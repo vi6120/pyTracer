@@ -33,6 +33,9 @@
 
 ### Fixed
 
+- **Verdicts are plain text.** The `/pytracer try` comment labelled verdicts with
+  emoji (check mark, cross, warning, question mark, party popper); it now uses the
+  words alone, and a test keeps emoji out of every package's source.
 - **`/pytracer try` and `pytracer reproduce` say "still failing" for a wrong
   answer.** A scenario that fails only on its assertions (nothing raised) has no
   failure fingerprint, so a branch that had not fixed it was reported as

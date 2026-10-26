@@ -9,6 +9,7 @@
   <a href="https://pytracer.com">Website</a> &middot;
   <a href="https://pytracer.com/docs">Docs</a> &middot;
   <a href="https://pytracer.com/docs#packages">Packages</a> &middot;
+  <a href="https://pytracer.com/benchmarks">Benchmarks</a> &middot;
   <a href="https://pypi.org/project/pytracer-all/">PyPI</a>
 </p>
 
@@ -32,6 +33,33 @@ SDK, or any Python agent you instrument by hand.
 New here? Run the [quickstart](examples/quickstart) to try the whole loop in a
 couple of minutes, with no services.
 
+### A use case
+
+A customer asks a support agent to exchange an order; the agent confirms, but the
+exchange goes out with the old item IDs as the new ones, a one-line bug in the glue
+code between the model and its tools. Re-running it live proves nothing, because the
+model words things differently each time. With pyTracer:
+
+1. The failing conversation is **captured**, with its branch and commit.
+2. `pytracer record` **turns it into a test** that asserts the right items are
+   exchanged, so CI goes red.
+3. On the fix PR, `/pytracer try` replays the exact conversation with every model and
+   tool response frozen: **fixed**.
+4. A PR that only renamed a variable: **still failing**, not a lucky green run.
+5. A PR that changes the exchange call itself: **cannot judge**, naming that call and
+   what to do, instead of guessing.
+
+No model calls and no API spend in any of those checks.
+
+### How it works
+
+**Capture** a run (each model call and tool result, stamped with branch and commit),
+**freeze** its responses as mocks, **replay** it on any branch in full, partial or
+live mode, and **classify** the outcome. A verdict is only drawn from a run that
+stayed on its recording: if a branch makes a call the recording cannot serve, you get
+`cannot_judge` with that call named; if the baseline itself drifts, `cannot_reproduce`;
+and a branch that fails exactly as before is `still_failing`, whatever else changed.
+
 ## Why
 
 Agents are non-deterministic and hard to test: a run depends on live model
@@ -49,7 +77,7 @@ Seven core packages, each an installable Python package under `packages/`:
 | `pytracer-sdk` | 1. Instrumentation | `@op` decorator captures agent actions as OpenTelemetry-compatible spans, with local secret/PII redaction and non-blocking flush |
 | `pytracer-gateway` | 2. Ingestion | FastAPI service that validates spans, authenticates per project by API key (static map or managed keys in Postgres, with per-key rate limiting), and writes them through to storage without blocking; an optional Redis Streams queue makes ingestion durable across restarts |
 | `pytracer-stores` | 3. Storage | Trace store (ClickHouse) for captured spans, mock store (PostgreSQL) for recorded tool responses |
-| `pytracer-replay` | 4. Replay engine | Deterministic replay in three modes, an assertion framework, run diffing, failure fingerprinting, a three-way outcome classifier, and a network sandbox; replay stays faithful on real agents (streaming responses, concurrent and repeated tool calls replayed in order, nondeterminism controls for a frozen clock and seeded RNG, retry dedupe, and side-effect detection) |
+| `pytracer-replay` | 4. Replay engine | Deterministic replay in three modes, an assertion framework, run diffing, failure fingerprinting, an outcome classifier that abstains with the reason rather than guess, and a network sandbox; replay stays faithful on real agents (streaming responses, concurrent and repeated tool calls replayed in order, nondeterminism controls for a frozen clock and seeded RNG, retry dedupe, and side-effect detection) |
 | `pytracer-runner` | 4. Isolation | Per-commit isolated runner: check out any ref into a clean workspace and replay a frozen trace against it |
 | `pytracer-registry` | 5. Collaboration | Versioned, forkable, access-controlled test collections with pull requests and discovery |
 | `pytracer-cli` | 6. CI/CD | `pytracer run` executes test collections locally and in CI, with a pytest plugin (`pytracer-cli[pytest]`) that runs them as pytest tests and a `pytracer reproduce --pr` "try on this branch" PR comment; ships a GitHub Action and a GitLab template |
@@ -210,14 +238,21 @@ pytracer reproduce --branch feature/fix-bug --baseline main \
 
 It checks out each ref in its own isolated workspace, replays, and prints a
 per-scenario verdict of **fixed**, **still failing**, or **diverged** (a new,
-different failure), exiting non-zero unless every scenario is fixed. Needs the
-runner: `pip install pytracer-cli[runner]`.
+different failure), exiting non-zero unless every scenario is fixed. When it cannot
+settle a scenario it says so with the reason (**cannot judge**: the branch made a call
+the recording cannot serve, which it names; **cannot reproduce**: the baseline did),
+exiting with code 2. Needs the runner: `pip install pytracer-cli[runner]`.
+
+With `--isolation docker` (the default) each ref installs into a throwaway container;
+with `--isolation local` it runs in your current environment and installs nothing
+(`--install` / `--no-install` override either).
 
 Add `--pr <number> --pr-repo owner/name` to post the verdict as a "try on this
 branch" comment on the pull request.
 
 The same thing is available as a library (`CrossBranchRunner`,
-`classify_reproduction`) for building it into your own tooling.
+`classify_reproduction`, `explain_reproduction`) for building it into your own
+tooling.
 
 Each ref runs in its own clean workspace with its own dependencies, so branches
 never interfere with each other.
@@ -303,26 +338,52 @@ To run the gateway and its stores together as containers, see
 Every package is covered by tests and checked with `ruff` and `mypy --strict`:
 
 ```bash
-pytest packages            # 332 tests
+pytest packages            # 589 tests
 ruff check packages
 mypy packages/*/src
 ```
 
 ## Status
 
-pyTracer 0.1.2 is released: all twelve packages are on PyPI. All seven core
-layers have working, tested engines. Ingestion is durable (the gateway's queue
-and dead-letter list survive a restart on Redis Streams), API keys are managed
-in Postgres with create/revoke and per-key rate limiting, failures auto-document
-as deduplicated GitHub issues, the deploy stack has a TLS-terminating reverse
-proxy with a self-hosting hardening guide ([SECURITY.md](SECURITY.md)), and a
-k6 + Prometheus benchmark harness ([benchmarks/](benchmarks/)) load-tests the
-gateway. The replay engine now holds fidelity on real agents (streaming
-responses, concurrent and repeated tool calls replayed in order, nondeterminism
-controls for a frozen clock and seeded RNG, retry dedupe, and side-effect
-detection), `pytracer reproduce --pr` posts a "try on this branch" verdict as a
-PR comment, and a pytest plugin runs collections inside your existing suite.
+pyTracer 0.1.4 is released: all twelve packages are on PyPI, and the hosted gateway
+runs it. 0.1.4 fixes every verdict issue found in outside testing (a run that leaves
+its recording now gets no verdict and the reason, never a lucky "fixed"), captures
+every AutoGen release from 0.4.0, keeps the gateway writing through a Redis outage,
+lets several gateways share one queue, and keeps model calls' token counts with
+replay switched on. See the [changelog](CHANGELOG.md) for the full list, including
+the behaviour changes and known limitations.
+
+Every layer is in place: capture with local redaction, a durable ingestion gateway
+(Redis Streams, dead-letter list, managed API keys, per-key rate limits, TLS), a
+ClickHouse trace store, the replay engine with streaming, concurrency and
+nondeterminism controls, cross-branch reproduction with a PR trigger, a CI gate and
+pytest plugin, failure auto-documentation as GitHub issues, and the test registry.
 Remaining work is the registry web UI and outbound webhooks.
+
+## Benchmarks
+
+Measured on 0.1.4 (laptop and cloud VM, 26 October 2026); every number with its
+hardware and the command to rerun it is on the
+[benchmarks page](https://pytracer.com/benchmarks):
+
+- **Gateway soak:** 3,600 spans/s for 30 minutes, p95 5.6 ms, no failed or lost spans,
+  memory flat (99 MB to 75 MB).
+- **Failover:** two gateways, one killed mid-run: no spans lost, one request failed.
+- **Self-hosting:** the full stack with TLS runs on a free-tier VM.
+- **Verdicts on real pull requests:** fixed, still failing and cannot judge (with the
+  reason), each as expected, through the shipped GitHub Action.
+
+Next: replay versus live cost, flakiness, verdict trust on seeded bugs, and SDK
+overhead. Run the load tests yourself with [benchmarks/](benchmarks/).
+
+## Roadmap
+
+Near-term: published benchmarks, side-effect assertions and return values in
+`run --json`, replay controls (choose the redactor, reproduce a collaborator's remote
+branch), reusing existing OpenTelemetry or Langfuse spans, and full retry-chain
+capture. Later: a TypeScript SDK, side-effect governance on the hosted service, and
+cross-run failure intelligence. The [roadmap](https://pytracer.com/#roadmap) is kept
+current on the website.
 
 ## Contributing
 

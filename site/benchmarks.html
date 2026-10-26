@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Benchmarks - pyTracer</title>
+<meta name="description" content="What we measured on pyTracer 0.1.4 (gateway throughput and soak, failover, self-hosting on a free-tier VM, verdicts on real pull requests, framework coverage) and the benchmarks we run next. Every number with its hardware, date and the command to rerun it.">
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="stylesheet" href="/style.css">
+<script src="/nav.js" defer></script>
+<style>
+  .eyebrow { display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: 0.09em;
+             text-transform: uppercase; color: var(--accent); margin: 0 0 10px; }
+  .prose h1 { margin-bottom: 14px; }
+  .lead-xl { font-size: 20px; line-height: 1.5; color: var(--muted); margin: 0 0 8px; }
+  .rules { list-style: none; padding: 0; margin: 18px 0; }
+  .rules li { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin: 10px 0; background: var(--panel); }
+  .rules b { color: var(--text); }
+  .cmp { width: 100%; border-collapse: collapse; margin: 14px 0 6px; font-size: 15px; }
+  .cmp th, .cmp td { border: 1px solid var(--border); padding: 10px 12px; text-align: left; vertical-align: top; }
+  .cmp thead th { background: var(--panel); font-weight: 700; }
+  .cmp td.num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .note { color: var(--muted); font-size: 13.5px; margin: 4px 0 18px; }
+  .card-b { border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin: 16px 0;
+            background: var(--panel); }
+  .card-b h3 { margin: 0 0 6px; font-size: 17px; }
+  .card-b .q { color: var(--muted); margin: 0 0 8px; font-style: italic; }
+  .card-b p:last-child, .card-b ul:last-child { margin-bottom: 0; }
+  .tag { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em;
+         text-transform: uppercase; border-radius: 999px; padding: 3px 10px; margin: 0 0 8px; }
+  .tag.done { background: var(--accent-soft); color: var(--accent); }
+  .tag.next { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .cta-band { background: var(--accent-soft); border: 1px solid var(--border); border-radius: 16px;
+              padding: 28px 26px; margin: 34px 0 8px; text-align: center; }
+  .cta-band h2 { margin: 0 0 8px; padding: 0; border: none; }
+  .cta-band p { color: var(--muted); margin: 0 auto 18px; max-width: 560px; }
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  @media (max-width: 640px) { .cmp { font-size: 13.5px; } .cmp th, .cmp td { padding: 8px 9px; } }
+</style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="inner">
+      <a class="brand" href="/"><span class="py">py</span>Tracer</a>
+      <nav class="nav" id="site-nav">
+        <a href="/#problem">Problem</a>
+        <a href="/#how">How it works</a>
+        <a href="/compare">Why</a>
+        <a href="/benchmarks" class="active">Benchmarks</a>
+        <a href="/#roadmap">Roadmap</a>
+        <a href="/docs">Docs</a>
+      </nav>
+      <a class="nav-cta" href="https://github.com/vi6120/pyTracer">GitHub</a>
+      <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span class="bars"></span></button>
+    </div>
+  </header>
+
+  <main class="prose">
+    <div class="eyebrow">Benchmarks</div>
+    <h1>What we measured, and what we measure next.</h1>
+    <p class="lead-xl">Every number on this page comes with its hardware, its date, the version
+    it was measured on, and a command to rerun it. Where we have not measured something yet,
+    we say so instead of estimating.</p>
+
+    <h2>How we benchmark</h2>
+    <ul class="rules">
+      <li><b>Rerunnable.</b> The scripts live in the repository
+      (<a href="https://github.com/vi6120/pyTracer/tree/main/benchmarks">benchmarks/</a>), so
+      you can run the same test on your own machine.</li>
+      <li><b>Hardware, date and version on every number.</b> Laptop numbers are labelled as
+      laptop numbers. Results below are for pyTracer 0.1.4.</li>
+      <li><b>The bad cases too.</b> Abstentions, the request that failed, and the worst case
+      next to the typical one.</li>
+      <li><b>Compared with running it live, not with other vendors.</b> We do not publish
+      numbers for tools we did not run ourselves.</li>
+    </ul>
+
+    <h2>Measured</h2>
+
+    <div class="card-b">
+      <span class="tag done">Measured &middot; 26 Oct 2026</span>
+      <h3>Gateway ingestion: throughput, latency and loss</h3>
+      <p class="q">Will the gateway ever be my bottleneck, and does it lose spans?</p>
+      <p>One gateway, Redis queue and single-node ClickHouse from the bench stack, driven by
+      k6 with batches of 20 spans, on an Apple M1 Pro laptop (Docker Desktop with 10 CPUs and
+      8 GB). Every count below is the gateway's own, not k6's.</p>
+      <table class="cmp">
+        <thead><tr><th>Run</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Ramp to 200 virtual users (2 min)</td><td>The writer's ceiling on this laptop is about <b>3,600 spans/s</b>. Past it the queue fills and the gateway answers 429 (backpressure, by design) instead of dropping spans; every accepted span was written, none dead-lettered.</td></tr>
+          <tr><td>Constant 150 and 180 requests/s (1 min each)</td><td class="num">p95 4.7 ms and 4.9 ms, no errors</td></tr>
+          <tr><td><b>Soak: 3,600 spans/s for 30 minutes</b></td><td>324,001 requests and 6,480,020 spans; <b>0 failed, 0 rejected, 0 backpressured</b>. p95 5.6 ms, median 3.0 ms, worst 329 ms. Accepted equals written (7,424,180 including earlier runs), 0 dead letters, and ClickHouse holds exactly that many distinct span ids. Gateway memory went from 99 MB to 75 MB.</td></tr>
+        </tbody>
+      </table>
+      <p class="note">One laptop, small spans (a few attributes each). Real model spans carry
+      prompts and replies of several kilobytes, so expect lower throughput on real traffic;
+      that is the next ingestion run below.</p>
+    </div>
+
+    <div class="card-b">
+      <span class="tag done">Measured &middot; 26 Oct 2026</span>
+      <h3>Two gateways, one of them killed mid-run</h3>
+      <p class="q">If a gateway crashes, do I lose the spans it was holding?</p>
+      <p>Two gateways sharing one Redis stream behind Caddy, at a constant 2,000 spans/s for
+      4 minutes. One gateway was stopped normally and restarted; the other was killed
+      (<code>SIGKILL</code>) and restarted, mid-run.</p>
+      <ul>
+        <li><b>No loss:</b> 480,000 spans accepted, 480,000 distinct span ids stored, nothing
+        left pending.</li>
+        <li><b>p95 stayed at 4.4 ms.</b> The normal stop failed no request; the kill failed
+        one, the request in flight on the killed gateway (the SDK retries it).</li>
+        <li>Delivery is at least once: the killed gateway had written part of a batch without
+        acknowledging it, so its peer wrote that part again. Reads return each span once.</li>
+      </ul>
+    </div>
+
+    <div class="card-b">
+      <span class="tag done">Measured &middot; 26 Oct 2026</span>
+      <h3>Self-hosting on a free-tier VM, with TLS</h3>
+      <p class="q">Can I run the whole stack myself, cheaply?</p>
+      <p>The full deploy stack (gateway, Redis, ClickHouse, Postgres and Caddy) ran on a
+      Google Cloud free-tier e2-micro (1 GB of memory) with 2 GB of swap, using about 690 MB.
+      Caddy obtained a Let's Encrypt certificate on the first try and the SDK delivered spans
+      over HTTPS. A Redis restart under that setup is also how we found and fixed the bug that
+      stopped the gateway writing after an outage (fixed in 0.1.4).</p>
+      <p class="note">It fits, but tightly: for real use start at 2 to 4 GB. ClickHouse's own
+      system logs grow without traffic (about 0.5 GB a week on our hosted server); capping
+      them is on the roadmap.</p>
+    </div>
+
+    <div class="card-b">
+      <span class="tag done">Measured &middot; 26 Oct 2026</span>
+      <h3>Verdicts on real pull requests</h3>
+      <p class="q">Do the CI templates work, and is the verdict right?</p>
+      <p>We ran the shipped GitHub Action and <code>/pytracer try</code> on real pull requests
+      in a test repository with a captured failure (an agent that undercounts its sources),
+      installing pyTracer 0.1.4 from PyPI as the templates do, and the GitLab template on
+      gitlab.com:</p>
+      <table class="cmp">
+        <thead><tr><th>Pull request</th><th>Expected</th><th>The posted verdict</th></tr></thead>
+        <tbody>
+          <tr><td>The real fix</td><td>fixed</td><td><b>fixed</b></td></tr>
+          <tr><td>A README change, bug still there</td><td>still failing</td><td><b>still failing</b> (0.1.3 wrongly said diverged)</td></tr>
+          <tr><td>Changes a tool call's arguments</td><td>no verdict, with the reason</td><td><b>cannot judge</b>: "The branch calls tool 'search' with arguments the recording does not have", with the advice to re-record</td></tr>
+        </tbody>
+      </table>
+      <p>Failing pushes opened one GitHub issue and later failures updated it instead of opening
+      duplicates; the GitLab template ran in merge-request and branch pipelines with its JUnit
+      report in the merge request.</p>
+    </div>
+
+    <div class="card-b">
+      <span class="tag done">Independent testing</span>
+      <h3>An outside study of the verdicts</h3>
+      <p class="q">Does "fixed" mean fixed, on a real agent benchmark?</p>
+      <p>A partner tested 0.1.3 on a public agent benchmark with a planted bug and three
+      candidate branches. Frozen replay was deterministic (20 of 20 identical replays, zero
+      writes), but three verdict behaviours fell short of the docs, including a broken branch
+      reported <b>fixed</b> because its calls had run live. All three are fixed in 0.1.4: a run
+      that leaves its recording gets no verdict and the reason why, and a branch that fails
+      exactly as before is reported still failing. We will link their report when it is
+      public.</p>
+    </div>
+
+    <div class="card-b">
+      <span class="tag done">In CI on every change</span>
+      <h3>Framework coverage</h3>
+      <p class="q">Does it work with my framework and version?</p>
+      <table class="cmp">
+        <thead><tr><th>Adapter</th><th>Tested at</th></tr></thead>
+        <tbody>
+          <tr><td>LangGraph</td><td>LangGraph 1.2.11 with langchain-core 1.4.7 (the minimum), and current releases</td></tr>
+          <tr><td>OpenAI Agents SDK</td><td>0.20.0 (the minimum, and the version that installs beside CrewAI) and 0.22.1</td></tr>
+          <tr><td>CrewAI</td><td>1.15.20 (the minimum) and 1.15.30</td></tr>
+          <tr><td>AutoGen</td><td>0.4.0, 0.4.9, 0.6.2, 0.7.2 and 0.7.5: each range of what AutoGen reports is tested</td></tr>
+        </tbody>
+      </table>
+      <p class="note">All four frameworks are also installed together in one environment and
+      tested, and every group fails if a test is skipped. 589 tests in all.</p>
+    </div>
+
+    <h2>Measuring next</h2>
+    <p>These answer the questions developers ask before they adopt a tool. None is measured
+    yet; each will be published here with its script.</p>
+
+    <div class="card-b">
+      <span class="tag next">Next</span>
+      <h3>Replay versus running live: money and time</h3>
+      <p class="q">What does a replayed agent test cost and take, compared with running it live?</p>
+      <p>A real agent run recorded once, then timed live and replayed: wall time, model tokens,
+      dollars and CI minutes, per test and per month of CI.</p>
+    </div>
+    <div class="card-b">
+      <span class="tag next">Next</span>
+      <h3>Flaky live tests versus frozen replay</h3>
+      <p class="q">Will replay make my agent tests stop flaking?</p>
+      <p>The same scenario run 100 times live and 100 times replayed: pass rate, distinct
+      answers and distinct tool-call paths.</p>
+    </div>
+    <div class="card-b">
+      <span class="tag next">Next</span>
+      <h3>Verdict trust on seeded bugs</h3>
+      <p class="q">When pyTracer says fixed, is it right? When it cannot tell, does it say so?</p>
+      <p>Planted bugs on a public agent benchmark, each with a correct fix, a non-fix and a fix
+      that adds a new bug, under every replay setting: expected versus reported verdict, and
+      the abstention rate.</p>
+    </div>
+    <div class="card-b">
+      <span class="tag next">Next</span>
+      <h3>SDK overhead per <code>@op</code></h3>
+      <p class="q">Will it slow my agent down?</p>
+      <p>Added latency per decorated call (typical and worst case) for sync, async and streamed
+      functions, and memory per 100,000 buffered spans, against the undecorated function.</p>
+    </div>
+    <div class="card-b">
+      <span class="tag next">Next</span>
+      <h3>Time to the first green replayed test</h3>
+      <p class="q">How long until it works on my agent?</p>
+      <p>Minutes and lines changed from <code>pip install</code> to a green replayed test, for
+      a fresh LangGraph, CrewAI, OpenAI Agents and AutoGen example, following only the docs.</p>
+    </div>
+    <div class="card-b">
+      <span class="tag next">Next</span>
+      <h3>Ingestion at real span sizes, for a day, scaled out</h3>
+      <p class="q">What happens with real prompts, over a day, with more gateways?</p>
+      <p>The soak above with 2 to 10 KB prompts and replies, for 24 hours on a cloud VM, with
+      two and three gateways, and with a ClickHouse outage injected mid-run.</p>
+    </div>
+
+    <h2>Run them yourself</h2>
+    <p>From a clone of the repository, with Docker running:</p>
+<pre><code>docker compose -f benchmarks/docker-compose.bench.yml up -d --build
+docker compose -f benchmarks/docker-compose.bench.yml --profile load run --rm k6
+docker compose -f benchmarks/docker-compose.bench.yml --profile load run --rm \
+  -e MODE=soak -e RATE=180 -e DURATION=30m k6
+curl localhost:8080/v1/stats   # accepted must equal written, dead_letters 0</code></pre>
+    <p>The <a href="https://github.com/vi6120/pyTracer/blob/main/benchmarks/README.md">benchmarks
+    README</a> explains every option and how to read the results.</p>
+
+    <div class="cta-band">
+      <h2>See it on your own agent</h2>
+      <p>The numbers that matter most are the ones on your agent. Install it and replay your
+      first captured failure.</p>
+      <div class="cta-row">
+        <a class="btn primary" href="/docs">Read the docs</a>
+        <a class="btn ghost" href="https://github.com/vi6120/pyTracer">View on GitHub</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer-xl">
+    <div class="inner">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="fb-logo"><span class="py">py</span>Tracer</div>
+          <p>The test-and-replay layer for AI agents. Deterministic replay and cross-branch reproduction, built on an open core.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Product</h4>
+          <a href="/docs">Docs</a>
+          <a href="/compare">Why pyTracer</a>
+          <a href="/benchmarks">Benchmarks</a>
+          <a href="https://pypi.org/project/pytracer-all/">PyPI</a>
+          <a href="https://github.com/vi6120/pyTracer">GitHub</a>
+        </div>
+        <div class="footer-col">
+          <h4>Resources</h4>
+          <a href="/docs">User guide</a>
+          <a href="https://github.com/vi6120/pyTracer/tree/main/examples/reproduce-demo">Reproduce demo</a>
+          <a href="https://github.com/vi6120/pyTracer/issues">Issues</a>
+        </div>
+        <div class="footer-col">
+          <h4>Legal</h4>
+          <a href="/license">License</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="made">Built by <b><a href="https://www.linkedin.com/in/vikasramaswamy/">Vikas Ramaswamy</a></b> and <b><a href="https://www.linkedin.com/in/nageshasheshadri/">Nagesha Sheshadri</a></b></div>
+        <div>Apache-2.0 (client) &amp; AGPL-3.0 (server)</div>
+      </div>
+    </div>
+    <div class="footer-mark" aria-hidden="true">pyTracer</div>
+  </footer>
+</body>
+</html>

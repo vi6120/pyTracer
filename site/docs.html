@@ -16,6 +16,8 @@
       <a class="brand" href="/"><span class="py">py</span>Tracer</a>
       <nav class="nav" id="site-nav">
         <a href="/docs" class="active">Docs</a>
+        <a href="/compare">Why</a>
+        <a href="/benchmarks">Benchmarks</a>
         <a href="/license">License</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
@@ -87,7 +89,7 @@ uv pip install pytracer-all        # or into the active environment</code></pre>
     vitest integration for JS/TS agents) is on the roadmap, not yet released.</p>
 
     <h2 id="packages">Packages on PyPI</h2>
-    <p>All twelve packages are published on PyPI at version 0.1.3 (each with a wheel
+    <p>All twelve packages are published on PyPI at version 0.1.4 (each with a wheel
     and a source distribution). Install only what you need; every name below links
     to its page on PyPI.</p>
     <table>
@@ -409,8 +411,9 @@ pytest -v
     <p><strong>Try on this branch, from a PR.</strong> Add the
     <a href="https://github.com/vi6120/pyTracer/blob/main/packages/cli/ci/pr-try-on-branch.yml">try-on-branch workflow</a>
     and comment <code>/pytracer try</code> on any pull request: pyTracer reproduces
-    the failure on that branch and posts the fixed / still-failing / diverged
-    verdict back as a comment, updated in place on each push
+    the failure on that branch and posts the fixed / still failing / diverged
+    verdict back as a comment (or, when it cannot judge, the call that left the
+    recording and what to do), updated in place on each push
     (<code>pytracer reproduce --pr &lt;number&gt;</code> under the hood).</p>
 
     <h2 id="frameworks">Framework adapters</h2>
@@ -519,10 +522,16 @@ app.invoke(inputs, config={"callbacks": [PyTracerCallbackHandler()]})</code></pr
     suits a small team or a beta. The full walkthrough (from provisioning a server
     to Cloudflare DNS and TLS) is in the repository:</p>
     <ul>
-      <li><a href="https://github.com/vi6120/pyTracer/blob/main/deploy/README.md">deploy/README.md</a> - the deploy stack and configuration</li>
+      <li><a href="https://github.com/vi6120/pyTracer/blob/main/deploy/README.md">deploy/README.md</a> - the deploy stack and configuration, including
+      several gateways on one queue (<code>deploy/docker-compose.scale.yml</code>)</li>
       <li><a href="https://github.com/vi6120/pyTracer/blob/main/deploy/HOSTING.md">deploy/HOSTING.md</a> - hosting on your own domain, step by step</li>
       <li><a href="https://github.com/vi6120/pyTracer/blob/main/SECURITY.md">SECURITY.md</a> - the hardening checklist</li>
     </ul>
+
+    <p>For a trial, the whole stack runs on a free-tier VM (1 GB of memory with 2 GB of
+    swap); for real use start at 2 to 4 GB. One gateway sustained 3,600 spans per second
+    on a laptop with no lost spans; the <a href="/benchmarks">benchmarks</a> have the
+    details and how to rerun them.</p>
 
     <h2 id="usecases">Use cases</h2>
     <h3>Regression-test a customer-support agent</h3>
@@ -532,7 +541,9 @@ app.invoke(inputs, config={"callbacks": [PyTracerCallbackHandler()]})</code></pr
     <h3>Prove a fix actually works</h3>
     <p>A user reports a bug. Capture the failing run, then use
     <code>pytracer reproduce</code> to re-run it against the fix branch with the
-    model and tools frozen, so you know the code change is what fixed it, not luck.</p>
+    model and tools frozen, so you know the code change is what fixed it, not luck.
+    If the branch changes the calls themselves, it says it cannot judge and names
+    the call, instead of guessing.</p>
     <h3>Compare model or prompt versions deterministically</h3>
     <p>Freeze the tool responses and replay in <code>partial</code> mode against a
     new model or prompt, isolating the effect of that one change.</p>
@@ -558,6 +569,8 @@ app.invoke(inputs, config={"callbacks": [PyTracerCallbackHandler()]})</code></pr
         <div class="footer-col">
           <h4>Product</h4>
           <a href="/docs">Docs</a>
+          <a href="/compare">Why pyTracer</a>
+          <a href="/benchmarks">Benchmarks</a>
           <a href="https://pypi.org/project/pytracer-all/">PyPI</a>
           <a href="https://github.com/vi6120/pyTracer">GitHub</a>
           <a href="/docs#packages">Packages</a>

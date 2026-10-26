@@ -165,6 +165,8 @@
   .pipe.play > *:nth-child(5) { transition-delay: 1s; }
   .pipe.play > *:nth-child(6) { transition-delay: 1.28s; }
   .pipe.play > *:nth-child(7) { transition-delay: 1.5s; }
+  .pipe.play > *:nth-child(8) { transition-delay: 1.78s; }
+  .pipe.play > *:nth-child(9) { transition-delay: 2s; }
 
   /* mini terminal (playbooks visual) */
   .mini-term { background: var(--code-bg); color: var(--code-text); border-radius: 14px; border: 1px solid var(--border);
@@ -257,6 +259,7 @@
         <a href="#problem">Problem</a>
         <a href="#how">How it works</a>
         <a href="/compare">Why</a>
+        <a href="/benchmarks">Benchmarks</a>
         <a href="#roadmap">Roadmap</a>
         <a href="#faq">FAQ</a>
         <a href="/docs">Docs</a>
@@ -270,7 +273,7 @@
     <!-- 1. hero -->
     <section class="hero">
       <div class="container">
-        <a class="pill reveal" href="https://pypi.org/project/pytracer-all/"><span class="dot"></span>Live on PyPI &middot; v0.1.3</a>
+        <a class="pill reveal" href="https://pypi.org/project/pytracer-all/"><span class="dot"></span>Live on PyPI &middot; v0.1.4</a>
         <h1 class="reveal d1">Know if your change <span class="accent">actually fixed</span> the agent.</h1>
         <p class="lede reveal d2">
           pyTracer captures what an agent does and replays a past run deterministically,
@@ -294,8 +297,8 @@
               <div class="verdict-row">
                 <span class="vs">cites-every-source</span>
                 <span class="vo">
-                  <span class="v-fixed">&check; fixed</span>
-                  <span class="v-fail">&times; still failing</span>
+                  <span class="v-fixed">fixed</span>
+                  <span class="v-fail">still_failing</span>
                 </span>
               </div>
             </div>
@@ -379,6 +382,40 @@
       </div>
     </section>
 
+    <!-- 4b. use case story -->
+    <section class="band" id="story">
+      <div class="container">
+        <div class="split">
+          <div class="col-head">
+            <div class="eyebrow reveal">A use case</div>
+            <h2 class="reveal d1">The support agent that sent the wrong items.</h2>
+            <p class="reveal d2">
+              A customer asks a support agent to exchange an order. The agent confirms, but
+              the exchange goes out with the <strong>old item IDs</strong> as the new ones: a
+              one-line bug in the glue code between the model and the tools. Re-running it
+              live does not help, because the model words things differently each time.
+              Here is the same bug with pyTracer.
+            </p>
+            <p class="reveal d2">
+              No live model calls and no API spend in any of these checks: every answer comes
+              from the run that actually failed, replayed with its responses frozen.
+            </p>
+          </div>
+          <div class="pipe">
+            <div class="pipe-step"><span class="k">1</span><span class="tx"><b>Captured</b><span>The failing conversation is recorded with its branch and commit: every model call and tool result.</span></span></div>
+            <div class="pipe-arrow">&darr;</div>
+            <div class="pipe-step"><span class="k">2</span><span class="tx"><b>Turned into a test</b><span><code>pytracer record</code> makes it a scenario asserting the right items are exchanged; CI goes red.</span></span></div>
+            <div class="pipe-arrow">&darr;</div>
+            <div class="pipe-step"><span class="k">3</span><span class="tx"><b>The fix PR</b><span>Comment <code>/pytracer try</code>: <strong>fixed</strong>, on the exact conversation that failed.</span></span></div>
+            <div class="pipe-arrow">&darr;</div>
+            <div class="pipe-step"><span class="k">4</span><span class="tx"><b>The PR that only looked like a fix</b><span>A rename, bug still there: <strong>still failing</strong>, not a lucky green run.</span></span></div>
+            <div class="pipe-arrow">&darr;</div>
+            <div class="pipe-step"><span class="k">5</span><span class="tx"><b>The PR it cannot judge</b><span>It changes the exchange call itself: <strong>cannot judge</strong>, naming that call and what to do, instead of guessing.</span></span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- 5. playbooks -->
     <section class="band">
       <div class="container">
@@ -424,11 +461,19 @@
               <strong>live</strong> (re-run everything) - or <strong>freeze everything
               except the one step you changed</strong>. Every mode adds assertions on the
               <strong>route the agents took</strong>, not just the final output, plus run
-              diffing, a failure fingerprint, and a three-way outcome classifier. Replay
+              diffing, a failure fingerprint, and an outcome classifier that abstains rather than guess. Replay
               stays faithful on real agents: <strong>streaming</strong> responses and
               <strong>concurrent or repeated tool calls</strong> replay in order, the clock,
               timestamps and UUIDs are pinned and the RNG seeded, and live
               <strong>side-effects</strong> are surfaced.
+            </p>
+            <p class="reveal d2">
+              A verdict is only drawn from a run that <strong>stayed on its recording</strong>,
+              whether it passed or failed. If a branch makes a call the recording cannot serve
+              (new arguments, an extra call, a call never recorded), you get <strong>cannot
+              judge</strong> and that call named, never a lucky "fixed". If the baseline itself
+              drifts, it is <strong>cannot reproduce</strong>. And a branch that fails exactly
+              as before is <strong>still failing</strong>, whatever else changed.
             </p>
           </div>
           <div class="pipe">
@@ -438,7 +483,7 @@
             <div class="pipe-arrow">&darr;</div>
             <div class="pipe-step"><span class="k">3</span><span class="tx"><b>Replay</b><span>full / partial / live, on any branch.</span></span></div>
             <div class="pipe-arrow">&darr;</div>
-            <div class="pipe-step"><span class="k">4</span><span class="tx"><b>Classify</b><span>fixed / still-failing / diverged.</span></span></div>
+            <div class="pipe-step"><span class="k">4</span><span class="tx"><b>Classify</b><span>fixed / still failing / diverged, or no verdict and the reason why.</span></span></div>
           </div>
         </div>
       </div>
@@ -450,20 +495,22 @@
         <div class="band-head">
           <div class="eyebrow reveal">What ships today</div>
           <h2 class="reveal d1">Open source, and ready to use today.</h2>
-          <p class="reveal d2">pyTracer <a href="https://github.com/vi6120/pyTracer/releases/tag/v0.1.3">0.1.3</a>
+          <p class="reveal d2">pyTracer <a href="https://github.com/vi6120/pyTracer/releases/tag/v0.1.4">0.1.4</a>
           is live on PyPI and the repository is public - no waitlist, no beta flag. This
-          release folds in fixes from pilot testing across the SDK, replay engine, gateway,
-          CLI and all four framework adapters.</p>
+          release fixes every verdict issue found in outside testing, captures every
+          AutoGen release from 0.4.0, and keeps the gateway writing through an
+          outage.</p>
         </div>
         <div class="stat-grid">
           <div class="stat reveal"><div class="big">12</div><div class="lbl">PyPI packages</div></div>
           <div class="stat reveal d1"><div class="big">4</div><div class="lbl">framework adapters</div></div>
           <div class="stat reveal d2"><div class="big">3</div><div class="lbl">replay modes</div></div>
-          <div class="stat reveal d3"><div class="big">332</div><div class="lbl">tests, ruff + mypy clean</div></div>
+          <div class="stat reveal d3"><div class="big">589</div><div class="lbl">tests, ruff + mypy clean</div></div>
         </div>
         <p class="stat-note reveal d2">
           Apache-2.0 for the client toolchain, AGPL-3.0 for the hosted server components.
-          See the <a href="/docs#packages">full package list</a>.
+          See the <a href="/docs#packages">full package list</a>, and the
+          <a href="/benchmarks">benchmarks</a> for what we measured and how.
         </p>
       </div>
     </section>
@@ -496,22 +543,25 @@
         </div>
         <div class="road reveal d1">
           <div class="road-col shipped">
-            <span class="road-tag">Shipped &middot; 0.1.3</span>
+            <span class="road-tag">Shipped &middot; 0.1.4</span>
             <h3>Deterministic test &amp; replay</h3>
             <ul>
-              <li><b>Cross-branch reproduction</b> with a fixed / still-failing / diverged verdict</li>
+              <li><b>Cross-branch reproduction</b> with a fixed / still failing / diverged verdict, and "cannot judge" with the reason when a branch leaves its recording</li>
               <li><b>Three replay modes</b> plus selective, per-step freeze</li>
               <li><b>Route, tools and step assertions</b>, not just output checks</li>
               <li><b>Fidelity:</b> streaming, concurrent calls, pinned clock / UUID / RNG, side-effect reporting</li>
-              <li><b>Four adapters</b> (LangGraph, CrewAI, AutoGen, OpenAI Agents) that capture and replay without <code>@op</code>, CI gate, PR trigger, pytest plugin</li>
+              <li><b>Four adapters</b> (LangGraph, CrewAI, AutoGen from 0.4, OpenAI Agents) that capture and replay without <code>@op</code>, CI gate, PR trigger, pytest plugin</li>
+              <li><b>A gateway that keeps writing</b> through a Redis outage, and several gateways on one queue</li>
             </ul>
           </div>
           <div class="road-col plan">
             <span class="road-tag next">On the roadmap</span>
             <h3>Near-term</h3>
             <ul>
+              <li><b>Published benchmarks</b>: replay versus live cost, flakiness, verdict trust and SDK overhead (<a href="/benchmarks">see the plan</a>)</li>
+              <li><b>Side-effect assertions</b> (did the write happen?) and return values in <code>run --json</code></li>
+              <li><b>Replay controls</b>: choose the redactor, reproduce a collaborator's remote branch</li>
               <li><b>Coexist with your observability</b> - reuse OpenTelemetry / Langfuse spans instead of double-instrumenting</li>
-              <li><b>Published SDK overhead benchmark</b> for <code>@op</code></li>
               <li><b>Full retry-chain capture</b>, every attempt and its wasted spend</li>
             </ul>
           </div>
@@ -545,7 +595,7 @@
           <div class="card reveal">
             <span class="ic">verdict</span>
             <h3>Did my change fix it, or did the model drift?</h3>
-            <p>Replay research and eval tools answer pass / fail. pyTracer answers fixed / still-failing / diverged across branches - the question pass / fail cannot.</p>
+            <p>Replay research and eval tools answer pass / fail. pyTracer answers fixed / still failing / diverged across branches - the question pass / fail cannot - and says "cannot judge", with the reason, rather than call a branch fixed on a run that left its recording.</p>
           </div>
           <div class="card reveal d1">
             <span class="ic">determinism</span>
@@ -608,12 +658,20 @@
             <div class="body" style="max-width: 720px;">The recorded model and tool responses are injected back in during replay, so the agent follows the exact same path with no live API calls. The same failure reproduces identically every time.</div>
           </details>
           <details class="item">
+            <summary>What do "cannot judge" and "cannot reproduce" mean?</summary>
+            <div class="body" style="max-width: 720px;">They are pyTracer refusing to guess. <b>Cannot judge</b>: the branch made a call the recording cannot serve (new arguments, an extra call, or one never recorded), so its result is not a frozen one; pyTracer names that call and tells you what to do (re-record, or evaluate a changed prompt live). <b>Cannot reproduce</b>: the baseline itself drifted, usually because the run's settings were missing (pass them with <code>--env-file</code>).</div>
+          </details>
+          <details class="item">
+            <summary>How fast is it, and what does it cost to run?</summary>
+            <div class="body" style="max-width: 720px;">A replay makes no model calls, so it costs nothing in API spend. The gateway sustained 3,600 spans per second for 30 minutes on a laptop with no lost spans, and the whole stack runs on a free-tier VM. The <a href="/benchmarks">benchmarks page</a> has every number with its hardware and command, and what we measure next.</div>
+          </details>
+          <details class="item">
             <summary>Do I have to change my agent code?</summary>
             <div class="body" style="max-width: 720px;">With a framework adapter (LangGraph, CrewAI, AutoGen, OpenAI Agents), no: register the adapter and its model and tool calls are captured and replayable as they are. Otherwise, add the <code>@op</code> decorator to the functions that call models and tools. One or two lines each, and it does not change their behavior.</div>
           </details>
           <details class="item">
             <summary>Which frameworks are supported?</summary>
-            <div class="body" style="max-width: 720px;">LangGraph, CrewAI, AutoGen, and the OpenAI Agents SDK have dedicated adapters, and any Python agent works once you instrument it by hand. Each adapter records agent, model and tool calls with their outputs, one trace per run, and with replay switched on it makes a captured run replayable without <code>@op</code>. The <a href="/docs#adapter-capabilities">capability table</a> has the details.</div>
+            <div class="body" style="max-width: 720px;">LangGraph, CrewAI, AutoGen (every release from 0.4.0), and the OpenAI Agents SDK have dedicated adapters, and any Python agent works once you instrument it by hand. Each adapter records agent, model and tool calls with their outputs, one trace per run, and with replay switched on it makes a captured run replayable without <code>@op</code>. The <a href="/docs#adapter-capabilities">capability table</a> has the details.</div>
           </details>
           <details class="item">
             <summary>Can I replay a run captured through an adapter?</summary>
@@ -629,7 +687,7 @@
           </details>
           <details class="item">
             <summary>Can I self-host, or is there a hosted option?</summary>
-            <div class="body" style="max-width: 720px;">Both. Self-host the gateway and stores as a Docker stack behind a TLS reverse proxy, or point the SDK at the live gateway at <code>gateway.pytracer.com</code>.</div>
+            <div class="body" style="max-width: 720px;">Both. Self-host the gateway and stores as a Docker stack behind a TLS reverse proxy (it runs even on a free-tier VM), or point the SDK at the live gateway at <code>gateway.pytracer.com</code>.</div>
           </details>
           <details class="item">
             <summary>Does my prompt data leave my machine?</summary>
@@ -674,6 +732,8 @@
         <div class="footer-col">
           <h4>Product</h4>
           <a href="/docs">Docs</a>
+          <a href="/compare">Why pyTracer</a>
+          <a href="/benchmarks">Benchmarks</a>
           <a href="https://pypi.org/project/pytracer-all/">PyPI</a>
           <a href="https://github.com/vi6120/pyTracer">GitHub</a>
           <a href="/docs#packages">Packages</a>

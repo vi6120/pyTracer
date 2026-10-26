@@ -45,6 +45,7 @@
         <a href="/#problem">Problem</a>
         <a href="/#how">How it works</a>
         <a href="/compare" class="active">Why</a>
+        <a href="/benchmarks">Benchmarks</a>
         <a href="/#roadmap">Roadmap</a>
         <a href="/docs">Docs</a>
       </nav>
@@ -75,8 +76,9 @@
       responses frozen, no manual reconstruction.</li>
       <li><b>You're never sure the fix worked.</b> Re-running live returns different model
       and tool outputs, so a green run might just be drift. pyTracer holds those responses
-      frozen and reports <b>fixed / still-failing / diverged</b> per scenario across
-      branches.</li>
+      frozen and reports <b>fixed / still failing / diverged</b> per scenario across
+      branches, and says it <b>cannot judge</b>, naming the call, rather than call a
+      branch fixed on a run that left its recording.</li>
       <li><b>Testing agents before merge is manual.</b> Teams keep a few golden examples and
       test by hand. pyTracer turns a captured failure into a runnable regression test that
       gates CI - and runs inside your existing <code>pytest</code> suite.</li>
@@ -205,6 +207,7 @@
           <h4>Product</h4>
           <a href="/docs">Docs</a>
           <a href="/compare">Why pyTracer</a>
+          <a href="/benchmarks">Benchmarks</a>
           <a href="https://pypi.org/project/pytracer-all/">PyPI</a>
           <a href="https://github.com/vi6120/pyTracer">GitHub</a>
         </div>

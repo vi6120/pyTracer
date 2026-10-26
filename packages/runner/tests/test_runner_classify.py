@@ -90,3 +90,59 @@ def test_diverged_when_the_candidate_now_raises_instead() -> None:
     baseline = _run([_assertion_failure("'Reviewed 3 sources' not found")])
     candidate = _run([{"name": "s", "passed": False, "fingerprint": "fp1", "error_type": "KeyError"}])
     assert classify_reproduction(baseline, candidate) == {"s": Outcome.DIVERGED}
+
+
+# --- Runs that left their recordings (partner study, gap 3) ----------------------
+
+def _scenario(*, passed: bool, fp: str | None = None, error: str | None = None,
+              unrecorded: list[str] | None = None, evaluated: bool = False) -> dict[str, Any]:
+    return {
+        "name": "s", "passed": passed, "fingerprint": fp, "error_type": error,
+        "unrecorded_calls": unrecorded or [], "evaluated_changed_prompts": evaluated,
+        "assertions": [],
+    }
+
+
+BASE = _run([_scenario(passed=False, fp="bug")])  # reproduced the captured failure
+
+
+def test_a_pass_that_left_its_recording_is_not_fixed() -> None:
+    # Fallback mode: a changed tool call ran live and the run "passed". Its outcome
+    # came from live calls, so it cannot be reported fixed (it was, before).
+    live_pass = _run([_scenario(passed=True, unrecorded=["tool 'get_order'"])])
+    assert classify_reproduction(BASE, live_pass) == {"s": Outcome.CANNOT_JUDGE}
+
+
+def test_the_baselines_failure_showing_again_is_still_failing_despite_drift() -> None:
+    # Partial mode: both refs drifted, but the candidate fails with exactly the
+    # baseline's failure, so the bug did reproduce (it was cannot_reproduce).
+    drift = ["llm 'user_llm'"]
+    base = _run([_scenario(passed=False, fp="bug", unrecorded=drift)])
+    cand = _run([_scenario(passed=False, fp="bug", unrecorded=drift)])
+    assert classify_reproduction(base, cand) == {"s": Outcome.STILL_FAILING}
+
+
+def test_a_baseline_that_left_its_recording_cannot_reproduce_even_if_the_candidate_passes() -> None:
+    base = _run([_scenario(passed=False, fp="other", unrecorded=["llm 'user_llm'"])])
+    cand = _run([_scenario(passed=True)])
+    assert classify_reproduction(base, cand) == {"s": Outcome.CANNOT_REPRODUCE}
+
+
+def test_two_failures_on_a_missing_recording_are_not_the_same_bug() -> None:
+    miss = _scenario(passed=False, fp="miss", error="MissingMockError", unrecorded=["llm 'a'"])
+    assert classify_reproduction(_run([miss]), _run([dict(miss)])) == {"s": Outcome.CANNOT_REPRODUCE}
+
+
+def test_a_model_change_evaluated_live_on_request_is_judged() -> None:
+    changed = ["llm 'agent'"]
+    fixed = _run([_scenario(passed=True, unrecorded=changed, evaluated=True)])
+    other = _run([_scenario(passed=False, fp="new", unrecorded=changed, evaluated=True)])
+    same = _run([_scenario(passed=False, fp="bug", unrecorded=changed, evaluated=True)])
+    assert classify_reproduction(BASE, fixed) == {"s": Outcome.FIXED}
+    assert classify_reproduction(BASE, other) == {"s": Outcome.DIVERGED}
+    assert classify_reproduction(BASE, same) == {"s": Outcome.STILL_FAILING}
+
+
+def test_a_tool_miss_is_not_excused_by_evaluating_model_changes() -> None:
+    cand = _run([_scenario(passed=True, unrecorded=["tool 'exchange'", "llm 'agent'"], evaluated=True)])
+    assert classify_reproduction(BASE, cand) == {"s": Outcome.CANNOT_JUDGE}

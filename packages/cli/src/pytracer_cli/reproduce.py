@@ -96,14 +96,17 @@ def format_verdicts(verdicts: dict[str, Any]) -> str:
     if "cannot_reproduce" in values:
         lines.append("")
         lines.append(
-            "cannot_reproduce: neither ref matched its recordings; re-run with "
+            "cannot_reproduce: the baseline left its recordings (a frozen call "
+            "found none), so it never reproduced the failure; re-run with "
             "--env-file so both reach the bug."
         )
     if "cannot_judge" in values:
         lines.append("")
         lines.append(
-            "cannot_judge: a model input changed, which a frozen replay cannot "
-            "judge; try reproduce --evaluate-changed-prompts."
+            "cannot_judge: the candidate left its recordings (a frozen call found "
+            "none, or ran live), so its outcome, pass or fail, is not a frozen "
+            "result. If a prompt edit changed a model input, try reproduce "
+            "--evaluate-changed-prompts."
         )
     return "\n".join(lines)
 

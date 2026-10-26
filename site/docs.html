@@ -407,7 +407,7 @@ pip install pytracer-autogen          # AutoGen</code></pre>
       <thead><tr><th></th><th>LangGraph</th><th>OpenAI Agents</th><th>CrewAI</th><th>AutoGen</th></tr></thead>
       <tbody>
         <tr><td>Agent spans</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
-        <tr><td>Model calls (model, tokens, output)</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes, from the model client's call events (the <code>autogen_ext</code> clients log them); a client that logs none has its calls rebuilt from AutoGen's replies</td></tr>
+        <tr><td>Model calls (model, tokens, output)</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes, from the model client's call events (the <code>autogen_ext</code> clients log them); a client that logs none has its calls rebuilt from AutoGen's replies. Before AutoGen 0.7.2 the calls are recorded through pyTracer's routing, the one <code>install(replayable=True)</code> uses, so every release from 0.4.0 is captured in full</td></tr>
         <tr><td>Tool calls with their output</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
         <tr><td>One trace per framework run</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
         <tr><td>Nests under an enclosing <code>pytracer.start_span(...)</code></td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>

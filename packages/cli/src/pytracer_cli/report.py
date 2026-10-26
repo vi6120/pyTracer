@@ -45,6 +45,11 @@ def to_json(result: CollectionResult) -> dict[str, Any]:
                     for e in s.replay.side_effects.non_idempotent()
                 ],
                 "changed_models": s.replay.changed_models,
+                # Where the run left its recording, and which of those calls ran
+                # live; cross-branch verdicts never trust a run that left it.
+                "unrecorded_calls": s.replay.unrecorded_calls,
+                "live_fallbacks": s.replay.live_fallbacks,
+                "evaluated_changed_prompts": s.replay.evaluated_changed_prompts,
                 "concurrency_ambiguities": s.replay.concurrency_ambiguities,
                 "assertions": [
                     {"name": a.name, "passed": a.passed, "detail": a.detail} for a in s.assertions

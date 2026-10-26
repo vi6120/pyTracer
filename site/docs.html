@@ -263,7 +263,10 @@ scenarios:
       recording for that op by input similarity, so small drift (a timestamp in a prompt,
       a reordered field) still replays.</li>
       <li><code>strict: true</code> - fail the scenario on an unrecorded call instead of
-      silently running it live. On by default in <code>full</code> mode.</li>
+      silently running it live, even if the agent catches the error. On by default in
+      <code>full</code> mode. With <code>strict: false</code> an unrecorded tool call
+      runs live (and is reported); a model call whose input changed never runs live
+      unless <code>evaluate_changed_prompts</code> is set.</li>
       <li><code>sandbox: true</code> - block outbound network during the replay, so a
       miss cannot fire a real side effect. On by default in <code>full</code> mode.</li>
     </ul>
@@ -375,15 +378,20 @@ pytest -v
     <code>pytracer-cli</code>. If the agent needs secrets or endpoints to run, pass
     them with <code>--env-file .env</code> so the replay reaches the bug instead of
     failing on configuration (and a real fix is not reported still-failing).</p>
-    <p><strong>Inconclusive verdicts.</strong> When a frozen replay cannot settle a
-    scenario, <code>reproduce</code> says so instead of guessing: <strong>cannot
-    judge</strong> (a model input changed, e.g. a prompt edit, so the recording no
-    longer applies) or <strong>cannot reproduce</strong> (neither ref matched its
-    recordings, usually a missing <code>--env-file</code>). Both exit with code
-    <code>2</code>, distinct from <code>1</code> (a real regression) and <code>0</code>
-    (all fixed). For a prompt edit, add <code>pytracer reproduce
-    --evaluate-changed-prompts</code> to run the changed model call live and evaluate
-    it; that verdict holds only if nothing after the changed call also changed.</p>
+    <p><strong>Inconclusive verdicts.</strong> A verdict is drawn only from runs that
+    stayed on their recordings, the same way whether the branch passed or failed. When
+    a frozen replay cannot settle a scenario, <code>reproduce</code> says so instead of
+    guessing: <strong>cannot judge</strong> (the branch left its recordings: a frozen
+    call found none, or ran live, so its result, pass or fail, is not a frozen one) or
+    <strong>cannot reproduce</strong> (the baseline left its recordings, so it never
+    reproduced the failure, usually a missing <code>--env-file</code>). One exception:
+    if the branch fails exactly as the baseline did, that is <strong>still
+    failing</strong> whatever else drifted, since the bug showed again. Both
+    non-verdicts exit with code <code>2</code>, distinct from <code>1</code> (a real
+    regression) and <code>0</code> (all fixed). For a prompt edit, add
+    <code>pytracer reproduce --evaluate-changed-prompts</code> to run the changed model
+    call live and evaluate it; that verdict holds only if nothing after the changed call
+    also changed.</p>
     <p>A runnable, self-contained example of exactly this is in
     <a href="https://github.com/vi6120/pyTracer/tree/main/examples/reproduce-demo">examples/reproduce-demo</a>:
     one command builds a buggy branch and a fix branch and reproduces the captured

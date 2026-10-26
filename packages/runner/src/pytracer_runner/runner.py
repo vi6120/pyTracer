@@ -137,36 +137,62 @@ def classify_reproduction(
 ) -> dict[str, Outcome]:
     """Per-scenario cross-branch verdicts from two `pytracer run --json` outputs.
 
-    For each scenario in the candidate run: if it now passes it is FIXED; if it
-    still fails with the same failure fingerprint as the baseline, or (for a
-    failure that raised nothing, only failed assertions) with the same assertions
-    failing the same way, it is STILL_FAILING; otherwise it is DIVERGED (a new,
-    different failure).
+    A verdict is only drawn from runs that stayed on their recordings, the same way
+    whether the candidate passed or failed:
+
+    - STILL_FAILING: the candidate fails exactly as the baseline did (the same
+      fingerprint, or the same assertions failing the same way). The bug showed
+      again, so this holds even if something else drifted.
+    - CANNOT_REPRODUCE: the baseline left its recordings (a frozen call found no
+      recording, or ran live), so it never reproduced the captured failure and
+      there is nothing to compare.
+    - CANNOT_JUDGE: the candidate left its recordings, passing or failing: its
+      outcome came from calls that were not frozen, so it says nothing reliable
+      about the fix. A model call evaluated live on request
+      (``--evaluate-changed-prompts``) does not count as leaving them.
+    - FIXED: it passes; DIVERGED: it fails differently.
     """
     base_by_name = {s["name"]: s for s in baseline.get("scenarios", [])}
     verdicts: dict[str, Outcome] = {}
     for scenario in candidate.get("scenarios", []):
         name = scenario["name"]
-        if scenario.get("passed"):
-            verdicts[name] = Outcome.FIXED
-            continue
         base = base_by_name.get(name)
-        # Neither ref matched its recordings (e.g. the run's env was not supplied,
-        # so every model call drifted): the baseline failure was never reproduced,
-        # so there is nothing to compare (X2/X5).
-        if base is not None and _unmatched(scenario) and _unmatched(base):
-            verdicts[name] = Outcome.CANNOT_REPRODUCE
-            continue
-        # A model input changed on the candidate (a prompt edit): a frozen replay
-        # cannot judge the fix, so this is not a diverge (X4).
-        if scenario.get("changed_models"):
-            verdicts[name] = Outcome.CANNOT_JUDGE
-            continue
-        if base is not None and not base.get("passed") and _same_failure(scenario, base):
+        if (
+            base is not None
+            and not base.get("passed")
+            and not scenario.get("passed")
+            and not _missed(base)
+            and not _missed(scenario)
+            and _same_failure(scenario, base)
+        ):
             verdicts[name] = Outcome.STILL_FAILING
+        elif base is not None and _left_recording(base):
+            verdicts[name] = Outcome.CANNOT_REPRODUCE
+        elif _left_recording(scenario):
+            verdicts[name] = Outcome.CANNOT_JUDGE
+        elif scenario.get("passed"):
+            verdicts[name] = Outcome.FIXED
         else:
             verdicts[name] = Outcome.DIVERGED
     return verdicts
+
+
+def _missed(scenario: Mapping[str, Any]) -> bool:
+    """True when the run failed on a missing recording (not on the agent's bug)."""
+    return scenario.get("error_type") == "MissingMockError"
+
+
+def _left_recording(scenario: Mapping[str, Any]) -> bool:
+    """True when a run did not stay on its recordings: a frozen call found no
+    recording (and failed, or ran live). A model call evaluated live on request is
+    a deliberate exception."""
+    unrecorded = scenario.get("unrecorded_calls")
+    evaluated = bool(scenario.get("evaluated_changed_prompts"))
+    if unrecorded is not None:
+        return any(not (evaluated and call.startswith("llm ")) for call in unrecorded)
+    # Runs reported before these fields existed.
+    changed = bool(scenario.get("changed_models")) and not evaluated
+    return changed or _missed(scenario)
 
 
 def _same_failure(candidate: Mapping[str, Any], baseline: Mapping[str, Any]) -> bool:
@@ -189,10 +215,3 @@ def _failed_assertions(scenario: Mapping[str, Any]) -> list[tuple[Any, Any]]:
     )
 
 
-def _unmatched(scenario: Mapping[str, Any]) -> bool:
-    """True when a run did not match its recordings, so it never reproduced the
-    intended failure: a model input drifted (``changed_models``) or a frozen call
-    had no recording (``MissingMockError``)."""
-    if scenario.get("passed"):
-        return False
-    return bool(scenario.get("changed_models")) or scenario.get("error_type") == "MissingMockError"

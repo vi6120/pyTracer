@@ -33,6 +33,19 @@
 
 ### Fixed
 
+- **Cross-branch verdicts never trust a run that left its recording.** A branch
+  that passed was reported `fixed` even when its calls had run live, while one that
+  failed the same way was reported as an abstention, so a broken branch could be
+  called fixed. Now a branch that left its recording (a frozen call found none, or
+  ran live) is `cannot_judge` whether it passed or failed, a baseline that left it is
+  `cannot_reproduce`, and a branch failing exactly as the baseline did is
+  `still_failing` whatever else drifted. With `--evaluate-changed-prompts`, changed
+  model calls are judged as asked. A model call whose input changed no longer runs
+  live as a silent fallback when strict is off; it needs `evaluate_changed_prompts`.
+  A swallowed miss is now reported as the run's cause even when a later call failed
+  too, and `ReplayResult` and `run --json` list the calls that left the recording
+  (`unrecorded_calls`) and those that ran live (`live_fallbacks`). Found by a partner
+  study on tau2-bench.
 - **Verdicts are plain text.** The `/pytracer try` comment labelled verdicts with
   emoji (check mark, cross, warning, question mark, party popper); it now uses the
   words alone, and a test keeps emoji out of every package's source.

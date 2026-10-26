@@ -680,3 +680,79 @@ def test_strict_miss_fails_the_replay_even_when_the_agent_catches_it() -> None:
     assert res.return_value == "gave up"
     assert res.failed
     assert res.error_type == "MissingMockError" and "no recording" in (res.error_message or "")
+
+
+# --- Leaving the recording (partner study, gaps 1 and 3) -------------------------
+
+def _support_agent(order_id: str, calls: dict[str, int]) -> Any:
+    """Looks an order up, then asks the model; catches tool errors as frameworks do."""
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="get_order")
+    def get_order(oid: str) -> str:
+        calls["tool"] += 1
+        return f"order {oid}: shipped"
+
+    @pytracer.op(kind=SpanKind.LLM, name="agent_llm")
+    def agent_llm(context: str) -> str:
+        calls["model"] += 1
+        return f"reply to {context}"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="support")
+    def agent() -> str:
+        try:
+            found = get_order(order_id)
+        except Exception as exc:  # noqa: BLE001 - the dispatcher turns errors into text
+            found = f"Error: {exc}"
+        return agent_llm(found)
+
+    return agent
+
+
+def _recorded_support() -> MockSet:
+    calls = {"tool": 0, "model": 0}
+    rec = _record(_support_agent("#1", calls))
+    return MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+
+
+def test_a_changed_model_call_never_runs_live_without_the_flag() -> None:
+    # Fallback (strict off): the changed tool call runs live, which changes the
+    # model's input; that model call must not silently run live too.
+    calls = {"tool": 0, "model": 0}
+    res = ReplayEngine(ReplayMode.FULL, strict=False, sandbox=False).replay(
+        _support_agent("1", calls), _recorded_support()
+    )
+    assert calls == {"tool": 1, "model": 0}  # the tool ran live, the model did not
+    assert res.failed and res.error_type == "MissingMockError"
+    assert res.unrecorded_calls == ["tool 'get_order'", "llm 'agent_llm'"]
+    assert res.live_fallbacks == ["tool 'get_order'"]
+    assert "evaluate_changed_prompts" in (res.error_message or "")
+
+
+def test_a_changed_model_call_runs_live_when_asked_and_is_listed() -> None:
+    calls = {"tool": 0, "model": 0}
+    res = ReplayEngine(
+        ReplayMode.FULL, strict=False, sandbox=False, evaluate_changed_prompts=True
+    ).replay(_support_agent("1", calls), _recorded_support())
+    assert calls == {"tool": 1, "model": 1}
+    assert not res.failed
+    assert res.live_fallbacks == ["tool 'get_order'", "llm 'agent_llm'"]
+
+
+def test_a_swallowed_strict_miss_is_reported_as_the_cause() -> None:
+    # Strict: the tool miss is caught by the agent and fed to the model as text, so
+    # the model call misses too. The run must name the tool, the first miss.
+    calls = {"tool": 0, "model": 0}
+    res = ReplayEngine(ReplayMode.FULL, strict=True).replay(
+        _support_agent("1", calls), _recorded_support()
+    )
+    assert calls == {"tool": 0, "model": 0}
+    assert res.failed and res.error_type == "MissingMockError"
+    assert "tool 'get_order'" in (res.error_message or "")
+    assert res.unrecorded_calls[0] == "tool 'get_order'"
+
+
+def test_a_run_that_stays_on_its_recording_lists_nothing() -> None:
+    calls = {"tool": 0, "model": 0}
+    res = ReplayEngine(ReplayMode.FULL).replay(_support_agent("#1", calls), _recorded_support())
+    assert not res.failed and calls == {"tool": 0, "model": 0}
+    assert res.unrecorded_calls == [] and res.live_fallbacks == []

@@ -111,6 +111,12 @@ class ReplayResult:
     # recording: the model input changed (e.g. a prompt edit), so the recorded
     # response does not apply and the step cannot be judged by a frozen replay.
     model_input_changes: list[str] = field(default_factory=list)
+    # Every frozen call that found no recording, in order ("tool 'lookup'",
+    # "llm 'agent'"): where the run left its recording. The first is the cause.
+    unrecorded_calls: list[str] = field(default_factory=list)
+    # The frozen calls among those that then ran live instead (a tool when strict is
+    # off, a model with evaluate_changed_prompts), so the outcome was not frozen.
+    live_fallbacks: list[str] = field(default_factory=list)
     # Identifiers of ops called concurrently from different OS threads with the same
     # input, under the same caller (or no caller op), but differing recorded
     # responses: nothing distinguishes those calls, so the match may be swapped
@@ -196,9 +202,12 @@ class ReplayEngine:
         se_lock = threading.Lock()
         # Frozen model ops whose input no longer matched a recording (a prompt edit).
         model_input_changes: list[str] = []
-        # Strict-mode misses, kept so the replay fails even when the agent or its
-        # framework catches the error (an AutoGen runtime swallows a handler's).
+        # Misses that fail the run (a strict tool miss, or a changed model call that
+        # is not evaluated live), kept so the replay fails even when the agent or
+        # its framework catches the error (an AutoGen runtime swallows a handler's).
         strict_misses: list[MissingMockError] = []
+        unrecorded_calls: list[str] = []
+        live_fallbacks: list[str] = []
         # Numbers each (identifier, input) call so concurrent/repeat calls resolve
         # to their recording in order; thread-safe for concurrent tool execution.
         ledger = ConcurrencyLedger()
@@ -269,24 +278,37 @@ class ReplayEngine:
                     if isinstance(output, RecordedStream):
                         return Intercept(list(output.replay()), stream=True, match=match)
                     return Intercept(output, match=match)
-                # Miss on a frozen op. A frozen model op that misses means the model
-                # input changed (a prompt edit): the recorded response does not
-                # apply, so note it - and, if asked, run it live to evaluate it.
+                # Miss on a frozen op: the run left its recording here.
+                label = f"{kind.value} {tool_name or name!r}"
+                with se_lock:
+                    unrecorded_calls.append(label)
+                # A frozen model op that misses means the model input changed: the
+                # recorded response does not apply. It runs live only when asked
+                # (evaluate_changed_prompts), never as a silent fallback, since a
+                # live model makes the outcome nondeterministic.
                 if kind is SpanKind.LLM:
                     with se_lock:
                         model_input_changes.append(identifier)
                     if self.evaluate_changed_prompts:
+                        with se_lock:
+                            live_fallbacks.append(label)
                         return None  # fall through to a live model call
-                if self.strict:
+                if self.strict or kind is SpanKind.LLM:
+                    advice = (
+                        "set evaluate_changed_prompts to run it live and evaluate the change"
+                        if kind is SpanKind.LLM
+                        else "run this scenario in partial/live mode"
+                    )
                     miss = MissingMockError(
-                        f"no recording for {kind.value} {tool_name or name!r} "
-                        f"(occurrence {occurrence}): its input did not match any recorded "
-                        f"call, so there is nothing to replay. Re-record the trace, or run "
-                        f"this scenario in partial/live mode."
+                        f"no recording for {label} (occurrence {occurrence}): its input "
+                        f"did not match any recorded call, so there is nothing to replay. "
+                        f"Re-record the trace, or {advice}."
                     )
                     with se_lock:
                         strict_misses.append(miss)
                     raise miss
+                with se_lock:
+                    live_fallbacks.append(label)
             # Not mocked (or a non-strict mock miss): the op runs live. A live tool
             # call is a real external side effect; record it for the safety checks,
             # as a WRITE when the tool was declared a writer, else as an
@@ -335,9 +357,10 @@ class ReplayEngine:
             tracer.flush()
             tracer.shutdown()
             pytracer.set_tracer(previous)
-        if strict_misses and status is SpanStatus.OK:
-            # Strict means a missing recording fails the replay, even if something
-            # in the agent caught the error and the run went on.
+        if strict_misses:
+            # A missing recording fails the replay even if something in the agent
+            # caught the error and the run went on; and the first miss is the cause,
+            # not whatever failed downstream of it (e.g. a model fed the error text).
             status = SpanStatus.ERROR
             error_type = type(strict_misses[0]).__name__
             error_message = str(strict_misses[0])
@@ -366,6 +389,8 @@ class ReplayEngine:
             error_message=error_message,
             side_effects=side_effects,
             model_input_changes=model_input_changes,
+            unrecorded_calls=unrecorded_calls,
+            live_fallbacks=live_fallbacks,
             concurrency_ambiguities=concurrency_ambiguities,
             uninstrumented=(len(mocks) > 0 and not seen_op["any"]),
             evaluated_changed_prompts=self.evaluate_changed_prompts,

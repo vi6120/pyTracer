@@ -32,22 +32,22 @@ jobs:
             frameworks: >-
               langgraph==1.2.11 langgraph-prebuilt==1.1.0
               autogen-agentchat==0.7.5 autogen-core==0.7.5
-              opentelemetry-instrumentation-openai-v2==2.3b0 wrapt<2 openai httpx
+              opentelemetry-instrumentation-openai-v2==2.3b0 wrapt<2 openai==3.37.0 httpx==0.28.1
             store_tests: "langgraph or autogen"
           - group: crewai
             adapters: "packages/crewai"
-            frameworks: "crewai==1.15.20 httpx"
+            frameworks: "crewai==1.15.20 openai==2.54.0 httpx==0.28.1"
             store_tests: "crewai"
           - group: openai-agents
             adapters: "packages/openai-agents"
-            frameworks: "openai-agents==0.22.1 httpx"
+            frameworks: "openai-agents==0.22.1 openai==3.37.0 httpx==0.28.1"
             store_tests: "openai_agents"
           - group: all-frameworks
             adapters: "packages/langgraph packages/autogen packages/crewai packages/openai-agents"
             frameworks: >-
               crewai==1.15.30 openai-agents==0.20.0
               autogen-agentchat==0.7.5 autogen-core==0.7.5
-              langgraph==1.2.17 langgraph-prebuilt==1.1.1 httpx
+              langgraph==1.2.17 langgraph-prebuilt==1.1.1 openai==2.54.0 httpx==0.28.1
             store_tests: "langgraph or autogen or crewai or openai_agents"
             # The openai-v2 instrumentation test runs in the langgraph-autogen group.
             pytest_args: "--deselect tests/test_genai_instrumentation.py"
@@ -59,7 +59,7 @@ jobs:
             adapters: "packages/langgraph packages/openai-agents"
             frameworks: >-
               langgraph==1.2.11 langgraph-prebuilt==1.1.0 langchain-core==1.4.7
-              openai-agents==0.20.0 httpx==0.28.1
+              openai-agents==0.20.0 openai==2.54.0 httpx==0.28.1
             store_tests: "langgraph or openai_agents"
           # AutoGen reports less about a run the older the release, so the adapter
           # captures each range differently (pytracer_autogen.versions); one group

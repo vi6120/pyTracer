@@ -23,8 +23,8 @@ _LABELS = {
     "fixed": "fixed",
     "still_failing": "still failing",
     "diverged": "diverged",
-    "cannot_judge": "cannot judge (a model input changed)",
-    "cannot_reproduce": "cannot reproduce (recordings did not match)",
+    "cannot_judge": "cannot judge (the branch left the recording)",
+    "cannot_reproduce": "cannot reproduce (the baseline left the recording)",
 }
 
 
@@ -133,14 +133,15 @@ def render_comment(
     if any(_value(v) == "cannot_reproduce" for v in verdicts.values()):
         lines += [
             "",
-            "**Could not reproduce the baseline failure (the recordings did not match, "
-            "so every call drifted). Re-run with `--env-file` so both refs reach the bug.**",
+            "**Could not reproduce the baseline failure (the baseline left its recordings: "
+            "a frozen call found none). Re-run with `--env-file` so both refs reach the bug.**",
         ]
     lines += [
         "",
         "<sub>fixed = now passes &middot; still failing = same failure &middot; "
-        "diverged = a new, different failure &middot; cannot judge = a model input changed "
-        "&middot; cannot reproduce = recordings did not match</sub>",
+        "diverged = a new, different failure &middot; cannot judge = the branch left its "
+        "recordings, so its result is not frozen &middot; cannot reproduce = the baseline "
+        "left its recordings</sub>",
     ]
     return "\n".join(lines)
 

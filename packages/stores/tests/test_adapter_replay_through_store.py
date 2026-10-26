@@ -283,7 +283,7 @@ def test_langgraph_run_replays_from_the_store(trace_store: TraceStore, tmp_path:
 @pytest.mark.skipif(not _installed("autogen_agentchat"), reason="autogen-agentchat not installed")
 def test_autogen_run_replays_from_the_store(trace_store: TraceStore, tmp_path: Path) -> None:
     from autogen_agentchat.agents import AssistantAgent
-    from autogen_agentchat.conditions import MaxMessageTermination
+    from autogen_agentchat.conditions import TextMentionTermination
     from autogen_agentchat.teams import RoundRobinGroupChat
     from autogen_core import FunctionCall
     from autogen_core.models import ChatCompletionClient, CreateResult, ModelInfo, RequestUsage
@@ -355,9 +355,14 @@ def test_autogen_run_replays_from_the_store(trace_store: TraceStore, tmp_path: P
             call = FunctionCall(id="1", name="lookup", arguments='{"q": "x"}')
             writer = AssistantAgent("writer", model_client=Scripted([[call], "draft"]), tools=[lookup])
             critic = AssistantAgent("critic", model_client=Scripted(["ok"]))
-            team = RoundRobinGroupChat([writer, critic], termination_condition=MaxMessageTermination(4))
+            # Ends on the writer's last reply, on every AgentChat release (a message
+            # count differs: before 0.4.9 tool-call events count as messages).
+            team = RoundRobinGroupChat([writer, critic], termination_condition=TextMentionTermination("draft"))
             result = asyncio.run(team.run(task="write"))
-            return " | ".join(f"{m.source}: {m.to_text()}" for m in result.messages)
+            # to_text arrived in AgentChat 0.5.
+            return " | ".join(
+                f"{m.source}: {m.to_text() if hasattr(m, 'to_text') else m.content}" for m in result.messages
+            )
 
         output, spans = _capture(run)
         _check_replay(run, _through_gateway_and_store(spans, trace_store, tmp_path), output)

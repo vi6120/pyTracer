@@ -19,7 +19,8 @@ from pytracer_sdk import SpanKind as K
 from pytracer_sdk import SpanStatus
 from pytracer_sdk.transport import InMemoryTransport
 
-from pytracer_autogen import exporter_for, pytracer_tracer_provider
+from pytracer_autogen import exporter_for, install
+from pytracer_autogen.versions import captures_by_seams
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("autogen_agentchat") is None, reason="autogen-agentchat not installed"
@@ -37,7 +38,7 @@ def _lookup(q: str) -> str:
 
 def _team(tool: Any = _lookup, *, log_calls: bool = False, stream: bool = False) -> Any:
     from autogen_agentchat.agents import AssistantAgent
-    from autogen_agentchat.conditions import MaxMessageTermination
+    from autogen_agentchat.conditions import TextMentionTermination
     from autogen_agentchat.teams import RoundRobinGroupChat
     from autogen_core import FunctionCall
     from autogen_core.models import ChatCompletionClient, CreateResult, ModelInfo, RequestUsage
@@ -107,14 +108,16 @@ def _team(tool: Any = _lookup, *, log_calls: bool = False, stream: bool = False)
             )
 
     call = FunctionCall(id="1", name=tool.__name__, arguments='{"q": "x"}')
+    # Streaming arrived in AgentChat 0.4.5; pass the option only when it is used.
+    streaming = {"model_client_stream": True} if stream else {}
     writer = AssistantAgent(
         "writer", model_client=Scripted([[call], "draft"], log_calls=log_calls), tools=[tool],
-        model_client_stream=stream,
+        **streaming,
     )
-    critic = AssistantAgent(
-        "critic", model_client=Scripted(["ok"], log_calls=log_calls), model_client_stream=stream
-    )
-    return RoundRobinGroupChat([writer, critic], termination_condition=MaxMessageTermination(4))
+    critic = AssistantAgent("critic", model_client=Scripted(["ok"], log_calls=log_calls), **streaming)
+    # Ends on the writer's last reply. (A message count would differ by version:
+    # AgentChat before 0.4.9 counts tool-call events as messages.)
+    return RoundRobinGroupChat([writer, critic], termination_condition=TextMentionTermination("draft"))
 
 
 _PROVIDER = None
@@ -123,14 +126,14 @@ _EXPORTER = None
 
 @pytest.fixture
 def recorded() -> Iterator[tuple[InMemoryTransport, pytracer.Tracer]]:
-    # As the README says: pyTracer is the global OpenTelemetry provider. OTel lets
-    # the global be set once per process, so register a provider that resolves the
-    # tracer lazily once, and point the default tracer at each test's sink.
+    # As the README says: install() makes pyTracer the global OpenTelemetry
+    # provider. OTel lets the global be set once per process, so install once (the
+    # provider resolves the tracer lazily) and point the default tracer at each
+    # test's sink.
     global _PROVIDER, _EXPORTER
     if _PROVIDER is None:
-        _PROVIDER = pytracer_tracer_provider()
+        _PROVIDER = install()
         _EXPORTER = exporter_for(_PROVIDER)
-        otel_trace.set_tracer_provider(_PROVIDER)
     if otel_trace.get_tracer_provider() is not _PROVIDER:
         pytest.skip("another global OpenTelemetry provider is already registered")
     assert _EXPORTER is not None
@@ -150,7 +153,7 @@ def test_team_run_is_one_trace(recorded: tuple[InMemoryTransport, pytracer.Trace
     asyncio.run(team.run(task="write"))
     tracer.flush()
     run = [s for s in sink.spans if not s.name.startswith("create_agent")]
-    assert {s.agent_name for s in run if s.kind is K.AGENT} == {"writer", "critic"}
+    assert {s.agent_name for s in run if s.name.startswith("invoke_agent")} == {"writer", "critic"}
     assert len({s.trace_id for s in run}) == 1
     tool = next(s for s in run if s.kind is K.TOOL)
     assert tool.parent_span_id in {s.span_id for s in run if s.agent_name == "writer"}
@@ -185,7 +188,9 @@ def test_team_run_nests_under_an_enclosing_span(
     root = next(s for s in sink.spans if s.name == "request")
     assert all(s.trace_id == root.trace_id for s in sink.spans)  # agents built inside too
     agents = [s for s in sink.spans if s.name.startswith("invoke_agent")]
-    assert agents and all(s.parent_span_id == root.span_id for s in agents)
+    # Directly under the request, or (AutoGen before 0.6.2) under the team run that is.
+    teams = {s.span_id for s in sink.spans if s.name.startswith("run_team") and s.parent_span_id == root.span_id}
+    assert agents and all(s.parent_span_id in {root.span_id, *teams} for s in agents)
 
 
 def _model_calls_by_agent(sink: InMemoryTransport) -> dict[str, int]:
@@ -206,7 +211,9 @@ def test_logged_model_calls_are_recorded_under_their_agent_turns(
     tracer.flush()
     llm = [s for s in sink.spans if s.kind is K.LLM]
     assert _model_calls_by_agent(sink) == {"writer": 2, "critic": 1}
-    assert all(s.name == "chat scripted" and s.token_count == 5 for s in llm)
+    assert all(s.token_count == 5 for s in llm)
+    if not captures_by_seams():  # from the logged call events (older AutoGen: the seams)
+        assert all(s.name == "chat scripted" for s in llm)
     assert not any(s.attributes.get("pytracer.derived") for s in llm)  # no duplicates
 
 
@@ -218,8 +225,10 @@ def test_model_calls_are_derived_when_the_client_logs_nothing(
     tracer.flush()
     llm = [s for s in sink.spans if s.kind is K.LLM]
     assert _model_calls_by_agent(sink) == {"writer": 2, "critic": 1}
-    assert all(s.attributes.get("pytracer.derived") is True for s in llm)
-    assert {str(s.output) for s in llm} >= {"draft", "ok"}
+    # Rebuilt from AutoGen's replies; on older AutoGen the seams record the calls.
+    assert all(s.attributes.get("pytracer.derived") is (not captures_by_seams() or None) for s in llm)
+    assert {str(getattr(s.output, "content", s.output)) for s in llm} >= {"draft", "ok"}
+    assert all(s.token_count == 5 for s in llm)
 
 
 # --- C2: replaying a captured AutoGen run without @op -----------------------------
@@ -228,6 +237,7 @@ def test_model_calls_are_derived_when_the_client_logs_nothing(
 @pytest.fixture
 def seams(recorded: tuple[InMemoryTransport, pytracer.Tracer]) -> Iterator[InMemoryTransport]:
     from pytracer_autogen import install_seams, uninstall_seams
+    from pytracer_autogen.versions import captures_by_seams
 
     sink, _ = recorded
     assert _EXPORTER is not None
@@ -235,13 +245,20 @@ def seams(recorded: tuple[InMemoryTransport, pytracer.Tracer]) -> Iterator[InMem
     try:
         yield sink
     finally:
-        uninstall_seams()
+        if not captures_by_seams():  # on older AutoGen, install() keeps them on
+            uninstall_seams()
+
+
+def _text(message: Any) -> str:
+    """A message as text (``to_text`` arrived in AgentChat 0.5)."""
+    to_text = getattr(message, "to_text", None)
+    return str(to_text()) if callable(to_text) else str(message.content)
 
 
 def _run_team(*, stream: bool = False) -> Any:
     def run() -> str:
         result = asyncio.run(_team(stream=stream).run(task="write"))
-        return " | ".join(f"{m.source}: {m.to_text()}" for m in result.messages)
+        return " | ".join(f"{m.source}: {_text(m)}" for m in result.messages)
 
     return run
 

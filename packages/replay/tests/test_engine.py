@@ -655,3 +655,28 @@ def test_recorded_exception_from_an_unimported_package_is_not_imported() -> None
 
 class ImportedModuleError(Exception):
     """A non-builtin exception in a module the process has imported (this one)."""
+
+
+def test_strict_miss_fails_the_replay_even_when_the_agent_catches_it() -> None:
+    # A framework that swallows a handler's exception (as AutoGen's runtime does)
+    # must not turn a strict miss into a passing replay with a truncated result.
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="lookup")
+    def lookup(q: str) -> str:
+        return f"found {q}"
+
+    def make_agent(query: str) -> Any:
+        @pytracer.op(kind=SpanKind.AGENT, agent_name="a")
+        def agent() -> str:
+            try:
+                return lookup(query)
+            except Exception:  # noqa: BLE001 - the framework's catch-all
+                return "gave up"
+
+        return agent
+
+    rec = _record(make_agent("x"))
+    mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+    res = ReplayEngine(ReplayMode.FULL, strict=True).replay(make_agent("changed"), mocks)
+    assert res.return_value == "gave up"
+    assert res.failed
+    assert res.error_type == "MissingMockError" and "no recording" in (res.error_message or "")

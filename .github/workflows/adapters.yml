@@ -53,16 +53,54 @@ jobs:
             pytest_args: "--deselect tests/test_genai_instrumentation.py"
           # The oldest versions the adapters declare, installed exactly, so the lower
           # bound of every supported range is tested, not only the newest versions.
-          # CrewAI's floor (1.15.20) is the crewai group's pin; it cannot join this
-          # group because it requires a newer OpenTelemetry than AutoGen's floor.
+          # CrewAI's floor (1.15.20) is the crewai group's pin, and AutoGen's floor
+          # (0.4.0) is the autogen-0.4 group below.
           - group: minimum-versions
-            adapters: "packages/langgraph packages/autogen packages/openai-agents"
+            adapters: "packages/langgraph packages/openai-agents"
             frameworks: >-
               langgraph==1.2.11 langgraph-prebuilt==1.1.0 langchain-core==1.4.7
-              autogen-agentchat==0.7.5 autogen-core==0.7.5
-              opentelemetry-sdk==1.34.1 opentelemetry-api==1.34.1
               openai-agents==0.20.0 httpx==0.28.1
-            store_tests: "langgraph or autogen or openai_agents"
+            store_tests: "langgraph or openai_agents"
+          # AutoGen reports less about a run the older the release, so the adapter
+          # captures each range differently (pytracer_autogen.versions); one group
+          # per range, each at its oldest release and OpenTelemetry floor.
+          # 0.4.0 to 0.4.8: no OpenTelemetry spans at all. AgentChat streams model
+          # replies from 0.4.5 and logs stream events from 0.4.9, so those two
+          # streaming tests have nothing to run against here.
+          - group: autogen-0.4
+            adapters: "packages/autogen"
+            frameworks: >-
+              autogen-agentchat==0.4.0 autogen-core==0.4.0
+              opentelemetry-sdk==1.27.0 opentelemetry-api==1.27.0 httpx==0.28.1
+            store_tests: "autogen"
+            pytest_args: >-
+              --deselect tests/test_genai_instrumentation.py
+              --deselect tests/test_autogen_team.py::test_streamed_team_run_replays
+              --deselect tests/test_autogen_exporter.py::test_streamed_model_call_spans_start_to_end
+          # 0.4.9 to 0.6.1: runtime spans only, no GenAI agent or tool spans.
+          - group: autogen-0.4.9
+            adapters: "packages/autogen"
+            frameworks: >-
+              autogen-agentchat==0.4.9.3 autogen-core==0.4.9.3
+              opentelemetry-sdk==1.27.0 opentelemetry-api==1.27.0 httpx==0.28.1
+            store_tests: "autogen"
+            pytest_args: "--deselect tests/test_genai_instrumentation.py"
+          # 0.6.2 to 0.7.1: GenAI spans, but no tool results in the messages.
+          - group: autogen-0.6.2
+            adapters: "packages/autogen"
+            frameworks: >-
+              autogen-agentchat==0.6.2 autogen-core==0.6.2
+              opentelemetry-sdk==1.34.1 opentelemetry-api==1.34.1 httpx==0.28.1
+            store_tests: "autogen"
+            pytest_args: "--deselect tests/test_genai_instrumentation.py"
+          # 0.7.2 and later: everything from AutoGen's own spans (0.7.5 runs in the
+          # langgraph-autogen group).
+          - group: autogen-0.7.2
+            adapters: "packages/autogen"
+            frameworks: >-
+              autogen-agentchat==0.7.2 autogen-core==0.7.2
+              opentelemetry-sdk==1.34.1 opentelemetry-api==1.34.1 httpx==0.28.1
+            store_tests: "autogen"
             pytest_args: "--deselect tests/test_genai_instrumentation.py"
     name: acceptance (${{ matrix.group }})
     services:

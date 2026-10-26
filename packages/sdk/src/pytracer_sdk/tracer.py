@@ -74,6 +74,21 @@ class _OpMeta:
     agent_name: str | None
     tool_name: str | None
     capture_io: bool
+    # Reads the token count from the call's output (a seam's model call), if set.
+    tokens: Callable[[Any], int | None] | None = None
+
+
+def _finish(active: ActiveSpan, meta: _OpMeta, output: Any) -> None:
+    """Record a live call's output (and its token count, when ``meta`` reads one)."""
+    if meta.capture_io:
+        active.set_output(output)
+    if meta.tokens is not None:
+        try:
+            count = meta.tokens(output)
+        except Exception:  # noqa: BLE001 - an unreadable count must never fail the call
+            count = None
+        if count:
+            active.set_tokens(count)
 
 
 # Marks "no explicit op input": the input is built from the call's args/kwargs.
@@ -309,8 +324,7 @@ class Tracer:
             if injected is not None:
                 return iter(injected.output) if injected.stream else injected.output
             result = fn(*args, **kwargs)
-            if meta.capture_io:
-                active.set_output(result)
+            _finish(active, meta, result)
             return result
 
     async def acall_op(
@@ -336,8 +350,7 @@ class Tracer:
             if injected is not None:
                 return _as_async_iter(injected.output) if injected.stream else injected.output
             result = await fn(*args, **kwargs)
-            if meta.capture_io:
-                active.set_output(result)
+            _finish(active, meta, result)
             return result
 
     def call_gen_op(
@@ -394,8 +407,8 @@ class Tracer:
             active.set_error(exc)
             raise
         finally:
-            if live and meta.capture_io:
-                active.set_output(collected)
+            if live:
+                _finish(active, meta, collected)
             active.close()
 
     def call_async_gen_op(
@@ -445,8 +458,8 @@ class Tracer:
             active.set_error(exc)
             raise
         finally:
-            if live and meta.capture_io:
-                active.set_output(collected)
+            if live:
+                _finish(active, meta, collected)
             active.close()
 
     def _maybe_intercept(

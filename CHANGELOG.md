@@ -4,6 +4,16 @@
 
 ### Added
 
+- **AutoGen 0.4 and later, captured in full.** AutoGen before 0.7.2 does not
+  report a tool's result, and before 0.6.2 emits no agent or tool spans at all, so
+  the adapter captured those runs only partly. `install()` now records what such
+  a release leaves out through pyTracer itself (model and tool calls, and before
+  0.6.2 each agent turn and team run), and CI runs the adapter on 0.4.0, 0.4.9,
+  0.6.2, 0.7.2 and the latest release. Model calls recorded this way, including
+  with `install(replayable=True)` on any release, now carry their token counts.
+- **Strict replay fails on a missing recording even if the agent catches it.**
+  A framework that swallows an agent's exception (as AutoGen's runtime does before
+  0.4.9) no longer turns a strict-mode miss into a passing replay.
 - **Replay through every framework adapter, without `@op`.** With replay switched
   on (`install_seams()` for LangGraph and CrewAI, `install(replayable=True)` for
   OpenAI Agents and AutoGen), the adapter routes the framework's own model and

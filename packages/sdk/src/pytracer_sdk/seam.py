@@ -16,6 +16,8 @@ Each wrapper takes:
   so a recorded call and its replay hash to the same key.
 - ``parent``: the span this call belongs under, which the adapter knows from the
   framework (its open agent or node span). ``None`` nests under the active span.
+- ``tokens`` (optional): reads the call's token count from its output (for a
+  stream, the list of items), for a framework that reports usage on the result.
 
 While a seam call runs, :func:`active_seam` reports it, so the adapter's
 observe-only hook (callback, event listener, trace processor) can step aside
@@ -58,8 +60,17 @@ def active_seam() -> SeamCall | None:
     return _active.get()
 
 
-def _meta(kind: SpanKind, name: str, tool_name: str | None) -> _OpMeta:
-    return _OpMeta(name=name, kind=kind, agent_name=None, tool_name=tool_name, capture_io=True)
+def _meta(
+    kind: SpanKind,
+    name: str,
+    tool_name: str | None,
+    agent_name: str | None,
+    tokens: Callable[[Any], int | None] | None,
+) -> _OpMeta:
+    return _OpMeta(
+        name=name, kind=kind, agent_name=agent_name, tool_name=tool_name, capture_io=True,
+        tokens=tokens,
+    )
 
 
 def _nested(kind: SpanKind) -> bool:
@@ -83,6 +94,8 @@ def call_through(
     kind: SpanKind,
     name: str,
     tool_name: str | None = None,
+    agent_name: str | None = None,
+    tokens: Callable[[Any], int | None] | None = None,
     input: Any = _FROM_ARGS,
     parent: SpanContext | None = None,
     tracer: Tracer | None = None,
@@ -100,7 +113,7 @@ def call_through(
             _active.reset(token)
 
     return _resolve(tracer).call_op(
-        body, args, kwargs, _meta(kind, name, tool_name), op_input=input, parent=parent
+        body, args, kwargs, _meta(kind, name, tool_name, agent_name, tokens), op_input=input, parent=parent
     )
 
 
@@ -112,6 +125,8 @@ async def acall_through(
     kind: SpanKind,
     name: str,
     tool_name: str | None = None,
+    agent_name: str | None = None,
+    tokens: Callable[[Any], int | None] | None = None,
     input: Any = _FROM_ARGS,
     parent: SpanContext | None = None,
     tracer: Tracer | None = None,
@@ -129,7 +144,7 @@ async def acall_through(
             _active.reset(token)
 
     return await _resolve(tracer).acall_op(
-        body, args, kwargs, _meta(kind, name, tool_name), op_input=input, parent=parent
+        body, args, kwargs, _meta(kind, name, tool_name, agent_name, tokens), op_input=input, parent=parent
     )
 
 
@@ -141,6 +156,8 @@ def stream_through(
     kind: SpanKind,
     name: str,
     tool_name: str | None = None,
+    agent_name: str | None = None,
+    tokens: Callable[[Any], int | None] | None = None,
     input: Any = _FROM_ARGS,
     parent: SpanContext | None = None,
     tracer: Tracer | None = None,
@@ -166,7 +183,7 @@ def stream_through(
             _reset(token)
 
     return _resolve(tracer).call_gen_op(
-        body, args, kwargs, _meta(kind, name, tool_name), op_input=input, parent=parent
+        body, args, kwargs, _meta(kind, name, tool_name, agent_name, tokens), op_input=input, parent=parent
     )
 
 
@@ -178,6 +195,8 @@ def astream_through(
     kind: SpanKind,
     name: str,
     tool_name: str | None = None,
+    agent_name: str | None = None,
+    tokens: Callable[[Any], int | None] | None = None,
     input: Any = _FROM_ARGS,
     parent: SpanContext | None = None,
     tracer: Tracer | None = None,
@@ -196,7 +215,7 @@ def astream_through(
             _reset(token)
 
     return _resolve(tracer).call_async_gen_op(
-        body, args, kwargs, _meta(kind, name, tool_name), op_input=input, parent=parent
+        body, args, kwargs, _meta(kind, name, tool_name, agent_name, tokens), op_input=input, parent=parent
     )
 
 

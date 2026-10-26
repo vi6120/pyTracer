@@ -22,11 +22,11 @@ jobs:
       # The gate the PR template asks for: `mypy packages/*/src` is clean. The
       # source imports optional backends (the gateway's redis queue and metrics
       # endpoint), PyYAML and pytest (the CLI's pytest plugin), and autogen-core
-      # (the AutoGen adapter's replay seams; it is only a dev extra there, since
-      # capture needs just OpenTelemetry), so those are installed too, or mypy
-      # reports missing modules instead of real type errors. mypy and
-      # autogen-core are pinned so the gate is reproducible, as ruff is in
-      # lint.yml; bump them deliberately after re-checking the tree.
+      # and autogen-agentchat (the AutoGen adapter's seams; only dev extras there,
+      # since capture on current AutoGen needs just OpenTelemetry), so those are
+      # installed too, or mypy reports missing modules instead of real type
+      # errors. mypy and AutoGen are pinned so the gate is reproducible, as ruff is
+      # in lint.yml; bump them deliberately after re-checking the tree.
       - name: Install all packages and the type-check toolchain
         run: |
           python -m pip install --upgrade pip
@@ -34,7 +34,8 @@ jobs:
           for d in packages/*/; do editable="$editable -e $d"; done
           python -m pip install $editable
           python -m pip install -e "packages/gateway[redis,metrics]" \
-            "mypy==1.10.0" "types-PyYAML>=6.0" "pytest>=8" "autogen-core==0.7.5"
+            "mypy==1.10.0" "types-PyYAML>=6.0" "pytest>=8" "autogen-core==0.7.5" \
+            "autogen-agentchat==0.7.5"
 
       - name: Type-check every package
         run: mypy packages/*/src

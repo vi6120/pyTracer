@@ -12,7 +12,10 @@ license = "Apache-2.0"
 authors = [{ name = "Vikas Ramaswamy" }, { name = "Nagesha Sheshadri" }]
 dependencies = [
     "pytracer-sdk==0.1.3",
-    "opentelemetry-sdk>=1.20",
+    # AutoGen is not a dependency: the exporter also serves other GenAI-instrumented
+    # libraries, and every autogen-core release is 0.4.0 or later, all of which CI
+    # verifies (see pytracer_autogen.versions). 1.27.0 is AutoGen 0.4.0's floor.
+    "opentelemetry-sdk>=1.27.0",
 ]
 
 [project.urls]
@@ -24,7 +27,7 @@ Issues = "https://github.com/vi6120/pyTracer/issues"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "autogen-core>=0.4",
+    "autogen-core>=0.4.0",
     "ruff>=0.5",
     "mypy>=1.10",
 ]

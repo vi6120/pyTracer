@@ -71,7 +71,7 @@ What each adapter captures and replays:
 | | LangGraph | OpenAI Agents | CrewAI | AutoGen |
 |---|---|---|---|---|
 | Agent spans | Yes | Yes | Yes | Yes |
-| Model calls (model, tokens, output) | Yes | Yes | Yes | Yes, from the model client's call events (the `autogen_ext` clients log them); a client that logs none has its calls rebuilt from AutoGen's replies |
+| Model calls (model, tokens, output) | Yes | Yes | Yes | Yes, from the model client's call events (the `autogen_ext` clients log them); a client that logs none has its calls rebuilt from AutoGen's replies. Before AutoGen 0.7.2 the calls are recorded through pyTracer's routing ([AutoGen versions](packages/autogen/README.md#autogen-versions)) |
 | Tool calls with their output | Yes | Yes | Yes | Yes |
 | One trace per framework run | Yes | Yes | Yes | Yes |
 | Nests under an enclosing `pytracer.start_span(...)` | Yes | Yes | Yes | Yes |

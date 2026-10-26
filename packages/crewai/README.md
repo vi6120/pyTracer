@@ -24,9 +24,14 @@ matching start id, which the listener uses to build a correctly nested trace.
 
 CrewAI requires `openai<3`, so in the same environment the OpenAI Agents SDK is
 capped at 0.20.0 (0.21 and later need `openai>=3`); pyTracer's OpenAI Agents
-adapter supports 0.20.0. With AutoGen in the same environment, install both in one
-command, or pin `googleapis-common-protos<1.75.1`, or CrewAI fails at import with a
-protobuf `VersionError`. See
+adapter supports 0.20.0. This adapter requires CrewAI 1.15.20 or later, the oldest
+release it is tested with, so asking for `openai-agents>=0.21` beside it is
+reported as a conflict by pip and uv, instead of being settled by quietly
+installing an old, untested CrewAI. CrewAI brings in `googleapis-common-protos`
+twice, through `opentelemetry-exporter-otlp-proto-http` and through `chromadb`;
+with AutoGen in the same environment, install both in one command, or pin
+`googleapis-common-protos<1.75.1`, or CrewAI fails at import with a protobuf
+`VersionError`. See
 [using several frameworks in one environment](https://pytracer.com/docs#framework-combinations).
 
 ## One trace per request

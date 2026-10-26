@@ -82,9 +82,10 @@ def run_reproduction(
     return baseline, candidate, verdicts
 
 
-def format_verdicts(verdicts: dict[str, Any]) -> str:
-    """Render per-scenario cross-branch outcomes as a table, with a hint for the
-    inconclusive outcomes so they are not read as a plain pass or fail."""
+def format_verdicts(verdicts: dict[str, Any], reasons: dict[str, str] | None = None) -> str:
+    """Render per-scenario cross-branch outcomes as a table, with the reason for each
+    inconclusive outcome (``reasons``, from ``explain_reproduction``) so it is not
+    read as a plain pass or fail; a general hint where no reason is known."""
     if not verdicts:
         return "no scenarios"
     lines = [f"{'SCENARIO':<28} OUTCOME"]
@@ -93,6 +94,14 @@ def format_verdicts(verdicts: dict[str, Any]) -> str:
         value = str(getattr(verdicts[name], "value", verdicts[name]))
         values.add(value)
         lines.append(f"{name[:28]:<28} {value}")
+    reasons = reasons or {}
+    if reasons:
+        lines.append("")
+        lines += [f"{name}: {reasons[name]}" for name in sorted(reasons)]
+    unexplained = {
+        str(getattr(verdicts[n], "value", verdicts[n])) for n in verdicts if n not in reasons
+    }
+    values &= unexplained
     if "cannot_reproduce" in values:
         lines.append("")
         lines.append(

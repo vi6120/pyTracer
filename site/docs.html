@@ -386,9 +386,14 @@ pytest -v
     <strong>cannot reproduce</strong> (the baseline left its recordings, so it never
     reproduced the failure, usually a missing <code>--env-file</code>). One exception:
     if the branch fails exactly as the baseline did, that is <strong>still
-    failing</strong> whatever else drifted, since the bug showed again. Both
+    failing</strong> whatever else drifted, since the bug showed again. Each
+    non-verdict comes with its reason: the first call that left the recording and
+    how (called with different arguments, called more often than recorded, or never
+    recorded at all), in the terminal and in the PR comment. Both
     non-verdicts exit with code <code>2</code>, distinct from <code>1</code> (a real
-    regression) and <code>0</code> (all fixed). For a prompt edit, add
+    regression) and <code>0</code> (all fixed). When the first change is to a tool call,
+    a frozen replay cannot judge it: re-record the scenario on the branch. For a prompt
+    edit (a model input changed first), add
     <code>pytracer reproduce --evaluate-changed-prompts</code> to run the changed model
     call live and evaluate it; that verdict holds only if nothing after the changed call
     also changed.</p>

@@ -213,6 +213,17 @@ class MockSet:
                 return True, output, "fuzzy"
         return False, None, "miss"
 
+    def miss_reason(self, identifier: str, input: Any) -> str:
+        """Why a call found no recording: ``"extra_call"`` (this input was recorded,
+        but fewer times than it is now called), ``"changed_input"`` (the op was
+        recorded, never with this input: changed arguments, or a changed prompt),
+        or ``"not_recorded"`` (the recording never called this op)."""
+        if (identifier, input_hash(input)) in self._sequences:
+            return "extra_call"
+        if identifier in self._by_identifier:
+            return "changed_input"
+        return "not_recorded"
+
     @staticmethod
     def _best_candidate(
         input: Any, candidates: list[tuple[Any, Any]], threshold: float

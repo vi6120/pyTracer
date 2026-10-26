@@ -756,3 +756,24 @@ def test_a_run_that_stays_on_its_recording_lists_nothing() -> None:
     res = ReplayEngine(ReplayMode.FULL).replay(_support_agent("#1", calls), _recorded_support())
     assert not res.failed and calls == {"tool": 0, "model": 0}
     assert res.unrecorded_calls == [] and res.live_fallbacks == []
+
+
+def test_each_miss_records_why_it_left_the_recording() -> None:
+    calls = {"tool": 0, "model": 0}
+    res = ReplayEngine(ReplayMode.FULL, strict=False, sandbox=False).replay(
+        _support_agent("1", calls), _recorded_support()
+    )
+    assert res.divergences == [
+        {"call": "tool 'get_order'", "kind": "tool", "op": "get_order",
+         "reason": "changed_input", "ran_live": True},
+        {"call": "llm 'agent_llm'", "kind": "llm", "op": "agent_llm",
+         "reason": "changed_input", "ran_live": False},
+    ]
+
+
+def test_miss_reason_tells_extra_changed_and_new_calls_apart() -> None:
+    mocks = MockSet()
+    mocks.add("tool:lookup", {"q": "a"}, "A")
+    assert mocks.miss_reason("tool:lookup", {"q": "a"}) == "extra_call"
+    assert mocks.miss_reason("tool:lookup", {"q": "b"}) == "changed_input"
+    assert mocks.miss_reason("tool:refund", {"q": "a"}) == "not_recorded"

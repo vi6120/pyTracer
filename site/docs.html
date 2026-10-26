@@ -340,7 +340,8 @@ scenarios:
     On every pull request it runs the collection and posts a pass/fail summary as a
     PR comment, failing the check if any scenario regresses. On a push it also
     auto-documents failures as deduplicated GitHub issues. A GitLab template is
-    included too.</p>
+    included too: it runs in merge-request and branch pipelines, once per change, and
+    shows the results in the merge request's test report.</p>
     <pre><code>pytracer run tests/collection.yaml --json results.json
 pytracer issues sync results.json --repo owner/name   # needs a GitHub token</code></pre>
 

@@ -183,8 +183,10 @@ pytracer-cli[stores]`.
 
 Add the GitHub Action (see [packages/cli/ci/github-action.yml](packages/cli/ci/github-action.yml)).
 On every pull request it runs the collection and posts a pass/fail summary as a
-PR comment, and fails the check if any scenario regresses. A GitLab template is
-included too.
+PR comment, and fails the check if any scenario regresses. A GitLab template
+([packages/cli/ci/gitlab-ci.yml](packages/cli/ci/gitlab-ci.yml)) is included too: it
+runs in merge-request and branch pipelines, once per change, and shows the results
+in the merge request's test report.
 
 On a push (not a PR), it also **auto-documents failures as GitHub issues**:
 `pytracer issues sync` opens an issue per failing scenario, keyed by the

@@ -21,6 +21,10 @@
 
 ### Fixed
 
+- **The GitLab template runs in merge-request pipelines.** Its job had no `rules:`,
+  so a project using merge-request pipelines got an empty pipeline. It now runs in
+  merge-request and branch pipelines, once per change (only in the merge-request
+  pipeline while one is open), verified on gitlab.com.
 - **Adapters require the framework versions they are tested with.** The CrewAI,
   OpenAI Agents and LangGraph adapters now require CrewAI 1.15.20, OpenAI Agents
   0.20.0 and langchain-core 1.4.7 or later (they allowed far older releases), and

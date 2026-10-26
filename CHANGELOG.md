@@ -33,6 +33,13 @@
 
 ### Fixed
 
+- **`pytracer reproduce --isolation local` leaves your environment alone.** It ran
+  each ref's install steps in the current environment, with whichever `python` was
+  first on `PATH`: `pip install -e .` re-pointed an editable install at a temporary
+  checkout, and provisioning `pytracer-cli` at the running version could downgrade
+  pyTracer itself. Local runs now install nothing and use the interpreter running
+  `pytracer`; Docker runs still install in their container. `--install/--no-install`
+  overrides either (`--no-install` also suits environments without pip, such as uv's).
 - **`cannot_judge` and `cannot_reproduce` say why.** Every non-verdict now names
   the first call that left the recording and how (different arguments, more calls
   than recorded, or a call never recorded), in the terminal and the PR comment, and

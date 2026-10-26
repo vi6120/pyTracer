@@ -10,7 +10,9 @@ fixed / still-failing / diverged verdicts that "try on this branch" reports.
 from __future__ import annotations
 
 import json
+import shlex
 import shutil
+import sys
 import tempfile
 from collections.abc import Mapping
 from importlib import metadata as importlib_metadata
@@ -26,13 +28,13 @@ from .source import SourceProvider
 _RESULT_ARTIFACT = "pytracer-out.json"
 
 
-def _cli_install_step() -> str:
+def _cli_install_step(python: str) -> str:
     """Pip step that provisions pytracer-cli, pinned to the running version if known."""
     try:
         version = importlib_metadata.version("pytracer-cli")
     except importlib_metadata.PackageNotFoundError:
-        return "pip install -q pytracer-cli"
-    return f"pip install -q 'pytracer-cli=={version}'"
+        return f"{python} -m pip install -q pytracer-cli"
+    return f"{python} -m pip install -q 'pytracer-cli=={version}'"
 
 
 @dataclass
@@ -88,8 +90,8 @@ class CrossBranchRunner:
         env_file: str | Path | None = None,
         env_dest: str = ".env",
         evaluate_changed_prompts: bool = False,
-        install: str = "pip install -e . -q",
-        provision_cli: bool = True,
+        install: str | bool | None = None,
+        provision_cli: bool | None = None,
     ) -> ReproduceResult:
         """Run a collection at ``ref`` with the frozen trace injected.
 
@@ -97,22 +99,41 @@ class CrossBranchRunner:
         then runs the collection emitting JSON results, which are parsed back.
         ``env_file`` carries the run's settings (e.g. a ``.env``) into the clean
         checkout so both refs reach the bug instead of failing on configuration.
-        ``provision_cli`` (default) also installs ``pytracer-cli`` into the ref's
-        environment - pinned to the running version - so ``python -m pytracer_cli``
-        works even when the project under test does not depend on it. Install output
-        is not silenced, so a failure is visible in ``stderr``.
+        ``provision_cli`` also installs ``pytracer-cli`` into the ref's environment -
+        pinned to the running version - so ``python -m pytracer_cli`` works even when
+        the project under test does not depend on it. Install output is not silenced,
+        so a failure is visible in ``stderr``.
+
+        ``install`` is the install command, ``True`` for ``pip install -e .``, or
+        ``False`` to install nothing. By default (``None``) an isolated executor
+        (Docker) installs the project and provisions the CLI in its throwaway
+        container, while a local one installs nothing and runs with the current
+        interpreter: its environment is the caller's own, which already has the
+        project's dependencies, and installing there would change it (re-point an
+        editable install at a temporary checkout, or downgrade pyTracer to a pin).
         """
         inject: dict[str, Path] = {}
         if frozen_trace is not None and trace_dest is not None:
             inject[trace_dest] = Path(frozen_trace)
         if env_file is not None:
             inject[env_dest] = Path(env_file)
+        isolated = getattr(self._executor, "isolated", True)
+        # Local runs use this interpreter, not whichever `python` is first on PATH.
+        python = "python" if isolated else shlex.quote(sys.executable)
+        if install is None:
+            install = isolated
+        if provision_cli is None:
+            provision_cli = isolated
+        steps: list[str] = []
+        if install is True:
+            steps.append(f"{python} -m pip install -e . -q")
+        elif install:
+            steps.append(install)
+        if provision_cli:
+            steps.append(_cli_install_step(python))
         # `python -m` works whenever pytracer-cli is importable, even if the
         # project does not put the `pytracer` script on PATH.
-        steps = [install]
-        if provision_cli:
-            steps.append(_cli_install_step())
-        run_cmd = f"python -m pytracer_cli run {collection_path} --json {_RESULT_ARTIFACT}"
+        run_cmd = f"{python} -m pytracer_cli run {collection_path} --json {_RESULT_ARTIFACT}"
         if evaluate_changed_prompts:
             run_cmd += " --evaluate-changed-prompts"
         steps.append(run_cmd)

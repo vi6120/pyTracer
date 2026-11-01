@@ -555,23 +555,25 @@
             </ul>
           </div>
           <div class="road-col plan">
-            <span class="road-tag next">On the roadmap</span>
-            <h3>Near-term</h3>
+            <span class="road-tag next">In progress</span>
+            <h3>Building now</h3>
             <ul>
-              <li><b>Published benchmarks</b>: replay versus live cost, flakiness, verdict trust and SDK overhead (<a href="/benchmarks">see the plan</a>)</li>
-              <li><b>Side-effect assertions</b> (did the write happen?) and return values in <code>run --json</code></li>
-              <li><b>Replay controls</b>: choose the redactor, reproduce a collaborator's remote branch</li>
+              <li><b>Handoff contracts</b>: your agents' own schemas (e.g. Pydantic) as the contract at each handoff, with the retry evidence today's tools hide - how many model calls an output needed to match, and every attempt with its input, error and cost</li>
+              <li><b>Checks at handoffs</b> that record that evidence and <b>never block</b> - in-process and proxy, measured on real pilots</li>
+              <li><b>Hosted pyTracer Cloud</b>: a dashboard for traces, verdicts and handoff evidence</li>
               <li><b>Coexist with your observability</b> - reuse OpenTelemetry / Langfuse spans instead of double-instrumenting</li>
-              <li><b>Full retry-chain capture</b>, every attempt and its wasted spend</li>
+              <li><b>TypeScript SDK</b> for JS/TS agents, and more CI/CD (Jenkins, Azure DevOps, Bitbucket)</li>
+              <li><b>Published benchmarks</b>: replay versus live cost, flakiness, verdict trust and SDK overhead (<a href="/benchmarks">see the plan</a>)</li>
             </ul>
           </div>
           <div class="road-col plan">
-            <span class="road-tag later">Exploring</span>
-            <h3>Later</h3>
+            <span class="road-tag later">Later</span>
+            <h3>Enterprise &amp; beyond</h3>
             <ul>
-              <li><b>TypeScript SDK</b> and a vitest integration for JS/TS agents</li>
-              <li><b>Enterprise side-effect governance</b> - audit and access control on the hosted service</li>
-              <li><b>Cross-run failure intelligence</b> over a team's captured history</li>
+              <li><b>Test generation with human review</b>: mutate a failed run's frozen state into regression tests and contract rules a developer accepts - nothing changes in production automatically</li>
+              <li><b>Warnings from failure history</b>: flag when a run resembles a known failure, with a pointer to it - it warns, never blocks</li>
+              <li><b>Enterprise</b>: SSO / SAML, audit logs, data residency and governance on the hosted service</li>
+              <li><b>Further frameworks</b> and a hardened multi-tenant cloud</li>
             </ul>
           </div>
         </div>
@@ -624,8 +626,9 @@
           </div>
         </div>
         <p class="stat-note reveal d2">
-          And it compounds: as a team captures more failures, that history becomes shared
-          regression intelligence - <a href="#roadmap">where we are heading next</a>.
+          And it compounds: the same recorded runs power checks at agent handoffs and, as a
+          team captures more failures, warnings from that history - shared regression
+          intelligence, <a href="#roadmap">where we are heading next</a>.
         </p>
       </div>
     </section>

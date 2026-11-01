@@ -27,6 +27,7 @@
   .hero h1 .accent { color: var(--accent); }
   .hero p.lede { font-size: clamp(17px, 2.6vw, 21px); color: var(--muted); max-width: 660px;
                  margin: 0 auto 30px; line-height: 1.55; }
+  .hero-logo { display: block; width: clamp(104px, 16vw, 140px); height: auto; margin: 0 auto 20px; }
 
   .pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
           color: var(--accent); background: var(--accent-soft); border: 1px solid var(--border);
@@ -273,6 +274,10 @@
     <!-- 1. hero -->
     <section class="hero">
       <div class="container">
+        <picture class="hero-logo reveal">
+          <source media="(prefers-color-scheme: dark)" srcset="/assets/logo-trans-dark.png">
+          <img src="/assets/logo-trans-light.png" alt="pyTracer" width="140">
+        </picture>
         <a class="pill reveal" href="https://pypi.org/project/pytracer-all/"><span class="dot"></span>Live on PyPI &middot; v0.1.4</a>
         <h1 class="reveal d1">Know if your change <span class="accent">actually fixed</span> the agent.</h1>
         <p class="lede reveal d2">

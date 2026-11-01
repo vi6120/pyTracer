@@ -67,6 +67,22 @@
              border: 1px solid #1b1f28; border-radius: 16px; overflow: hidden; }
   .fw-cell { background: #0b0d12; padding: 26px 20px; text-align: center; font-weight: 650; font-size: 17px; color: #e9edf3; }
   .fw-sub { text-align: center; color: #8a92a0; font-size: 14px; margin-top: 18px; }
+  /* framework slider (continuous, pauses on hover) */
+  .fw-slider { position: relative; overflow: hidden; max-width: 920px; margin: 0 auto;
+               -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+               mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); }
+  .fw-track { display: flex; width: max-content; animation: fwslide 20s linear infinite; }
+  .fw-slider:hover .fw-track { animation-play-state: paused; }
+  @keyframes fwslide { to { transform: translateX(-50%); } }
+  .fw-item { display: inline-flex; align-items: center; padding: 18px 46px; font-weight: 650; font-size: 21px; color: #e9edf3; white-space: nowrap; }
+  .badge-dark { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
+                color: #9fd0f5; border: 1px solid #2a3240; border-radius: 999px; padding: 6px 14px; margin-top: 18px; transition: border-color .16s ease; }
+  .badge-dark:hover { text-decoration: none; border-color: #5cb0ef; }
+  @media (prefers-reduced-motion: reduce) {
+    .fw-track { animation: none; width: auto; flex-wrap: wrap; justify-content: center; }
+    .fw-track .dup { display: none; }
+    .fw-slider { -webkit-mask-image: none; mask-image: none; }
+  }
 
   /* ---- sticky showcase (the signature motion) ---- */
   .showcase { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 56px; align-items: start; }
@@ -173,7 +189,6 @@
     <section class="hero">
       <div class="wrap hero-grid">
         <div class="hero-text">
-          <a class="badge" href="https://pypi.org/project/pytracer-all/">Live on PyPI &middot; v0.1.4</a>
           <h1 class="display">Know if your change <span class="accent">actually fixed</span> the agent.</h1>
           <p class="lede">pyTracer captures what an agent does and replays a past run deterministically,
           with the model and tool responses held frozen. Re-run a captured failure on any branch and
@@ -204,13 +219,20 @@
     <!-- frameworks: full-bleed dark band -->
     <section class="band-dark section-tight">
       <div class="wrap">
-        <div class="fw-grid">
-          <div class="fw-cell">LangGraph</div>
-          <div class="fw-cell">CrewAI</div>
-          <div class="fw-cell">AutoGen</div>
-          <div class="fw-cell">OpenAI Agents SDK</div>
+        <div class="fw-slider" aria-label="Supported frameworks">
+          <div class="fw-track">
+            <span class="fw-item">LangGraph</span>
+            <span class="fw-item">CrewAI</span>
+            <span class="fw-item">AutoGen</span>
+            <span class="fw-item">OpenAI Agents SDK</span>
+            <span class="fw-item dup" aria-hidden="true">LangGraph</span>
+            <span class="fw-item dup" aria-hidden="true">CrewAI</span>
+            <span class="fw-item dup" aria-hidden="true">AutoGen</span>
+            <span class="fw-item dup" aria-hidden="true">OpenAI Agents SDK</span>
+          </div>
         </div>
         <p class="fw-sub">Dedicated adapters for all four, or any Python agent you instrument by hand.</p>
+        <div style="text-align:center"><a class="badge-dark" href="https://pypi.org/project/pytracer-all/">Live on PyPI &middot; v0.1.4</a></div>
       </div>
     </section>
 

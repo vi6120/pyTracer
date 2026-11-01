@@ -73,15 +73,20 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
 /* Header */
 .site-header {
   position: sticky; top: 0; z-index: 20;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: saturate(180%) blur(8px);
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
 .site-header .inner {
   max-width: var(--maxw); margin: 0 auto; padding: 14px 24px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
 }
-.brand { font-weight: 700; font-size: 21px; letter-spacing: -0.02em; color: var(--accent); }
+.brand { display: inline-flex; align-items: center; gap: 9px;
+         font-weight: 700; font-size: 21px; letter-spacing: -0.02em; color: var(--accent); }
+.brand::before { content: ""; width: 26px; height: 26px; flex: none;
+                 background: url(/assets/mark-light.png) center / contain no-repeat; }
+@media (prefers-color-scheme: dark) {
+  .brand::before { background-image: url(/assets/mark-dark.png); }
+}
 .brand:hover { text-decoration: none; }
 .brand .py { color: var(--navy); }
 .nav { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
@@ -174,7 +179,7 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
 
 /* Logo in the hero. The PNG has a transparent background, so it sits cleanly on
    both light and dark themes. */
-.hero-logo { max-width: 360px; width: 100%; height: auto; margin: 0 auto 24px; display: block; }
+.hero-logo { max-width: 280px; width: 100%; height: auto; margin: 0 auto 22px; display: block; }
 
 /* Scale up on wide desktop screens */
 @media (min-width: 1100px) {
@@ -211,13 +216,13 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
 
 /* Interaction polish */
 .btn { transition: transform .15s ease, opacity .15s ease, border-color .15s ease, box-shadow .15s ease; }
-.btn.primary:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -10px var(--accent); }
+.btn.primary:hover { transform: translateY(-1px); }
 .btn.ghost:hover { transform: translateY(-1px); }
 .card { transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
 .card:hover {
   transform: translateY(-3px);
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  box-shadow: 0 14px 34px -18px color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 10px 24px -16px rgba(0, 0, 0, 0.22);
 }
 @media (prefers-reduced-motion: reduce) {
   .btn, .card { transition: none; }

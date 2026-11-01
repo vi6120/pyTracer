@@ -80,9 +80,10 @@ pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
   max-width: var(--maxw); margin: 0 auto; padding: 14px 24px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
 }
-.brand { display: inline-flex; align-items: center; gap: 9px;
-         font-weight: 700; font-size: 21px; letter-spacing: -0.02em; color: var(--accent); }
-.brand::before { content: ""; width: 26px; height: 26px; flex: none;
+/* Header shows the logo mark only; the "pyTracer" text stays in the DOM for
+   screen readers and as the link's accessible name, but is visually hidden. */
+.brand { display: inline-flex; align-items: center; font-size: 0; line-height: 0; }
+.brand::before { content: ""; width: 32px; height: 32px; flex: none;
                  background: url(/assets/mark-light.png) center / contain no-repeat; }
 @media (prefers-color-scheme: dark) {
   .brand::before { background-image: url(/assets/mark-dark.png); }

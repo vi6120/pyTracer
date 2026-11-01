@@ -10,53 +10,102 @@
 <link rel="stylesheet" href="/style.css">
 <script src="/nav.js" defer></script>
 <style>
-  .hero { padding: 72px 0 40px; text-align: center; }
-  .hero h1 { font-size: clamp(32px, 5.4vw, 54px); line-height: 1.06; letter-spacing: -0.03em; margin: 0 0 20px; max-width: 840px; margin-inline: auto; }
-  .hero h1 .accent { color: var(--accent); }
-  .hero .lede { font-size: clamp(17px, 2.4vw, 20px); color: var(--muted); max-width: 640px; margin: 0 auto 28px; line-height: 1.55; }
-  .pypi-link { display: inline-block; font-size: 14px; font-weight: 600; color: var(--accent); margin-bottom: 20px; }
-  .cta { display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  :root { --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; }
 
-  .section { padding: 64px 0; border-top: 1px solid var(--border); }
-  .section h2 { font-size: clamp(25px, 3.6vw, 34px); line-height: 1.14; letter-spacing: -0.02em; margin: 0 0 14px; }
-  .section > .container > p.intro { color: var(--muted); font-size: 17px; line-height: 1.6; max-width: 640px; margin: 0 0 32px; }
-  .section .head { max-width: 680px; margin: 0 auto 36px; text-align: center; }
-  .section .head p { color: var(--muted); font-size: 17px; line-height: 1.6; margin: 0 auto; max-width: 600px; }
+  /* wider canvas than the shared .container, used edge to edge */
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+  .section { padding: 96px 0; }
+  .section-tight { padding: 64px 0; }
 
-  .fw-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px 28px; color: var(--muted); font-weight: 600; }
-  .fw-row span { white-space: nowrap; }
-  .fw-note { text-align: center; color: var(--muted); font-size: 14px; margin-top: 16px; }
+  /* floating pill nav, scoped to the landing */
+  .site-header { position: sticky; top: 14px; z-index: 30; background: transparent; border: none; }
+  .site-header .inner { max-width: 1160px; margin: 0 auto; padding: 10px 14px 10px 18px;
+    background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: saturate(150%) blur(10px);
+    border: 1px solid var(--border); border-radius: 999px; box-shadow: 0 10px 30px -20px rgba(0,0,0,.4); }
 
-  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; max-width: 1000px; margin: 0 auto; }
-  .step { }
-  .step .n { font-weight: 700; color: var(--accent); font-size: 15px; margin-bottom: 8px; }
-  .step p { margin: 0; font-size: 15.5px; line-height: 1.5; }
-  .step.bad .n { color: #c23b3b; }
+  /* pill buttons with motion */
+  .btn { border-radius: 999px; transition: transform .16s ease, background-color .16s ease, border-color .16s ease; }
+  .btn.primary:hover { transform: translateY(-2px); background: color-mix(in srgb, var(--accent) 88%, #000); }
+  .btn.ghost:hover { transform: translateY(-2px); }
+  .btn.lg { padding: 14px 26px; font-size: 16px; }
 
-  .how { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; max-width: 900px; margin: 0 auto; }
-  .how .card b { display: block; color: var(--text); font-size: 16px; margin-bottom: 4px; }
-  .how .card span { color: var(--muted); font-size: 15px; line-height: 1.5; }
+  /* serif editorial display */
+  h1.display, .section h2.display { font-family: var(--serif); font-weight: 600; letter-spacing: -0.015em; }
 
-  .usecase { max-width: 760px; margin: 0 auto; }
-  .usecase p { color: var(--muted); font-size: 16.5px; line-height: 1.65; }
-  .usecase ol { margin: 22px 0 0; padding-left: 0; list-style: none; counter-reset: uc; }
-  .usecase li { position: relative; padding: 0 0 16px 40px; counter-increment: uc; }
-  .usecase li::before { content: counter(uc); position: absolute; left: 0; top: 0;
-                        width: 26px; height: 26px; border-radius: 6px; background: var(--panel-2);
-                        color: var(--accent); font-weight: 700; font-size: 14px;
-                        display: inline-flex; align-items: center; justify-content: center; }
-  .usecase li b { color: var(--text); }
+  /* ---- hero: full width, asymmetric ---- */
+  .hero { padding: 40px 0 72px; }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center; }
+  .hero-logo { width: 140px; height: auto; display: block; margin: 0 0 22px; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
+           color: var(--accent); border: 1px solid var(--border); border-radius: 999px; padding: 5px 13px; margin-bottom: 22px; }
+  h1.display { font-size: clamp(42px, 6.2vw, 74px); line-height: 1.02; margin: 0 0 22px; }
+  h1.display .accent { color: var(--accent); }
+  .hero .lede { font-size: clamp(17px, 2.2vw, 21px); color: var(--muted); max-width: 520px; line-height: 1.55; margin: 0 0 30px; }
+  .hero .cta { display: inline-flex; gap: 14px; flex-wrap: wrap; }
 
-  .modes { max-width: 760px; margin: 0 auto; }
-  .modes p { color: var(--muted); font-size: 16.5px; line-height: 1.65; }
-  .modes p strong { color: var(--text); }
+  /* product panel: a real pytracer result, styled like the PR check it posts */
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+           box-shadow: 0 40px 80px -50px rgba(0,0,0,.5); }
+  .panel-bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+  .panel-bar .avatar { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); flex: none; }
+  .panel-bar b { color: var(--text); font-weight: 650; }
+  .panel-body { padding: 18px 20px; font-family: var(--mono); font-size: 13.5px; line-height: 1.9; }
+  .panel-body .muted { color: var(--muted); }
+  .vtable { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .vtable td { padding: 5px 0; border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
+  .vtable td:first-child { color: var(--text); }
+  .vtable td.v { text-align: right; font-weight: 700; }
+  .v.ok { color: #1f9d57; } .v.fail { color: #c23b3b; } .v.warn { color: #b7791f; }
+  @media (prefers-color-scheme: dark) { .v.ok { color: #46c788; } .v.warn { color: #e0b150; } .v.fail { color: #f0756b; } }
+  .panel-foot { padding: 12px 20px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+  .panel-foot b { color: var(--text); }
 
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; max-width: 820px; margin: 0 auto; text-align: center; }
-  .stat .big { font-size: clamp(30px, 4.6vw, 42px); font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
-  .stat .lbl { color: var(--muted); font-size: 14px; margin-top: 8px; }
-  .stats-note { text-align: center; color: var(--muted); font-size: 14px; margin: 28px auto 0; max-width: 620px; }
+  /* ---- full-bleed dark band ---- */
+  .band-dark { background: #0b0d12; color: #c3c9d4; }
+  .band-dark .eq { color: #e9edf3; }
+  .fw-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #1b1f28;
+             border: 1px solid #1b1f28; border-radius: 16px; overflow: hidden; }
+  .fw-cell { background: #0b0d12; padding: 26px 20px; text-align: center; font-weight: 650; font-size: 17px; color: #e9edf3; }
+  .fw-sub { text-align: center; color: #8a92a0; font-size: 14px; margin-top: 18px; }
 
-  .road { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; max-width: 1040px; margin: 0 auto; }
+  /* ---- sticky showcase (the signature motion) ---- */
+  .showcase { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 56px; align-items: start; }
+  .sc-steps { position: sticky; top: 120px; align-self: start; }
+  .sc-steps h2 { margin: 0 0 24px; }
+  .sc-step { padding: 16px 0 16px 20px; border-left: 2px solid var(--border); cursor: default; transition: border-color .2s ease; }
+  .sc-step.active { border-color: var(--accent); }
+  .sc-step b { display: block; font-size: 19px; margin-bottom: 4px; color: var(--muted); transition: color .2s ease; }
+  .sc-step.active b { color: var(--text); }
+  .sc-step p { margin: 0; font-size: 15px; color: var(--muted); max-height: 0; opacity: 0; overflow: hidden;
+               transition: max-height .3s ease, opacity .3s ease, margin .3s ease; }
+  .sc-step.active p { max-height: 100px; opacity: 1; margin-top: 6px; }
+  .sc-stages { display: flex; flex-direction: column; gap: 56vh; padding: 20vh 0 30vh; }
+  .stage { min-height: 1px; }
+  .stage .mock { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px 22px;
+                 font-family: var(--mono); font-size: 13.5px; line-height: 1.85; box-shadow: 0 30px 70px -50px rgba(0,0,0,.5); }
+  .stage .mock .k { color: var(--accent); } .stage .mock .mut { color: var(--muted); }
+  .stage .cap { margin-top: 14px; font-size: 14px; color: var(--muted); }
+
+  /* ---- alternating feature rows ---- */
+  .feature { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+  .feature.flip .f-media { order: -1; }
+  .feature h2 { margin: 0 0 16px; }
+  .feature p { color: var(--muted); font-size: 17px; line-height: 1.65; margin: 0 0 14px; }
+  .feature p strong { color: var(--text); }
+  .f-media .mock { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px 22px;
+                   font-family: var(--mono); font-size: 13.5px; line-height: 1.85; box-shadow: 0 30px 70px -50px rgba(0,0,0,.5); }
+  .f-media .mock .add { color: #1f9d57; } .f-media .mock .del { color: #c23b3b; } .f-media .mock .mut { color: var(--muted); }
+  @media (prefers-color-scheme: dark) { .f-media .mock .add { color: #46c788; } .f-media .mock .del { color: #f0756b; } }
+
+  /* ---- stats (on dark) ---- */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; text-align: center; }
+  .stat .big { font-size: clamp(34px, 4.4vw, 52px); font-weight: 800; letter-spacing: -0.03em; line-height: 1; color: #fff; }
+  .stat .lbl { color: #8a92a0; font-size: 14px; margin-top: 10px; }
+
+  /* ---- roadmap ---- */
+  .road { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .road-col { border: 1px solid var(--border); border-radius: 16px; padding: 24px 22px; }
+  .road-col.shipped { background: var(--accent-soft); }
   .road-col h3 { margin: 0 0 4px; font-size: 16px; }
   .road-tag { display: inline-block; font-size: 12px; font-weight: 700; color: var(--muted); margin: 0 0 12px; }
   .road-col.shipped .road-tag { color: var(--accent); }
@@ -66,32 +115,39 @@
   .road-col.shipped li::before { content: "\2713"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
   .road-col.plan li::before { content: "\2192"; position: absolute; left: 0; color: var(--muted); }
 
-  .why { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; max-width: 920px; margin: 0 auto; }
-  .why .card h3 { font-size: 17px; margin: 0 0 8px; }
-  .why .card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
-
-  .faq { max-width: 760px; margin: 0 auto; }
+  /* ---- faq + install ---- */
+  .faq { max-width: 820px; }
   details.q { border-top: 1px solid var(--border); }
   details.q:last-of-type { border-bottom: 1px solid var(--border); }
-  details.q > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between;
-                        gap: 16px; padding: 18px 2px; font-size: 17px; font-weight: 600; }
+  details.q > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 16px; padding: 18px 2px; font-size: 18px; font-weight: 600; }
   details.q > summary::-webkit-details-marker { display: none; }
   details.q > summary::after { content: "+"; font-size: 22px; font-weight: 300; color: var(--muted); }
   details.q[open] > summary::after { content: "\2013"; color: var(--accent); }
   details.q .body { padding: 0 2px 20px; color: var(--muted); font-size: 15.5px; line-height: 1.6; }
-
-  .install { max-width: 620px; margin: 0 auto; }
   .install .row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-                  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-                  padding: 12px 16px; margin: 10px 0; font-family: var(--mono); font-size: 15px; }
-  .copy { font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--muted);
-          background: var(--panel-2); border: none; border-radius: 7px; padding: 5px 11px; cursor: pointer; }
-  .copy:hover { color: var(--text); }
-  .copy.ok { color: var(--accent); }
+                  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 13px 18px; margin: 10px 0;
+                  font-family: var(--mono); font-size: 15px; max-width: 560px; }
+  .copy { font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--muted); background: var(--panel-2); border: none; border-radius: 7px; padding: 5px 11px; cursor: pointer; }
+  .copy:hover { color: var(--text); } .copy.ok { color: var(--accent); }
 
-  @media (max-width: 860px) {
-    .steps, .stats { grid-template-columns: repeat(2, 1fr); }
-    .how, .why, .road { grid-template-columns: 1fr; }
+  /* purposeful in-view fade, for media panels only (not every block) */
+  .rise { opacity: 0; transform: translateY(20px); transition: opacity .6s ease, transform .6s ease; }
+  .rise.in { opacity: 1; transform: none; }
+
+  @media (max-width: 920px) {
+    .hero-grid, .showcase, .feature { grid-template-columns: 1fr; gap: 32px; }
+    .feature.flip .f-media { order: 0; }
+    .sc-steps { position: static; }
+    .sc-stages { gap: 28px; padding: 24px 0; }
+    .sc-step p { max-height: 100px; opacity: 1; margin-top: 6px; }
+    .fw-grid { grid-template-columns: repeat(2, 1fr); }
+    .stats { grid-template-columns: repeat(2, 1fr); gap: 24px; }
+    .road { grid-template-columns: 1fr; }
+    .section { padding: 64px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rise { opacity: 1; transform: none; transition: none; }
+    .btn.primary:hover, .btn.ghost:hover { transform: none; }
   }
 </style>
 </head>
@@ -105,7 +161,6 @@
         <a href="/compare">Why</a>
         <a href="/benchmarks">Benchmarks</a>
         <a href="#roadmap">Roadmap</a>
-        <a href="#faq">FAQ</a>
         <a href="/docs">Docs</a>
       </nav>
       <a class="nav-cta" href="https://github.com/vi6120/pyTracer">GitHub</a>
@@ -114,203 +169,182 @@
   </header>
 
   <main>
-    <!-- hero -->
+    <!-- hero: full-width asymmetric -->
     <section class="hero">
-      <div class="container">
-        <picture class="hero-logo">
-          <source media="(prefers-color-scheme: dark)" srcset="/assets/logo-trans-dark.png">
-          <img src="/assets/logo-trans-light.png" alt="pyTracer" width="300">
-        </picture>
-        <a class="pypi-link" href="https://pypi.org/project/pytracer-all/">Live on PyPI &middot; v0.1.4</a>
-        <h1>Know if your change <span class="accent">actually fixed</span> the agent.</h1>
-        <p class="lede">
-          pyTracer captures what an agent does and replays a past run deterministically,
-          with the model and tool responses held frozen. Re-run a captured failure on any
-          branch and get a clear fixed, still-failing or diverged verdict.
-        </p>
-        <div class="cta">
-          <a class="btn primary" href="/docs">Read the docs</a>
-          <a class="btn ghost" href="https://github.com/vi6120/pyTracer">View on GitHub</a>
+      <div class="wrap hero-grid">
+        <div class="hero-text">
+          <a class="badge" href="https://pypi.org/project/pytracer-all/">Live on PyPI &middot; v0.1.4</a>
+          <h1 class="display">Know if your change <span class="accent">actually fixed</span> the agent.</h1>
+          <p class="lede">pyTracer captures what an agent does and replays a past run deterministically,
+          with the model and tool responses held frozen. Re-run a captured failure on any branch and
+          get a verdict you can trust.</p>
+          <div class="cta">
+            <a class="btn primary lg" href="/docs">Read the docs</a>
+            <a class="btn ghost lg" href="https://github.com/vi6120/pyTracer">View on GitHub</a>
+          </div>
+        </div>
+        <div class="hero-media rise">
+          <div class="panel">
+            <div class="panel-bar"><span class="avatar"></span><b>pytracer</b>&nbsp;reproduced the captured failure on three branches</div>
+            <div class="panel-body">
+              <div class="muted">$ pytracer reproduce --baseline main</div>
+              <table class="vtable">
+                <tr><td>fix</td><td class="v ok">fixed</td></tr>
+                <tr><td>still</td><td class="v fail">still_failing</td></tr>
+                <tr><td>diverged</td><td class="v fail">diverged</td></tr>
+                <tr><td>renamed-only</td><td class="v warn">cannot_judge</td></tr>
+              </table>
+            </div>
+            <div class="panel-foot">The model and tool responses were <b>frozen</b> from the recorded run. No live calls.</div>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- frameworks -->
-    <section class="section">
-      <div class="container">
-        <div class="fw-row">
-          <span>LangGraph</span><span>CrewAI</span><span>AutoGen</span><span>OpenAI Agents SDK</span>
+    <!-- frameworks: full-bleed dark band -->
+    <section class="band-dark section-tight">
+      <div class="wrap">
+        <div class="fw-grid">
+          <div class="fw-cell">LangGraph</div>
+          <div class="fw-cell">CrewAI</div>
+          <div class="fw-cell">AutoGen</div>
+          <div class="fw-cell">OpenAI Agents SDK</div>
         </div>
-        <p class="fw-note">Dedicated adapters for all four, or any Python agent you instrument by hand.</p>
+        <p class="fw-sub">Dedicated adapters for all four, or any Python agent you instrument by hand.</p>
       </div>
     </section>
 
-    <!-- problem -->
+    <!-- problem: alternating feature row -->
     <section class="section" id="problem">
-      <div class="container">
-        <div class="head">
-          <h2>A green test does not mean your fix worked.</h2>
-          <p>Agents are nondeterministic. Re-run a failed one and the model and tool responses
-          come back different every time, so when a test turns green you cannot tell whether
-          your code change fixed it or the model just drifted.</p>
+      <div class="wrap feature">
+        <div class="f-text">
+          <h2 class="display">A green test does not mean your fix worked.</h2>
+          <p>Agents are nondeterministic. Re-run a failed one and the model and tool responses come
+          back different every time, so a green test might mean your change worked, or might just be
+          the model drifting.</p>
+          <p>pyTracer holds those responses <strong>frozen</strong> and replays the exact run, so the
+          failure reproduces on demand instead of by luck.</p>
         </div>
-        <div class="steps">
-          <div class="step"><div class="n">1</div><p>Your agent fails in production.</p></div>
-          <div class="step"><div class="n">2</div><p>You change the code to fix it.</p></div>
-          <div class="step"><div class="n">3</div><p>You re-run, but the model and tools drift.</p></div>
-          <div class="step bad"><div class="n">4</div><p>You cannot tell what actually fixed it.</p></div>
+        <div class="f-media rise">
+          <div class="mock">
+            <div class="mut"># the one-line bug, main vs fix</div>
+            <div><span class="del">- return f"Reviewed {n_sources - 1} sources. {summary}"</span></div>
+            <div><span class="add">+ return f"Reviewed {n_sources} sources. {summary}"</span></div>
+            <div class="mut" style="margin-top:10px">glue code between the model and its tools, not the model</div>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- how it works -->
+    <!-- how it works: sticky scroll showcase -->
     <section class="section" id="how">
-      <div class="container">
-        <div class="head">
-          <h2>Capture a run once, replay it anywhere.</h2>
-          <p>The same failure reproduces the same way every time, with no live model calls and
-          no API spend.</p>
+      <div class="wrap showcase">
+        <div class="sc-steps">
+          <h2 class="display">Capture a run once,<br>replay it anywhere.</h2>
+          <div class="sc-step" data-step="0"><b>Capture</b><p>Record the run, down to each model call and tool result, stamped with branch and commit.</p></div>
+          <div class="sc-step" data-step="1"><b>Freeze</b><p>Pin the recorded responses as mocks, along with the clock, timestamps, UUIDs and RNG.</p></div>
+          <div class="sc-step" data-step="2"><b>Replay</b><p>Re-run on any branch in full, partial or live mode, or freeze all but the step you changed.</p></div>
+          <div class="sc-step" data-step="3"><b>Classify</b><p>Get a fixed, still-failing or diverged verdict, or no verdict with the reason why.</p></div>
         </div>
-        <div class="how">
-          <div class="card"><b>Capture</b><span>Record the run, down to each model call and tool result, with the branch and commit stamped on it.</span></div>
-          <div class="card"><b>Freeze</b><span>Pin the recorded model and tool responses as mocks, along with the clock, timestamps, UUIDs and RNG.</span></div>
-          <div class="card"><b>Replay</b><span>Re-run on any branch in full, partial or live mode, or freeze everything except the one step you changed.</span></div>
-          <div class="card"><b>Classify</b><span>Get a fixed, still-failing or diverged verdict per scenario, or no verdict with the reason why.</span></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- use case -->
-    <section class="section">
-      <div class="container">
-        <div class="head">
-          <h2>The support agent that sent the wrong items.</h2>
-          <p>A customer asks a support agent to exchange an order. The agent confirms, but the
-          exchange goes out with the old item IDs as the new ones: a one-line bug in the glue
-          code between the model and the tools. Re-running it live proves nothing, because the
-          model words things differently each time.</p>
-        </div>
-        <div class="usecase">
-          <ol>
-            <li><b>Captured.</b> The failing conversation is recorded with its branch and commit, every model call and tool result.</li>
-            <li><b>Turned into a test.</b> <code>pytracer record</code> makes it a scenario asserting the right items are exchanged, so CI goes red.</li>
-            <li><b>The fix PR.</b> Comment <code>/pytracer try</code> and it replays the exact conversation: fixed.</li>
-            <li><b>A PR that only looked like a fix.</b> A rename, bug still there: still failing, not a lucky green run.</li>
-            <li><b>The PR it cannot judge.</b> It changes the exchange call itself: cannot judge, naming that call and what to do, instead of guessing.</li>
-          </ol>
-        </div>
-      </div>
-    </section>
-
-    <!-- replay modes + verdict -->
-    <section class="section">
-      <div class="container">
-        <div class="head">
-          <h2>Replay that survives real nondeterminism.</h2>
-        </div>
-        <div class="modes">
-          <p>Choose how much to hold frozen: <strong>full</strong> freezes the recorded model and
-          tools, <strong>partial</strong> keeps the tools frozen and runs the model live, and
-          <strong>live</strong> re-runs everything. Or freeze everything except the one step you
-          changed. Every mode asserts the route the agents took, not just the final output, and
-          replay stays faithful on real agents: streamed responses and concurrent or repeated
-          tool calls replay in order, the clock, timestamps and UUIDs are pinned, the RNG is
-          seeded, and live side effects are surfaced.</p>
-          <p>A verdict is only drawn from a run that stayed on its recording. If a branch makes a
-          call the recording cannot serve, you get <strong>cannot judge</strong> with that call
-          named, never a lucky fixed. If the baseline itself drifts, it is
-          <strong>cannot reproduce</strong>. A branch that fails exactly as before is
-          <strong>still failing</strong>, whatever else changed.</p>
+        <div class="sc-stages">
+          <div class="stage" data-step="0"><div class="mock">
+            <div class="mut">run captured  ·  branch=main  commit=8a3f1c</div>
+            <div><span class="k">agent</span> researcher</div>
+            <div>&nbsp;&nbsp;<span class="k">llm</span> gpt-4o  <span class="mut">1,204 tok</span></div>
+            <div>&nbsp;&nbsp;<span class="k">tool</span> search(query)  <span class="mut">3 results</span></div>
+            <div>&nbsp;&nbsp;<span class="k">tool</span> summarize(docs)</div>
+          </div><div class="cap">Every model call, tool call and handoff, as structured spans.</div></div>
+          <div class="stage" data-step="1"><div class="mock">
+            <div class="mut">freezing recorded responses as mocks</div>
+            <div><span class="k">llm</span> gpt-4o        <span class="v ok">pinned</span></div>
+            <div><span class="k">tool</span> search       <span class="v ok">pinned</span></div>
+            <div><span class="k">clock / uuid / rng</span>  <span class="v ok">pinned</span></div>
+          </div><div class="cap">Nondeterminism is pinned, not just the model output.</div></div>
+          <div class="stage" data-step="2"><div class="mock">
+            <div class="mut">$ pytracer reproduce --branch fix</div>
+            <div>replaying on <span class="k">fix</span>, mocks frozen&hellip;</div>
+            <div>route  researcher &rarr; search &rarr; summarize  <span class="v ok">match</span></div>
+          </div><div class="cap">The exact recorded run, re-executed on your branch.</div></div>
+          <div class="stage" data-step="3"><div class="mock">
+            <div class="mut">SCENARIO              OUTCOME</div>
+            <div>cites-every-source    <span class="v ok">fixed</span></div>
+            <div>stale-id-passthrough  <span class="v fail">still_failing</span></div>
+            <div>exchange-call-moved   <span class="v warn">cannot_judge</span></div>
+          </div><div class="cap">A verdict per scenario, or an honest abstention with the reason.</div></div>
         </div>
       </div>
     </section>
 
-    <!-- proof -->
-    <section class="section">
-      <div class="container">
-        <div class="head">
-          <h2>Open source, and ready to use today.</h2>
-          <p>pyTracer <a href="https://github.com/vi6120/pyTracer/releases/tag/v0.1.4">0.1.4</a>
-          is live on PyPI and the repository is public. No waitlist, no beta flag.</p>
+    <!-- verdict: alternating (flipped) -->
+    <section class="section" id="verdict">
+      <div class="wrap feature flip">
+        <div class="f-text">
+          <h2 class="display">A verdict, not a lucky green run.</h2>
+          <p>A verdict is only drawn from a run that stayed on its recording. If a branch makes a call
+          the recording cannot serve, you get <strong>cannot judge</strong> with that call named, never
+          a lucky fixed. If the baseline itself drifts, it is <strong>cannot reproduce</strong>.</p>
+          <p>A branch that fails exactly as before is <strong>still failing</strong>, whatever else
+          changed. That is the question pass/fail cannot answer: did my change fix it, or break
+          something?</p>
         </div>
+        <div class="f-media rise">
+          <div class="mock">
+            <div class="mut">BRANCH     VERDICT         MEANING</div>
+            <div>fix        <span class="add">fixed</span>           the branch actually fixed it</div>
+            <div>still      <span class="del">still_failing</span>   the change was a no-op</div>
+            <div>diverged   <span class="del">diverged</span>        fails a new, different way</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- proof: dark band -->
+    <section class="band-dark section">
+      <div class="wrap">
         <div class="stats">
           <div class="stat"><div class="big">12</div><div class="lbl">PyPI packages</div></div>
           <div class="stat"><div class="big">4</div><div class="lbl">framework adapters</div></div>
           <div class="stat"><div class="big">3</div><div class="lbl">replay modes</div></div>
           <div class="stat"><div class="big">589</div><div class="lbl">tests, ruff + mypy clean</div></div>
         </div>
-        <p class="stats-note">Apache-2.0 for the client toolchain, AGPL-3.0 for the hosted server
-        components. See the <a href="/docs#packages">full package list</a> and the
-        <a href="/benchmarks">benchmarks</a> for what we measured and how.</p>
+        <p class="fw-sub" style="margin-top:28px">Open source today: Apache-2.0 client toolchain, AGPL-3.0 server. Every number is on the <a href="/benchmarks" style="color:#c3c9d4;text-decoration:underline">benchmarks page</a> with its method.</p>
       </div>
     </section>
 
     <!-- roadmap -->
     <section class="section" id="roadmap">
-      <div class="container">
-        <div class="head">
-          <h2>Where we are, and where we are going.</h2>
-          <p>Shipped is on PyPI today; the rest is planned, not released. We build against real
-          pilot and interview feedback, so the order can shift.</p>
-        </div>
+      <div class="wrap">
+        <h2 class="display" style="font-size:clamp(28px,4vw,42px);margin:0 0 10px">Where we are, and where we are going.</h2>
+        <p style="color:var(--muted);font-size:17px;max-width:620px;margin:0 0 36px">Shipped is on PyPI today; the rest is planned, not released. We build against real pilot feedback, so the order can shift.</p>
         <div class="road">
           <div class="road-col shipped">
             <div class="road-tag">Shipped &middot; 0.1.4</div>
             <h3>Deterministic test &amp; replay</h3>
             <ul>
-              <li><b>Cross-branch reproduction</b> with a fixed, still-failing or diverged verdict, and cannot judge with the reason when a branch leaves its recording</li>
+              <li><b>Cross-branch reproduction</b> with a fixed, still-failing or diverged verdict, and cannot judge with the reason</li>
               <li><b>Three replay modes</b> plus selective, per-step freeze</li>
-              <li><b>Route, tools and step assertions</b>, not just output checks</li>
-              <li><b>Four adapters</b> (LangGraph, CrewAI, AutoGen, OpenAI Agents) that capture and replay without <code>@op</code>, with a CI gate, PR trigger and pytest plugin</li>
+              <li><b>Route, tools and step assertions</b></li>
+              <li><b>Four adapters</b>, a CI gate, a PR trigger and a pytest plugin</li>
             </ul>
           </div>
           <div class="road-col plan">
             <div class="road-tag">In progress</div>
             <h3>Building now</h3>
             <ul>
-              <li><b>Handoff contracts</b>: your agents' own schemas as the contract at each handoff, with the retry evidence today's tools hide</li>
-              <li><b>Checks at handoffs</b> that record that evidence and never block, in-process and proxy</li>
+              <li><b>Handoff contracts</b> with the retry evidence today's tools hide</li>
+              <li><b>Checks at handoffs</b> that record evidence and never block</li>
               <li><b>Hosted pyTracer Cloud</b>: a dashboard for traces, verdicts and handoff evidence</li>
-              <li><b>TypeScript SDK</b> for JS/TS agents, and more CI/CD (Jenkins, Azure DevOps, Bitbucket)</li>
+              <li><b>TypeScript SDK</b>, and more CI/CD platforms</li>
             </ul>
           </div>
           <div class="road-col plan">
             <div class="road-tag">Later</div>
             <h3>Enterprise &amp; beyond</h3>
             <ul>
-              <li><b>Test generation with human review</b>: mutate a failed run's frozen state into regression tests a developer accepts</li>
-              <li><b>Warnings from failure history</b>: flag when a run resembles a known failure; it warns, never blocks</li>
-              <li><b>Enterprise</b>: SSO / SAML, audit logs, data residency and governance</li>
+              <li><b>Test generation with human review</b></li>
+              <li><b>Warnings from failure history</b>; it warns, never blocks</li>
+              <li><b>Enterprise</b>: SSO / SAML, audit logs, governance</li>
             </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- why it holds up -->
-    <section class="section">
-      <div class="container">
-        <div class="head">
-          <h2>The open problems in agent replay.</h2>
-          <p>That record-and-replay works for agents is understood. The hard, still-open parts
-          are what come next, and they are where pyTracer lives.</p>
-        </div>
-        <div class="why">
-          <div class="card">
-            <h3>A verdict, not pass/fail</h3>
-            <p>pyTracer answers fixed, still failing or diverged across branches, and says cannot judge with the reason rather than call a branch fixed on a run that left its recording.</p>
-          </div>
-          <div class="card">
-            <h3>Replay that survives nondeterminism</h3>
-            <p>One unmarked clock, timestamp, UUID or RNG read silently runs live and breaks a deterministic replay. pyTracer pins all of them, so a run reproduces beyond the mocks.</p>
-          </div>
-          <div class="card">
-            <h3>Matching a re-worded call</h3>
-            <p>Matching by name and call count misses reordered or re-worded inputs. pyTracer matches on hashed inputs with a fuzzy and positional fallback, and marks a non-exact match instead of serving the wrong recording.</p>
-          </div>
-          <div class="card">
-            <h3>Multi-agent routes and side effects</h3>
-            <p>Assert the route the agents took, freeze just the step under test, and surface any live call during replay, so a green replay never hides a real side effect.</p>
           </div>
         </div>
       </div>
@@ -318,61 +352,41 @@
 
     <!-- faq -->
     <section class="section" id="faq">
-      <div class="container">
-        <div class="head">
-          <h2>Questions, answered.</h2>
-          <p>The <a href="/docs">docs</a> go deeper. Open an issue on
-          <a href="https://github.com/vi6120/pyTracer">GitHub</a>, or email
-          <a href="mailto:services@pytracer.com">services@pytracer.com</a>.</p>
-        </div>
+      <div class="wrap">
+        <h2 class="display" style="font-size:clamp(28px,4vw,42px);margin:0 0 28px">Questions, answered.</h2>
         <div class="faq">
           <details class="q" open>
             <summary>How is pyTracer different from tracing or eval tools?</summary>
-            <div class="body">Tracing shows you that a run happened; eval scores an output. pyTracer freezes a captured run and re-runs it deterministically on another branch, so you learn whether your code change is what fixed the failure, not just that today's run passed. See the <a href="/compare">full comparison</a>.</div>
+            <div class="body">Tracing shows you that a run happened; eval scores an output. pyTracer freezes a captured run and re-runs it deterministically on another branch, so you learn whether your code change is what fixed the failure. See the <a href="/compare">full comparison</a>.</div>
           </details>
           <details class="q">
             <summary>What does deterministic replay actually mean?</summary>
             <div class="body">The recorded model and tool responses are injected back in during replay, so the agent follows the exact same path with no live API calls. The same failure reproduces identically every time.</div>
           </details>
           <details class="q">
-            <summary>What do "cannot judge" and "cannot reproduce" mean?</summary>
-            <div class="body">They are pyTracer refusing to guess. <b>Cannot judge</b>: the branch made a call the recording cannot serve, so its result is not a frozen one; pyTracer names that call and tells you what to do. <b>Cannot reproduce</b>: the baseline itself drifted, usually because the run's settings were missing (pass them with <code>--env-file</code>).</div>
-          </details>
-          <details class="q">
             <summary>Do I have to change my agent code?</summary>
-            <div class="body">With a framework adapter (LangGraph, CrewAI, AutoGen, OpenAI Agents), no: register the adapter and its model and tool calls are captured and replayable as they are. Otherwise, add the <code>@op</code> decorator to the functions that call models and tools. One or two lines each, and it does not change their behavior.</div>
-          </details>
-          <details class="q">
-            <summary>How fast is it, and what does it cost to run?</summary>
-            <div class="body">A replay makes no model calls, so it costs nothing in API spend. The gateway sustained 3,600 spans per second for 30 minutes on a laptop with no lost spans, and the whole stack runs on a free-tier VM. The <a href="/benchmarks">benchmarks page</a> has every number with its hardware and command.</div>
+            <div class="body">With a framework adapter, no: register it and the model and tool calls are captured and replayable as they are. Otherwise add the <code>@op</code> decorator to the functions that call models and tools, one or two lines each.</div>
           </details>
           <details class="q">
             <summary>Is it open source? Can I self-host?</summary>
-            <div class="body">Yes to both. The client toolchain is Apache-2.0 and the hosted server components are AGPL-3.0; all 12 packages are on PyPI and the repository is public. Self-host the gateway and stores as a Docker stack, or point the SDK at the hosted gateway.</div>
-          </details>
-          <details class="q">
-            <summary>Does my prompt data leave my machine?</summary>
-            <div class="body">Only the spans you capture are sent to the gateway you configure, which can be your own. You control what is instrumented and where it goes, and sensitive values are redacted locally before they leave.</div>
+            <div class="body">Yes to both. The client toolchain is Apache-2.0 and the server components are AGPL-3.0; all 12 packages are on PyPI. Self-host the gateway and stores as a Docker stack, or point the SDK at the hosted gateway.</div>
           </details>
         </div>
       </div>
     </section>
 
     <!-- get started -->
-    <section class="section">
-      <div class="container">
-        <div class="head">
-          <h2>Test your agents today.</h2>
-          <p>One package pulls in the whole platform, or install just the SDK in your agent.</p>
-        </div>
+    <section class="section-tight" style="padding-bottom:96px">
+      <div class="wrap">
+        <h2 class="display" style="font-size:clamp(28px,4vw,42px);margin:0 0 10px">Test your agents today.</h2>
+        <p style="color:var(--muted);font-size:17px;margin:0 0 24px">One package pulls in the whole platform, or install just the SDK.</p>
         <div class="install">
           <div class="row"><code>pip install pytracer-all</code><button class="copy" type="button" data-copy="pip install pytracer-all" aria-label="Copy install command">Copy</button></div>
-          <div class="row"><code>pip install pytracer-sdk</code><button class="copy" type="button" data-copy="pip install pytracer-sdk" aria-label="Copy install command">Copy</button></div>
           <div class="row"><code>uv add pytracer-all</code><button class="copy" type="button" data-copy="uv add pytracer-all" aria-label="Copy install command">Copy</button></div>
         </div>
-        <div class="cta" style="margin-top: 26px; display: flex; justify-content: center;">
-          <a class="btn primary" href="/docs">Read the docs</a>
-          <a class="btn ghost" href="https://github.com/vi6120/pyTracer">View on GitHub</a>
+        <div class="cta" style="margin-top:24px;display:inline-flex;gap:14px">
+          <a class="btn primary lg" href="/docs">Read the docs</a>
+          <a class="btn ghost lg" href="https://github.com/vi6120/pyTracer">View on GitHub</a>
         </div>
       </div>
     </section>
@@ -392,7 +406,6 @@
           <a href="/benchmarks">Benchmarks</a>
           <a href="https://pypi.org/project/pytracer-all/">PyPI</a>
           <a href="https://github.com/vi6120/pyTracer">GitHub</a>
-          <a href="/docs#packages">Packages</a>
         </div>
         <div class="footer-col">
           <h4>Resources</h4>
@@ -416,16 +429,39 @@
   </footer>
 
   <script>
+    // copy buttons
     document.querySelectorAll('.copy').forEach(function (btn) {
       btn.addEventListener('click', function () {
         navigator.clipboard.writeText(btn.getAttribute('data-copy')).then(function () {
-          var prev = btn.textContent;
-          btn.textContent = 'Copied';
-          btn.classList.add('ok');
-          setTimeout(function () { btn.textContent = prev; btn.classList.remove('ok'); }, 1400);
+          var p = btn.textContent; btn.textContent = 'Copied'; btn.classList.add('ok');
+          setTimeout(function () { btn.textContent = p; btn.classList.remove('ok'); }, 1400);
         }).catch(function () {});
       });
     });
+
+    // purposeful in-view fade for media panels only
+    (function () {
+      var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var els = [].slice.call(document.querySelectorAll('.rise'));
+      if (reduce || !('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('in'); }); return; }
+      var io = new IntersectionObserver(function (es) { es.forEach(function (en) {
+        if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }); }, { threshold: 0.2 });
+      els.forEach(function (e) { io.observe(e); });
+    })();
+
+    // sticky showcase: highlight the step whose stage is centered
+    (function () {
+      var steps = [].slice.call(document.querySelectorAll('.sc-step'));
+      var stages = [].slice.call(document.querySelectorAll('.sc-stages .stage'));
+      if (!steps.length || !stages.length) return;
+      function setActive(i) { steps.forEach(function (s, j) { s.classList.toggle('active', j === i); }); }
+      setActive(0);
+      if (!('IntersectionObserver' in window)) { return; }
+      var io = new IntersectionObserver(function (es) {
+        es.forEach(function (en) { if (en.isIntersecting) { setActive(+en.target.getAttribute('data-step')); } });
+      }, { rootMargin: '-45% 0px -45% 0px', threshold: 0 });
+      stages.forEach(function (s) { io.observe(s); });
+    })();
   </script>
 </body>
 </html>

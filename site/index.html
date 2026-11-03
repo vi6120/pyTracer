@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>pyTracer - test and replay your AI agents</title>
 <meta name="description" content="pyTracer captures what your AI agent does, replays a past run deterministically, and regression-tests it in CI. Its headline feature is cross-branch reproduction.">
+<link rel="canonical" href="https://pytracer.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="pyTracer">
+<meta property="og:url" content="https://pytracer.com/">
+<meta property="og:title" content="pyTracer - test and replay your AI agents">
+<meta property="og:description" content="Capture what your AI agent does, replay a past run deterministically, and reproduce a failure across branches with a verdict you can trust.">
+<meta property="og:image" content="https://pytracer.com/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="pyTracer - test and replay your AI agents">
+<meta name="twitter:description" content="Capture what your AI agent does, replay a past run deterministically, and reproduce a failure across branches with a verdict you can trust.">
+<meta name="twitter:image" content="https://pytracer.com/assets/og.png">
 <link rel="icon" type="image/png" href="/assets/favicon.png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="stylesheet" href="/style.css">
@@ -166,6 +177,41 @@
     .btn.primary:hover, .btn.ghost:hover { transform: none; }
   }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "pyTracer",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Linux, macOS, Windows",
+      "softwareVersion": "0.1.4",
+      "url": "https://pytracer.com/",
+      "description": "pyTracer captures what an AI agent does, replays a past run deterministically with the model and tool responses frozen, and reproduces a failure across branches with a verdict.",
+      "license": "https://pytracer.com/license",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "author": { "@type": "Organization", "name": "pyTracer", "url": "https://pytracer.com/" }
+    },
+    {
+      "@type": "Organization",
+      "name": "pyTracer",
+      "url": "https://pytracer.com/",
+      "logo": "https://pytracer.com/assets/logo.png",
+      "sameAs": ["https://github.com/vi6120/pyTracer", "https://pypi.org/project/pytracer-all/"]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "How is pyTracer different from tracing or eval tools?", "acceptedAnswer": { "@type": "Answer", "text": "Tracing shows you that a run happened; eval scores an output. pyTracer freezes a captured run and re-runs it deterministically on another branch, so you learn whether your code change is what fixed the failure." } },
+        { "@type": "Question", "name": "What does deterministic replay actually mean?", "acceptedAnswer": { "@type": "Answer", "text": "The recorded model and tool responses are injected back in during replay, so the agent follows the exact same path with no live API calls. The same failure reproduces identically every time." } },
+        { "@type": "Question", "name": "Do I have to change my agent code?", "acceptedAnswer": { "@type": "Answer", "text": "With a framework adapter, no: register it and the model and tool calls are captured and replayable as they are. Otherwise add the @op decorator to the functions that call models and tools, one or two lines each." } },
+        { "@type": "Question", "name": "Is it open source? Can I self-host?", "acceptedAnswer": { "@type": "Answer", "text": "Yes to both. The client toolchain is Apache-2.0 and the server components are AGPL-3.0; all 12 packages are on PyPI. Self-host the gateway and stores as a Docker stack, or point the SDK at the hosted gateway." } }
+      ]
+    }
+  ]
+}
+</script>
 </head>
 <body>
   <header class="site-header">

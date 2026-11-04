@@ -157,6 +157,15 @@
   .copy { font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--muted); background: var(--panel-2); border: none; border-radius: 7px; padding: 5px 11px; cursor: pointer; }
   .copy:hover { color: var(--text); } .copy.ok { color: var(--accent); }
 
+  /* ---- brand identity band ---- */
+  .brand-band { text-align: center; }
+  .brand-band .lockup { width: clamp(220px, 32vw, 340px); height: auto; display: block; margin: 0 auto 18px; }
+  .brand-band .tag { color: var(--muted); font-size: 17px; max-width: 540px; margin: 0 auto; line-height: 1.6; }
+
+  /* justified body copy, uniform left and right edges */
+  .hero .lede, .feature p, #roadmap .wrap > p, #faq .body,
+  .brand-band .tag, .section-tight .wrap > p { text-align: justify; text-justify: inter-word; hyphens: auto; }
+
   /* purposeful in-view fade, for media panels only (not every block) */
   .rise { opacity: 0; transform: translateY(20px); transition: opacity .6s ease, transform .6s ease; }
   .rise.in { opacity: 1; transform: none; }
@@ -440,6 +449,17 @@
             <div class="body">Yes to both. The client toolchain is Apache-2.0 and the server components are AGPL-3.0; all 12 packages are on PyPI. Self-host the gateway and stores as a Docker stack, or point the SDK at the hosted gateway.</div>
           </details>
         </div>
+      </div>
+    </section>
+
+    <!-- brand identity band -->
+    <section class="section-tight brand-band">
+      <div class="wrap">
+        <picture>
+          <source srcset="/assets/logo-trans-dark.png" media="(prefers-color-scheme: dark)">
+          <img class="lockup" src="/assets/logo-trans-light.png" width="440" height="401" alt="pyTracer logo and wordmark">
+        </picture>
+        <p class="tag">pyTracer is the open-source test-and-replay layer for AI agents: capture a run, freeze it, and reproduce the failure across branches with a verdict you can trust.</p>
       </div>
     </section>
 

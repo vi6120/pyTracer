@@ -46,7 +46,7 @@
   /* ---- hero: full width, asymmetric ---- */
   .hero { padding: 40px 0 72px; }
   .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center; }
-  .hero-logo { width: 140px; height: auto; display: block; margin: 0 0 22px; }
+  .hero-logo { width: clamp(150px, 18vw, 200px); height: auto; display: block; margin: 0 0 24px; }
   .badge { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
            color: var(--accent); border: 1px solid var(--border); border-radius: 999px; padding: 5px 13px; margin-bottom: 22px; }
   h1.display { font-size: clamp(42px, 6.2vw, 74px); line-height: 1.02; margin: 0 0 22px; }
@@ -244,6 +244,10 @@
     <section class="hero">
       <div class="wrap hero-grid">
         <div class="hero-text">
+          <picture>
+            <source srcset="/assets/logo-trans-dark.png" media="(prefers-color-scheme: dark)">
+            <img class="hero-logo" src="/assets/logo-trans-light.png" width="440" height="401" alt="pyTracer">
+          </picture>
           <h1 class="display">Know if your change <span class="accent">actually fixed</span> the agent.</h1>
           <p class="lede">pyTracer captures what an agent does and replays a past run deterministically,
           with the model and tool responses held frozen. Re-run a captured failure on any branch and

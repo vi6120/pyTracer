@@ -3,6 +3,10 @@
 #   docker build -f packages/gateway/Dockerfile -t pytracer-gateway .
 FROM python:3.12-slim
 
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Install the gateway and the packages it depends on, from source (sequential

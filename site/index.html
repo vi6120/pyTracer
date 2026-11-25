@@ -98,7 +98,7 @@
   /* ---- sticky showcase (the signature motion) ---- */
   .showcase { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 56px; align-items: start; }
   .sc-steps { position: sticky; top: 120px; align-self: start; }
-  .sc-steps h2 { margin: 0 0 24px; }
+  .sc-title { grid-column: 1 / -1; margin: 0 0 -24px; }
   .sc-step { padding: 16px 0 16px 20px; border-left: 2px solid var(--border); cursor: default; transition: border-color .2s ease; }
   .sc-step.active { border-color: var(--accent); }
   .sc-step b { display: block; font-size: 19px; margin-bottom: 4px; color: var(--muted); transition: color .2s ease; }
@@ -321,8 +321,8 @@
     <!-- how it works: sticky scroll showcase -->
     <section class="section" id="how">
       <div class="wrap showcase">
+        <h2 class="display sc-title">Capture a run once, replay it anywhere.</h2>
         <div class="sc-steps">
-          <h2 class="display">Capture a run once,<br>replay it anywhere.</h2>
           <div class="sc-step" data-step="0"><b>Capture</b><p>Record the run, down to each model call and tool result, stamped with branch and commit.</p></div>
           <div class="sc-step" data-step="1"><b>Freeze</b><p>Pin the recorded responses as mocks, along with the clock, timestamps, UUIDs and RNG.</p></div>
           <div class="sc-step" data-step="2"><b>Replay</b><p>Re-run on any branch in full, partial or live mode, or freeze all but the step you changed.</p></div>

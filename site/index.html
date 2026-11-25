@@ -77,7 +77,8 @@
   .fw-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #1b1f28;
              border: 1px solid #1b1f28; border-radius: 16px; overflow: hidden; }
   .fw-cell { background: #0b0d12; padding: 26px 20px; text-align: center; font-weight: 650; font-size: 17px; color: #e9edf3; }
-  .fw-sub { text-align: center; color: #8a92a0; font-size: 14px; margin-top: 18px; }
+  .fw-sub { color: #8a92a0; font-size: 14px; margin: 14px 0 0; }
+  .section-tight .wrap > p.fw-sub { text-align: center; }
   /* framework slider (continuous, pauses on hover) */
   .fw-slider { position: relative; overflow: hidden; max-width: 920px; margin: 0 auto;
                -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
@@ -285,8 +286,8 @@
             <span class="fw-item dup" aria-hidden="true">OpenAI Agents SDK</span>
           </div>
         </div>
+        <div style="text-align:center;margin-top:18px"><a class="badge-dark" href="https://pypi.org/project/pytracer-all/">Live on PyPI &middot; v0.1.4</a></div>
         <p class="fw-sub">Dedicated adapters for all four, or any Python agent you instrument by hand.</p>
-        <div style="text-align:center"><a class="badge-dark" href="https://pypi.org/project/pytracer-all/">Live on PyPI &middot; v0.1.4</a></div>
       </div>
     </section>
 

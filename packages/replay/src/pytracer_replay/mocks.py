@@ -62,14 +62,19 @@ def _identifier(kind: SpanKind, name: str, tool_name: str | None) -> str:
 
 def _leaf_values(obj: Any, text: list[str], other: list[Any]) -> None:
     """Collect a payload's leaf values, dropping the JSON skeleton (dict keys and
-    list nesting), so matching compares what was asked, not how it was wrapped."""
+    list nesting), so matching compares what was asked, not how it was wrapped.
+
+    Only a string with whitespace in it is text (a question, a sentence) that a
+    model may re-word. A single-token string is an identifier (an order id, a SKU,
+    an email, a file name), as exact as a number: ``#W2378156`` and ``W2378156``
+    name different orders however alike they look."""
     if isinstance(obj, dict):
         for key in sorted(obj):
             _leaf_values(obj[key], text, other)
     elif isinstance(obj, (list, tuple)):
         for item in obj:
             _leaf_values(item, text, other)
-    elif isinstance(obj, str):
+    elif isinstance(obj, str) and (not obj.strip() or any(c.isspace() for c in obj.strip())):
         text.append(obj)
     else:
         other.append(obj)
@@ -78,10 +83,10 @@ def _leaf_values(obj: Any, text: list[str], other: list[Any]) -> None:
 def _positional_similarity(input: Any, candidate: Any) -> float:
     """Similarity of a call's input to a positional recording, over values only.
 
-    Non-text values (ids, numbers, booleans) must match exactly: a different one
-    means a different call (e.g. a different book id), so the score is 0. Text
-    values may drift between runs, scored by sequence similarity, so a re-worded
-    question for the same ids still matches.
+    Non-text values (ids, numbers, booleans, single-token strings) must match
+    exactly: a different one means a different call (e.g. a different book or
+    order id), so the score is 0. Text values may drift between runs, scored by
+    sequence similarity, so a re-worded question for the same ids still matches.
     """
     in_text: list[str] = []
     in_other: list[Any] = []

@@ -15,6 +15,7 @@ ids, timestamps, costs), so a replay of the same conversation finds its recordin
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from typing import Any
@@ -28,6 +29,9 @@ from tau2.domains.retail.environment import get_environment, get_tasks
 from tau2.user.user_simulator import UserSimulator
 
 MODEL = os.environ.get("BENCH_MODEL", "anthropic/claude-haiku-5-5")
+# Extra model-call arguments for the agent and the user simulator, as JSON; e.g.
+# '{"reasoning_effort": "none"}' turns off a local Ollama model's thinking.
+LLM_ARGS: dict[str, Any] = json.loads(os.environ.get("BENCH_LLM_ARGS") or "{}")
 
 # Retail tools that change the database.
 WRITE_TOOLS = (
@@ -47,8 +51,6 @@ _generate = llm_utils.generate
 def _scripted(path: str) -> Any:
     """A model that replays fixed replies (per role, in order) from a JSON file:
     ``BENCH_MODEL=scripted:<file>`` checks the benchmark's plumbing at no cost."""
-    import json
-
     from tau2.data_model.message import ToolCall
 
     script = json.loads(open(path, encoding="utf-8").read())
@@ -162,7 +164,7 @@ class Session:
 
 def start(task_id: str) -> Session:
     task = next(t for t in get_tasks("base") if t.id == task_id)
-    user = UserSimulator(llm=MODEL, instructions=str(task.user_scenario))
+    user = UserSimulator(llm=MODEL, instructions=str(task.user_scenario), llm_args=dict(LLM_ARGS))
     session = Session(
         task_id=task_id, env=get_environment(), task=task, user=user,
         user_state=user.get_init_state(),
@@ -177,5 +179,5 @@ def system_message(text: str) -> SystemMessage:
 
 def model(messages: list[Any], tools: list[Any]) -> Any:
     """The support agent's model call."""
-    return llm_utils.generate(MODEL, messages, tools=tools, call_name="support_agent")
+    return llm_utils.generate(MODEL, messages, tools=tools, call_name="support_agent", **LLM_ARGS)
 

@@ -421,3 +421,48 @@ def test_agent_framework_run_replays_from_the_store(trace_store: TraceStore, tmp
         _check_replay(run, _through_gateway_and_store(spans, trace_store, tmp_path), output)
     finally:
         uninstall()
+
+
+# --- Claude Agent SDK --------------------------------------------------------------
+
+
+@pytest.mark.skipif(not _installed("claude_agent_sdk"), reason="claude-agent-sdk not installed")
+def test_claude_agent_sdk_session_replays_from_the_store(trace_store: TraceStore, tmp_path: Path) -> None:
+    from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, create_sdk_mcp_server, query, tool
+
+    from pytracer_claude_agent_sdk import install, uninstall
+
+    # The scripted CLI the adapter's own tests use (the real SDK on the Python side).
+    path = Path(__file__).resolve().parents[2] / "claude-agent-sdk" / "tests" / "fake_cli.py"
+    spec = importlib.util.spec_from_file_location("pytracer_fake_cli", path)
+    assert spec is not None and spec.loader is not None
+    fake_cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fake_cli)
+
+    @tool("add", "Add two numbers.", {"a": int, "b": int})
+    async def add(args: dict[str, Any]) -> dict[str, Any]:
+        LIVE["tool"] += 1
+        return {"content": [{"type": "text", "text": str(args["a"] + args["b"])}]}
+
+    def run() -> str:
+        options = ClaudeAgentOptions(
+            model="claude-test", mcp_servers={"calc": create_sdk_mcp_server("calc", tools=[add])},
+            allowed_tools=["mcp__calc__add"],
+        )
+
+        async def go() -> str:
+            cli = fake_cli.FakeCLI(options=options)
+            messages = [m async for m in query(prompt="add 2 and 3", options=options, transport=cli)]
+            return " | ".join(str(m.result) for m in messages if isinstance(m, ResultMessage))
+
+        before = fake_cli.CALLS["cli"]
+        output = asyncio.run(go())
+        LIVE["model"] += fake_cli.CALLS["cli"] - before
+        return output
+
+    install()
+    try:
+        output, spans = _capture(run)
+        _check_replay(run, _through_gateway_and_store(spans, trace_store, tmp_path), output)
+    finally:
+        uninstall()

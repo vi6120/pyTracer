@@ -161,9 +161,12 @@ def classify_reproduction(
     A verdict is only drawn from runs that stayed on their recordings, the same way
     whether the candidate passed or failed:
 
-    - STILL_FAILING: the candidate fails exactly as the baseline did (the same
-      fingerprint, or the same assertions failing the same way). The bug showed
-      again, so this holds even if something else drifted.
+    - STILL_FAILING: the candidate fails exactly as the baseline did. The same
+      error fingerprint (the same error at the same call, after the same calls) is
+      the bug showing again, so it holds even if something else drifted. The same
+      assertions failing the same way with no error (say, a write that never
+      happened) has many causes, a live call among them, so it counts only when
+      both runs stayed on their recordings.
     - CANNOT_REPRODUCE: the baseline left its recordings (a frozen call found no
       recording, or ran live), so it never reproduced the captured failure and
       there is nothing to compare.
@@ -185,6 +188,10 @@ def classify_reproduction(
             and not _missed(base)
             and not _missed(scenario)
             and _same_failure(scenario, base)
+            and (
+                scenario.get("fingerprint") is not None
+                or not (_left_recording(scenario) or _left_recording(base))
+            )
         ):
             verdicts[name] = Outcome.STILL_FAILING
         elif base is not None and _left_recording(base):

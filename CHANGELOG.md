@@ -12,6 +12,14 @@
   `agent-framework-core` 1.26.0, through a scripted client, Agent Framework's own
   OpenAI Chat Completions client, and the gateway-to-store path. Requires Python
   3.11 or later.
+- **Claude Agent SDK adapter** (`pytracer-claude-agent-sdk`). `install()` captures
+  `query()` and `ClaudeSDKClient` sessions with no change to the agent code: each
+  turn of the Claude Code CLI is an LLM span keyed on what Python sent it, and
+  each in-process `@tool` is a tool span. A captured session replays without
+  starting the CLI; when a tool result, hook answer or prompt differs from the
+  recording, the replay reports the changed turn instead of serving it. CI runs
+  it on `claude-agent-sdk` 0.2.189 with a scripted CLI and the gateway-to-store
+  path; it has not yet been verified against a live Claude Code CLI session.
 
 ## 0.1.4
 

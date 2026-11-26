@@ -163,3 +163,20 @@ def test_positional_matches_reworded_question_but_not_a_different_book() -> None
     assert mocks.lookup(
         "search", {"args": [[1], "x"], "kwargs": {"k": 5}}, positional=True
     ) == (False, None, "miss")
+
+
+def test_positional_treats_a_single_token_string_as_an_id() -> None:
+    # A seeded-bug benchmark run (tau2-bench retail, B2): the recording was made on
+    # a branch that dropped the "#" from order ids. The fixed branch looks up the
+    # real id, which differs by one character; served the buggy branch's "Order not
+    # found", the fix looked like a no-op. An id must match exactly.
+    mocks = MockSet()
+    mocks.add("get_order_details", {"arguments": {"order_id": "W2378156"}}, "Order not found")
+    assert mocks.lookup(
+        "get_order_details", {"arguments": {"order_id": "#W2378156"}}, positional=True
+    ) == (False, None, "miss")
+    # The same id still matches, and a re-worded question beside it still does.
+    mocks.add("search", {"order_id": "#W1", "q": "where is my keyboard"}, "found")
+    assert mocks.lookup(
+        "search", {"order_id": "#W1", "q": "where is the keyboard I ordered"}, positional=True
+    ) == (True, "found", "positional")

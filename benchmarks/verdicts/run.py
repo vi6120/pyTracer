@@ -174,7 +174,11 @@ def live_truth(bug: Bug, repo: Path, root: Path, repeats: int) -> dict[str, Any]
 
 
 def _signature(run: dict[str, Any]) -> tuple[Any, ...]:
-    failed = sorted(n for n, a in (run.get("assertions") or {}).items() if not a["passed"])
+    """How a live run failed: which assertions failed and with what detail (as
+    pyTracer compares failures), whether the database matched the gold one, and
+    the error. Names alone are too coarse: an order never exchanged and one
+    exchanged wrongly both fail ``writes``, with different details."""
+    failed = sorted((n, a["detail"]) for n, a in (run.get("assertions") or {}).items() if not a["passed"])
     return (tuple(failed), run.get("db_matches_gold"), run.get("error_type"))
 
 

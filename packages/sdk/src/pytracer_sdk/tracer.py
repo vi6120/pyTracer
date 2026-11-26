@@ -128,6 +128,25 @@ def intercepted_span() -> Span | None:
     return _intercepting.get()
 
 
+# Tool and model calls still running, by span id, so code below a call (the HTTP
+# capture in ``pytracer_sdk.http``) can add to the span of the call it runs in;
+# and every open span's parent, to find that call from a helper span inside it.
+_open_calls: dict[str, ActiveSpan] = {}
+_open_parents: dict[str, str | None] = {}
+
+
+def open_call() -> ActiveSpan | None:
+    """The innermost tool or model call running in this context, if any."""
+    ctx = _current.get()
+    span_id = ctx.span_id if ctx is not None else None
+    while span_id is not None:
+        found = _open_calls.get(span_id)
+        if found is not None:
+            return found
+        span_id = _open_parents.get(span_id)
+    return None
+
+
 class ActiveSpan:
     """A span in progress. Use as a context manager; closing it records the span."""
 
@@ -137,6 +156,7 @@ class ActiveSpan:
         self._span = span
         self._token: contextvars.Token[SpanContext | None] | None = None
         self._closed = False
+        _open_parents[span.span_id] = span.parent_span_id
         # Set by the tracer for an op call: [attempt number, span id, failed].
         self.attempt: list[Any] | None = None
 
@@ -181,6 +201,8 @@ class ActiveSpan:
         if self._closed:
             return
         self._closed = True
+        _open_calls.pop(self._span.span_id, None)
+        _open_parents.pop(self._span.span_id, None)
         self._span.end_time_ns = time.time_ns()
         if self._span.status is SpanStatus.UNSET:
             self._span.status = SpanStatus.OK
@@ -255,6 +277,7 @@ class _Attempts:
             state = [previous[0] + 1 if previous else 1, span.span_id, False]
             calls[key] = state
         active.attempt = state
+        _open_calls[span.span_id] = active
         if previous is not None:
             span.attributes["pytracer.attempt"] = state[0]
             if previous[2]:
@@ -282,6 +305,9 @@ class Tracer:
         # output (used by the replay engine). Settable at runtime.
         self.interceptor = interceptor
         self._attempts = _Attempts()
+        from . import http
+
+        http.install()
 
     def start_span(
         self,

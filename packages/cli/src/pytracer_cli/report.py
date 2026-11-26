@@ -14,6 +14,7 @@ import json
 from typing import Any
 from xml.sax.saxutils import escape
 
+from pytracer_replay.assertions import describe_requests, repeated_requests
 from pytracer_sdk.codec import encode_value
 from pytracer_sdk.schema import Span, SpanStatus
 
@@ -48,7 +49,7 @@ def retry_chains(spans: list[Span]) -> list[dict[str, Any]]:
             sort_keys=True, default=repr,
         )
         groups.setdefault(key, []).append(span)
-    return [
+    chains: list[dict[str, Any]] = [
         {
             "op": calls[0].tool_name or calls[0].name,
             "kind": calls[0].kind.value,
@@ -65,9 +66,30 @@ def retry_chains(spans: list[Span]) -> list[dict[str, Any]]:
         for calls in groups.values()
         if any("pytracer.attempt" in c.attributes for c in calls)
     ]
+    # Requests a call sent more than once: a retry below the call (the tool's own,
+    # or a model SDK's), recorded by the SDK's HTTP capture.
+    for span in spans:
+        for requests in repeated_requests(span):
+            chains.append({
+                "op": span.tool_name or span.name,
+                "kind": "http",
+                "request": f"{requests[0].get('method')} {requests[0].get('url')}",
+                "attempts": [
+                    {
+                        "status": r.get("status"),
+                        "error_type": r.get("error"),
+                        "retry": bool(r.get("retry")),
+                    }
+                    for r in requests
+                ],
+                "text": describe_requests(requests),
+            })
+    return chains
 
 
 def _chain_text(chain: dict[str, Any]) -> str:
+    if chain["kind"] == "http":
+        return f"{chain['op']} repeated {chain['text']}"
     parts = []
     for number, attempt in enumerate(chain["attempts"], 1):
         failed = attempt["status"] == SpanStatus.ERROR.value

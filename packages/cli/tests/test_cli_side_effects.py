@@ -88,3 +88,34 @@ def test_bad_side_effect_assertions_are_config_errors(
 ) -> None:
     result = run_path(_make(tmp_path, [assertion]))
     assert message in (result.scenarios[0].config_error or "")
+
+
+def test_a_write_retried_below_the_tool_is_caught_when_the_tool_runs(tmp_path: Path) -> None:
+    pytest.importorskip("httpx")
+    cli_refund_agent.HTTP_TIMEOUTS[:] = [True]
+    record_trace(cli_refund_agent.http_agent, {"order_id": "A1"}, tmp_path / "trace.jsonl")
+    cli_refund_agent.HTTP_TIMEOUTS[:] = [True]  # the gateway times out again on replay
+    collection = write_collection(tmp_path, [{
+        "name": "refund-api",
+        "agent": "cli_refund_agent:http_agent",
+        "entry": {"order_id": "A1"},
+        "trace": "trace.jsonl",
+        "mode": "full",
+        "live": ["refund_via_api"],  # run the tool's code; its HTTP never leaves the process
+        "writes": ["refund_via_api"],
+        "assertions": [
+            {"type": "returns", "expected": {"status": "refunded"}},
+            {"type": "no_duplicate_writes"},
+        ],
+    }])
+    result = run_path(collection)
+    checks = {a.name: a for a in result.scenarios[0].assertions}
+    assert checks["returns"].passed  # one clean call, from the agent's side
+    assert not checks["no_duplicate_writes"].passed
+    assert "refund_via_api repeated POST https://pay.example/v1/refunds: #1 failed (ReadTimeout), #2 retry 200" in (
+        checks["no_duplicate_writes"].detail
+    )
+    markdown = to_markdown(result)
+    assert "`refund-api`: refund_via_api repeated POST https://pay.example/v1/refunds" in markdown
+    [chain] = to_json(result)["scenarios"][0]["retries"]
+    assert chain["kind"] == "http" and chain["request"] == "POST https://pay.example/v1/refunds"

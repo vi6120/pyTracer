@@ -57,6 +57,13 @@
   match, by the arguments that differ. Before, a write made with the wrong
   arguments read exactly like a write never made, so a branch that failed a new
   way could be judged still failing. Found by the seeded-bug benchmark.
+- `reproduce` reported a branch `still_failing` when it failed the baseline's
+  assertions the same way with no error, even after part of its run went live.
+  A missing write can come from the live part (a simulated customer ending the
+  call early), so a real fix read as a no-op. That match now counts only when
+  both runs stayed on their recordings; otherwise the verdict is `cannot_judge`
+  (or `cannot_reproduce`). The same error fingerprint still counts despite drift.
+  Found by the seeded-bug benchmark.
 
 ## 0.1.4
 

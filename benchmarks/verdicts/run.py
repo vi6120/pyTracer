@@ -222,7 +222,10 @@ def reproduce(bug: Bug, repo: Path, trace: Path, setting: str) -> dict[str, Any]
                 reason = line[len(name) + 2:]
         results[branch] = {"verdict": verdict, "reason": reason, "exit": done.returncode}
         if verdict is None:
-            results[branch]["output"] = (done.stdout + done.stderr)[-800:]
+            # pyTracer's own output, without tau2's debug log, so the cause is kept.
+            errors = [line for line in done.stderr.splitlines() if "| DEBUG" not in line]
+            results[branch]["stdout"] = done.stdout[-3000:]
+            results[branch]["stderr"] = "\n".join(errors)[-3000:]
     return results
 
 

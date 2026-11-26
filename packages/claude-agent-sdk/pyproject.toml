@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytracer-claude-agent-sdk"
+version = "0.1.4"
+description = "pyTracer adapter for the Claude Agent SDK - capture and replay agent sessions without code changes."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Vikas Ramaswamy" }, { name = "Nagesha Sheshadri" }]
+dependencies = [
+    "pytracer-sdk==0.1.4",
+    # The oldest Claude Agent SDK release CI verifies.
+    "claude-agent-sdk>=0.2.189",
+]
+
+[project.urls]
+Homepage = "https://pytracer.com"
+Documentation = "https://pytracer.com/docs.html"
+Repository = "https://github.com/vi6120/pyTracer"
+Issues = "https://github.com/vi6120/pyTracer/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pytracer_claude_agent_sdk"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true

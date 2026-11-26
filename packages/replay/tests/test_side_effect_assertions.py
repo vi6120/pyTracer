@@ -191,3 +191,27 @@ def test_returns_matches_a_subset_of_fields() -> None:
     failed = Returns({"status": "refunded"}).check(_result([], {"status": "failed"}))
     assert not failed.passed and "failed" in failed.detail
     assert Returns("done").check(_result([], "done")).passed
+
+
+def _with_requests(tool: str, *requests: dict[str, Any]) -> Span:
+    span = _tool(tool, {"arguments": {"order_id": "A1"}})
+    span.attributes["pytracer.http"] = list(requests)
+    return span
+
+
+def test_a_write_repeated_below_the_tool_is_a_duplicate() -> None:
+    timed_out = {"method": "POST", "url": "https://pay.example/v1/refunds", "status": None,
+                 "error": "ReadTimeout", "key": "k1"}
+    retried = {**timed_out, "status": 200, "error": None, "attempt": 2, "retry": True}
+    outcome = NoDuplicateWrites(["refund"]).check(_result([_with_requests("refund", timed_out, retried)]))
+    assert not outcome.passed
+    assert outcome.detail == (
+        "refund repeated POST https://pay.example/v1/refunds: #1 failed (ReadTimeout), #2 retry 200"
+    )
+
+
+def test_a_repeated_read_below_the_tool_is_not_a_duplicate_write() -> None:
+    first = {"method": "GET", "url": "https://pay.example/v1/orders/A1", "status": 503,
+             "error": None, "key": "k2"}
+    second = {**first, "status": 200, "attempt": 2, "retry": True}
+    assert NoDuplicateWrites(["refund"]).check(_result([_with_requests("refund", first, second)])).passed

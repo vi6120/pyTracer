@@ -1,0 +1,10 @@
+{
+  "user-simulator": [
+    {"content": "Hi, I'm Lei Wilson, zip 32255. Please cancel my order #W9348897, I no longer need it."},
+    {"content": "Thanks! ###STOP###"}
+  ],
+  "support-agent": [
+    {"tool_calls": [{"name": "cancel_pending_order", "arguments": {"order_id": "#W9348897", "reason": "no longer needed"}}]},
+    {"content": "Your order #W9348897 is cancelled."}
+  ]
+}

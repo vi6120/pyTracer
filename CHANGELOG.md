@@ -53,6 +53,10 @@
   found" and reported still failing. A single-token string (an id, a code, an
   email) now has to match exactly, like a number; only text with spaces in it is
   matched loosely. Found by the seeded-bug benchmark.
+- A `writes` failure now lists the calls of the tool whose arguments did not
+  match, by the arguments that differ. Before, a write made with the wrong
+  arguments read exactly like a write never made, so a branch that failed a new
+  way could be judged still failing. Found by the seeded-bug benchmark.
 
 ## 0.1.4
 

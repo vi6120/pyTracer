@@ -292,6 +292,22 @@ def _describe(calls: list[Span]) -> str:
     return ", ".join(parts)
 
 
+def _other_calls(calls: list[Span], expected: dict[str, Any]) -> str:
+    """The calls of a tool whose arguments did not match, by the arguments that
+    differ, so a write made wrongly reads differently from one never made."""
+    differing = []
+    for span in calls:
+        actual = _call_arguments(span)
+        if _matches(actual, expected):
+            continue
+        diff = [f"{k}={actual.get(k, '<missing>')!r}" for k, v in expected.items() if not _matches(actual.get(k), v)]
+        differing.append(", ".join(diff) or "other arguments")
+    if not differing:
+        return ""
+    shown = "; ".join(differing[:3]) + (f"; {len(differing) - 3} more" if len(differing) > 3 else "")
+    return f" ({len(differing)} with other arguments: {shown})"
+
+
 def _label(tool: str, args: dict[str, Any] | None) -> str:
     if not args:
         return tool
@@ -326,13 +342,15 @@ class Writes:
     def check(self, result: ReplayResult) -> AssertionResult:
         problems = []
         for want in self.expected:
-            calls = [s for s in _calls_of(result, want.tool) if _matches(_call_arguments(s), want.args or {})]
+            every = _calls_of(result, want.tool)
+            calls = [s for s in every if _matches(_call_arguments(s), want.args or {})]
             label = _label(want.tool, want.args)
+            others = _other_calls(every, want.args or {})
             if want.times is None and not calls:
-                problems.append(f"{label} was not called")
+                problems.append(f"{label} was not called{others}")
             elif want.times is not None and len(calls) != want.times:
                 detail = f": {_describe(calls)}" if calls else ""
-                problems.append(f"{label} was called {len(calls)} times, expected {want.times}{detail}")
+                problems.append(f"{label} was called {len(calls)} times, expected {want.times}{detail}{others}")
         if self.only:
             expected_tools = {w.tool for w in self.expected}
             for tool in sorted(set(self.write_tools) - expected_tools):

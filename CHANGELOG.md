@@ -19,7 +19,8 @@
   starting the CLI; when a tool result, hook answer or prompt differs from the
   recording, the replay reports the changed turn instead of serving it. CI runs
   it on `claude-agent-sdk` 0.2.189 with a scripted CLI and the gateway-to-store
-  path; it has not yet been verified against a live Claude Code CLI session.
+  path, and a live session (Claude Code 2.1.332) was captured and replayed
+  with no CLI started and no tool run.
 
 ## 0.1.4
 

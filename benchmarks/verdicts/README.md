@@ -91,13 +91,15 @@ standardized tau2 runs, so differences between runs come from the agent alone.
 | Run | Agent (`BENCH_MODEL`) | Why | Scope |
 |---|---|---|---|
 | 1 | GPT-5.2 | has an independent standardized retail score (81.6) | full |
-| 2 | gpt-oss-120b | open weights: anyone can rerun it | full |
+| 2 | DeepSeek-V3.2 | open weights: anyone can rerun it (retail 81.1, reported by DeepSeek) | full |
 | 3 | Claude Opus 5.5 | a top model from a third vendor | `--settings strict --repeats 1` |
 
 On Microsoft Foundry, an Azure OpenAI deployment is `azure/<deployment>` (with
-`AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION`), and Claude is
-`azure_ai/<deployment>` (with `AZURE_AI_API_KEY`, `AZURE_AI_API_BASE`). Each run
-writes to its own `--out` folder.
+`AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION`); DeepSeek and Claude are
+`azure_ai/<deployment>` (with `AZURE_AI_API_KEY`, `AZURE_AI_API_BASE`). Deploy
+pay-per-token (Global Standard, or Standard / Data Zone Standard): a managed
+compute template rents GPU machines by the hour, used or not. Each run writes to
+its own `--out` folder.
 
 ### Capping the spend
 

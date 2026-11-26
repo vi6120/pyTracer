@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- **Microsoft Agent Framework adapter** (`pytracer-agent-framework`). Microsoft
+  has archived AutoGen and points its users to Agent Framework. `install()`
+  captures agent runs, model calls (streamed or not, with token counts) and
+  function tools with no change to the agent code, and a captured run replays
+  with the model and tool responses frozen. CI runs it on
+  `agent-framework-core` 1.26.0, through a scripted client, Agent Framework's own
+  OpenAI Chat Completions client, and the gateway-to-store path. Requires Python
+  3.11 or later.
+
 ## 0.1.4
 
 Fixes every verdict issue an outside study on tau2-bench found in 0.1.3, captures

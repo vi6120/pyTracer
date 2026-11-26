@@ -43,6 +43,7 @@ body:
         - openai-agents
         - crewai
         - autogen
+        - agent-framework
         - not sure / other
     validations:
       required: false

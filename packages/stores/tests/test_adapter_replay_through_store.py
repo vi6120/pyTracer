@@ -368,3 +368,56 @@ def test_autogen_run_replays_from_the_store(trace_store: TraceStore, tmp_path: P
         _check_replay(run, _through_gateway_and_store(spans, trace_store, tmp_path), output)
     finally:
         uninstall_seams()
+
+
+# --- Microsoft Agent Framework ---------------------------------------------------
+
+
+@pytest.mark.skipif(not _installed("agent_framework"), reason="agent-framework not installed")
+def test_agent_framework_run_replays_from_the_store(trace_store: TraceStore, tmp_path: Path) -> None:
+    from agent_framework import (
+        Agent,
+        BaseChatClient,
+        ChatMiddlewareLayer,
+        ChatResponse,
+        Content,
+        FunctionInvocationLayer,
+        Message,
+        tool,
+    )
+
+    from pytracer_agent_framework import install, uninstall
+
+    @tool
+    def weather(city: str) -> str:
+        """Weather for a city."""
+        LIVE["tool"] += 1
+        return f"sunny in {city}"
+
+    class Scripted(FunctionInvocationLayer, ChatMiddlewareLayer, BaseChatClient):  # type: ignore[misc]
+        def __init__(self) -> None:
+            super().__init__()
+            self.replies = [
+                [Content.from_function_call(call_id="call_1", name="weather", arguments='{"city": "Paris"}')],
+                [Content.from_text("It is sunny in Paris.")],
+            ]
+
+        def _inner_get_response(self, *, messages: Any, stream: bool, options: Any, **kwargs: Any) -> Any:
+            LIVE["model"] += 1
+            contents = self.replies.pop(0)
+
+            async def respond() -> ChatResponse:
+                return ChatResponse(messages=[Message(role="assistant", contents=contents)], model="scripted")
+
+            return respond()
+
+    def run() -> str:
+        agent = Agent(client=Scripted(), name="assistant", instructions="help", tools=[weather])
+        return str(asyncio.run(agent.run("weather in Paris?")).text)
+
+    install()
+    try:
+        output, spans = _capture(run)
+        _check_replay(run, _through_gateway_and_store(spans, trace_store, tmp_path), output)
+    finally:
+        uninstall()

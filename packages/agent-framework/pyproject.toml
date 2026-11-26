@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytracer-agent-framework"
+version = "0.1.4"
+description = "pyTracer adapter for Microsoft Agent Framework - capture and replay agent runs without code changes."
+readme = "README.md"
+# Agent Framework itself requires Python 3.11.
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Vikas Ramaswamy" }, { name = "Nagesha Sheshadri" }]
+dependencies = [
+    "pytracer-sdk==0.1.4",
+    # The oldest Agent Framework release CI verifies.
+    "agent-framework-core>=1.26.0",
+]
+
+[project.urls]
+Homepage = "https://pytracer.com"
+Documentation = "https://pytracer.com/docs.html"
+Repository = "https://github.com/vi6120/pyTracer"
+Issues = "https://github.com/vi6120/pyTracer/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pytracer_agent_framework"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true

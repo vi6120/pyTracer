@@ -342,13 +342,42 @@ class Writes:
         return AssertionResult(self.name, not problems, "; ".join(problems))
 
 
+# Request methods that only read; a repeat of any other method can repeat a write.
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def repeated_requests(span: Span) -> list[list[dict[str, Any]]]:
+    """The HTTP requests a call sent more than once (``pytracer.http``, recorded by
+    the SDK), each group in order: a retry below the call, invisible from outside."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for request in span.attributes.get("pytracer.http") or ():
+        if isinstance(request, dict) and request.get("key"):
+            groups.setdefault(str(request["key"]), []).append(request)
+    return [g for g in groups.values() if len(g) > 1]
+
+
+def describe_requests(requests: list[dict[str, Any]]) -> str:
+    """``POST url: #1 failed (ReadTimeout), #2 retry 200``."""
+    parts = []
+    for number, request in enumerate(requests, 1):
+        error, status = request.get("error"), request.get("status")
+        outcome = f"failed ({error})" if error else str(status)
+        if not error and isinstance(status, int) and (status >= 500 or status in (408, 429)):
+            outcome = f"failed ({status})"
+        parts.append(f"#{number}{' retry' if request.get('retry') else ''} {outcome}")
+    return f"{requests[0].get('method')} {requests[0].get('url')}: " + ", ".join(parts)
+
+
 @dataclass
 class NoDuplicateWrites:
-    """Fails when a write tool was called more than once with the same arguments.
+    """Fails when a write tool was called more than once with the same arguments,
+    or sent the same non-read HTTP request more than once within one call.
 
     The classic case is a retry after a timeout whose write had already gone
-    through: the run looks fine, and the customer is refunded twice. ``tools`` are
-    the write tools to watch (the scenario's ``writes``).
+    through: the run looks fine, and the customer is refunded twice. The retry may
+    be the agent's (two calls of the tool) or below the tool (its own HTTP retry,
+    which the SDK records on the call). ``tools`` are the write tools to watch (the
+    scenario's ``writes``).
     """
 
     tools: list[str]
@@ -365,6 +394,10 @@ class NoDuplicateWrites:
                 if len(calls) > 1:
                     label = _label(tool, _call_arguments(calls[0]))
                     problems.append(f"{label} was called {len(calls)} times: {_describe(calls)}")
+            for span in _calls_of(result, tool):
+                for requests in repeated_requests(span):
+                    if str(requests[0].get("method")) not in _SAFE_METHODS:
+                        problems.append(f"{tool} repeated {describe_requests(requests)}")
         return AssertionResult(self.name, not problems, "; ".join(problems))
 
 

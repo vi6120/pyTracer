@@ -16,7 +16,7 @@ from tau2.data_model.message import ToolMessage
 
 from . import glue, harness
 
-MAX_TURNS = 30  # customer turns
+MAX_TURNS = 15  # customer turns; a retail task needs far fewer, so a stuck loop ends early
 MAX_STEPS = 12  # model calls per customer turn
 GREETING = "Hi! How can I help you today?"
 

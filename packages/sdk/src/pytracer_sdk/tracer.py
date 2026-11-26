@@ -10,8 +10,12 @@ from __future__ import annotations
 
 import contextvars
 import functools
+import hashlib
 import inspect
+import json
+import threading
 import time
+from collections import OrderedDict
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from types import TracebackType
@@ -133,6 +137,8 @@ class ActiveSpan:
         self._span = span
         self._token: contextvars.Token[SpanContext | None] | None = None
         self._closed = False
+        # Set by the tracer for an op call: [attempt number, span id, failed].
+        self.attempt: list[Any] | None = None
 
     # --- context propagation ------------------------------------------------
     def __enter__(self) -> ActiveSpan:  # noqa: PYI034 (Self needs py311; SDK targets py310)
@@ -163,6 +169,8 @@ class ActiveSpan:
         self._span.attributes[key] = value
 
     def set_error(self, exc: BaseException) -> None:
+        if self.attempt is not None:
+            self.attempt[2] = True
         self._span.status = SpanStatus.ERROR
         self._span.error_type = type(exc).__name__
         self._span.error_module = type(exc).__module__
@@ -195,6 +203,64 @@ class ActiveSpan:
         return self._ctx
 
 
+def _call_key(span: Span) -> str:
+    """Identifies an op call by what was called and with what, for linking repeats."""
+    try:
+        text = json.dumps(
+            [span.kind.value, span.name, span.tool_name, span.input], sort_keys=True, default=repr
+        )
+    except (TypeError, ValueError):
+        text = repr([span.kind.value, span.name, span.tool_name, span.input])
+    return hashlib.sha1(text.encode("utf-8"), usedforsecurity=False).hexdigest()
+
+
+# Calls whose retries matter: a repeated tool call can repeat a write, a repeated
+# model call costs tokens. Other ops are not numbered, so they cost nothing here.
+_RETRIED_KINDS = frozenset({SpanKind.TOOL, SpanKind.LLM})
+
+
+class _Attempts:
+    """Numbers repeated calls of one op under one parent, so a retry is visible.
+
+    The second and later tool or model calls with the same input under the same
+    parent span get
+    ``pytracer.attempt`` (2, 3, ...), and, when the call before failed,
+    ``pytracer.retry_of`` naming that failed attempt's span. A retry loop around a
+    tool or model call (the agent's own, or its framework's) then shows up as one
+    chain instead of unrelated calls, which is what a duplicate write hides behind.
+    Only the most recent parents are remembered, so memory stays bounded.
+    """
+
+    _MAX_PARENTS = 4096
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._by_parent: OrderedDict[str, dict[str, list[Any]]] = OrderedDict()
+
+    def mark(self, active: ActiveSpan) -> None:
+        span = active.span
+        if span.kind not in _RETRIED_KINDS:
+            return
+        scope = span.parent_span_id or span.trace_id
+        key = _call_key(span)
+        with self._lock:
+            calls = self._by_parent.get(scope)
+            if calls is None:
+                calls = self._by_parent[scope] = {}
+                if len(self._by_parent) > self._MAX_PARENTS:
+                    self._by_parent.popitem(last=False)
+            else:
+                self._by_parent.move_to_end(scope)
+            previous = calls.get(key)
+            state = [previous[0] + 1 if previous else 1, span.span_id, False]
+            calls[key] = state
+        active.attempt = state
+        if previous is not None:
+            span.attributes["pytracer.attempt"] = state[0]
+            if previous[2]:
+                span.attributes["pytracer.retry_of"] = previous[1]
+
+
 class Tracer:
     """Creates spans, wires up parent/child context, and buffers them."""
 
@@ -215,6 +281,7 @@ class Tracer:
         # When set, consulted before every op to optionally inject a recorded
         # output (used by the replay engine). Settable at runtime.
         self.interceptor = interceptor
+        self._attempts = _Attempts()
 
     def start_span(
         self,
@@ -320,6 +387,7 @@ class Tracer:
             input=_make_op_input(meta, args, kwargs, op_input),
             parent=parent,
         ) as active:
+            self._attempts.mark(active)
             injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
             if injected is not None:
                 return iter(injected.output) if injected.stream else injected.output
@@ -346,6 +414,7 @@ class Tracer:
             input=_make_op_input(meta, args, kwargs, op_input),
             parent=parent,
         ) as active:
+            self._attempts.mark(active)
             injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
             if injected is not None:
                 return _as_async_iter(injected.output) if injected.stream else injected.output
@@ -382,6 +451,7 @@ class Tracer:
             input=_make_op_input(meta, args, kwargs, op_input),
             parent=parent,
         )
+        self._attempts.mark(active)
         injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
         source = injected.output if injected is not None else fn(*args, **kwargs)
         return self._stream_sync(active, source, meta, live=injected is None)
@@ -430,6 +500,7 @@ class Tracer:
             input=_make_op_input(meta, args, kwargs, op_input),
             parent=parent,
         )
+        self._attempts.mark(active)
         injected = self._maybe_intercept(active, meta.kind, meta.name, meta.tool_name)
         source = injected.output if injected is not None else fn(*args, **kwargs)
         return self._stream_async(active, source, meta, live=injected is None)

@@ -27,6 +27,10 @@ DECLARATIVE_ASSERTIONS = frozenset(
         "route",  # ordered agents visited
         "tools_used",  # tools called
         "step_count",  # number of steps (optionally of one kind)
+        # Side effects (judged on the write tool calls, frozen or live):
+        "writes",  # which write calls happened, how often, with which arguments
+        "no_duplicate_writes",  # no write repeated with the same arguments
+        "returns",  # fields of the agent's return value
     }
 )
 
@@ -48,6 +52,11 @@ class AssertionSpec(BaseModel):
     # `no_errors` uses `scope`: "root" (default) judges the run; "any" also fails
     # on a handled error in a child span.
     scope: str = "root"
+    # `writes`: `expected` is a list of {tool, times?, args?}; with `only`, a
+    # declared write tool (the scenario's `writes`) not listed must not be called.
+    only: bool = False
+    # `no_duplicate_writes`: the write tools to watch (default: the scenario's `writes`).
+    tools: list[str] | None = None
 
 
 class ScenarioSpec(BaseModel):

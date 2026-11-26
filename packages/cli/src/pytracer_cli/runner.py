@@ -19,15 +19,19 @@ from pytracer_replay import (
     Contains,
     ExactMatch,
     MockSet,
+    NoDuplicateWrites,
     NoErrors,
     NondeterminismControls,
     ReplayEngine,
     ReplayMode,
     ReplayResult,
+    Returns,
     Route,
     SemanticSimilarity,
     StepCount,
     ToolsUsed,
+    WriteCall,
+    Writes,
     all_passed,
     fingerprint,
     run_assertions,
@@ -113,9 +117,35 @@ def load_trace(path: Path) -> list[Span]:
     return spans
 
 
-def build_assertion(spec: AssertionSpec) -> Assertion:
-    """Map a declarative assertion spec to a replay assertion object."""
+def _write_calls(expected: object) -> list[WriteCall]:
+    if not isinstance(expected, list) or not expected:
+        raise ScenarioError("'writes' requires 'expected' to be a list of {tool, times, args}")
+    calls = []
+    for item in expected:
+        if isinstance(item, str):
+            item = {"tool": item}
+        if not isinstance(item, dict) or not isinstance(item.get("tool"), str):
+            raise ScenarioError("each 'writes' entry needs a 'tool' name")
+        unknown = set(item) - {"tool", "times", "args"}
+        if unknown:
+            raise ScenarioError(f"'writes' entry has unknown fields {sorted(unknown)}")
+        times, args = item.get("times"), item.get("args")
+        if times is not None and (not isinstance(times, int) or isinstance(times, bool) or times < 0):
+            raise ScenarioError("'writes' 'times' must be a non-negative integer")
+        if args is not None and not isinstance(args, dict):
+            raise ScenarioError("'writes' 'args' must be a mapping of argument names to values")
+        calls.append(WriteCall(item["tool"], times=times, args=args))
+    return calls
+
+
+def build_assertion(spec: AssertionSpec, writes: list[str] | None = None) -> Assertion:
+    """Map a declarative assertion spec to a replay assertion object.
+
+    ``writes`` is the scenario's declared write tools, which `writes` (with
+    ``only``) and `no_duplicate_writes` use.
+    """
     name = spec.name
+    declared = list(writes or [])
     if spec.type == "no_errors":
         if spec.scope not in ("root", "any"):
             raise ScenarioError("'no_errors' scope must be 'root' or 'any'")
@@ -150,6 +180,23 @@ def build_assertion(spec: AssertionSpec) -> Assertion:
             except ValueError as exc:
                 raise ScenarioError(f"'step_count' has unknown kind {spec.kind!r}") from exc
         return StepCount(spec.expected, kind=kind, name=name or "step_count")
+    if spec.type == "writes":
+        if spec.only and not declared:
+            raise ScenarioError("'writes' with 'only' needs the scenario's 'writes' declared")
+        return Writes(
+            _write_calls(spec.expected), write_tools=declared, only=spec.only, name=name or "writes"
+        )
+    if spec.type == "no_duplicate_writes":
+        tools = spec.tools if spec.tools is not None else declared
+        if not tools:
+            raise ScenarioError(
+                "'no_duplicate_writes' needs 'tools' or the scenario's 'writes' declared"
+            )
+        return NoDuplicateWrites(list(tools), name=name or "no_duplicate_writes")
+    if spec.type == "returns":
+        if spec.expected is None:
+            raise ScenarioError("'returns' requires 'expected'")
+        return Returns(spec.expected, name=name or "returns")
     raise ScenarioError(f"unsupported assertion type in collection: {spec.type!r}")
 
 
@@ -186,7 +233,7 @@ def run_scenario(
             raise ScenarioError(f"ops cannot be both live and frozen: {sorted(overlap)}")
         agent = load_agent(scenario.agent)
         spans = load_trace(base_dir / scenario.trace)
-        assertions = [build_assertion(a) for a in scenario.assertions]
+        assertions = [build_assertion(a, scenario.writes) for a in scenario.assertions]
     except ScenarioError as exc:
         empty = ReplayResult(return_value=None, status=SpanStatus.ERROR, mode=scenario.mode)
         return ScenarioResult(scenario.name, False, empty, [], None, str(exc))

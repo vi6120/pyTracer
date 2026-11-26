@@ -4,6 +4,19 @@
 
 ### Added
 
+- **Side-effect assertions.** A scenario can now check what the agent wrote, not
+  only that nothing visibly failed: `writes` (each expected write call happened,
+  exactly `times` when given, with `args` matching; with `only`, no other declared
+  write tool was called), `no_duplicate_writes` (no write tool called twice with
+  the same arguments, the duplicate refund a retry after a timeout causes) and
+  `returns` (fields of the agent's return value). They judge the write calls in
+  the span tree, frozen or live, so a full replay checks them too.
+- **Retry chains.** The tracer numbers repeated calls of an op with the same input
+  under the same parent (`pytracer.attempt`) and links a retry to the attempt
+  that failed (`pytracer.retry_of`). Reports list each repeated call with how
+  every attempt ended, and `writes` failures quote that evidence.
+- **`run --json`** now includes each scenario's return value, the spans of the
+  replayed run, and its repeated calls (`retries`).
 - **Microsoft Agent Framework adapter** (`pytracer-agent-framework`). Microsoft
   has archived AutoGen and points its users to Agent Framework. `install()`
   captures agent runs, model calls (streamed or not, with token counts) and

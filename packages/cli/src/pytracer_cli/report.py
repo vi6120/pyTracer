@@ -14,6 +14,9 @@ import json
 from typing import Any
 from xml.sax.saxutils import escape
 
+from pytracer_sdk.codec import encode_value
+from pytracer_sdk.schema import Span, SpanStatus
+
 from .runner import CollectionResult, ScenarioResult
 
 _PASS = "PASS"
@@ -22,6 +25,55 @@ _FAIL = "FAIL"
 # Hidden marker embedded in an auto-doc issue body; the fingerprint is the
 # dedup key CI matches on to decide "update existing" vs "open new".
 FINGERPRINT_MARKER = "<!-- pytracer-fingerprint: {fp} -->"
+
+
+def _json_value(value: Any) -> Any:
+    """A return value in the recording's JSON form (types tagged), or its text when
+    it has no JSON form."""
+    encoded = encode_value(value)
+    try:
+        json.dumps(encoded)
+    except (TypeError, ValueError):
+        return repr(value)
+    return encoded
+
+
+def retry_chains(spans: list[Span]) -> list[dict[str, Any]]:
+    """Each op called more than once with the same input under the same parent,
+    with how every attempt ended (the tracer numbers them ``pytracer.attempt``)."""
+    groups: dict[str, list[Span]] = {}
+    for span in spans:
+        key = json.dumps(
+            [span.parent_span_id, span.kind.value, span.name, span.tool_name, span.input],
+            sort_keys=True, default=repr,
+        )
+        groups.setdefault(key, []).append(span)
+    return [
+        {
+            "op": calls[0].tool_name or calls[0].name,
+            "kind": calls[0].kind.value,
+            "attempts": [
+                {
+                    "span_id": c.span_id,
+                    "status": c.status.value,
+                    "error_type": c.error_type,
+                    "retry": "pytracer.retry_of" in c.attributes,
+                }
+                for c in calls
+            ],
+        }
+        for calls in groups.values()
+        if any("pytracer.attempt" in c.attributes for c in calls)
+    ]
+
+
+def _chain_text(chain: dict[str, Any]) -> str:
+    parts = []
+    for number, attempt in enumerate(chain["attempts"], 1):
+        failed = attempt["status"] == SpanStatus.ERROR.value
+        outcome = f"failed ({attempt['error_type'] or 'error'})" if failed else "ok"
+        parts.append(f"#{number}{' retry' if attempt['retry'] else ''} {outcome}")
+    return f"{chain['op']}: " + ", ".join(parts)
 
 
 def to_json(result: CollectionResult) -> dict[str, Any]:
@@ -55,6 +107,11 @@ def to_json(result: CollectionResult) -> dict[str, Any]:
                 "assertions": [
                     {"name": a.name, "passed": a.passed, "detail": a.detail} for a in s.assertions
                 ],
+                # What the agent returned, every span of the replayed run, and the
+                # ops it called more than once (with how each attempt ended).
+                "return_value": _json_value(s.replay.return_value),
+                "spans": [json.loads(span.to_json()) for span in s.replay.spans],
+                "retries": retry_chains(s.replay.spans),
             }
             for s in result.scenarios
         ],
@@ -128,7 +185,21 @@ def to_markdown(result: CollectionResult) -> str:
         lines.append(f"| `{s.name}` | {mark} | {detail} |")
     lines += _changed_model_lines(result)
     lines += _side_effect_lines(result)
+    lines += _retry_lines(result)
     return "\n".join(lines) + "\n"
+
+
+def _retry_lines(result: CollectionResult) -> list[str]:
+    """A footer listing ops called more than once, with how each attempt ended:
+    the retry evidence a passing run otherwise hides (a duplicated write)."""
+    notes = [
+        f"- `{s.name}`: {_chain_text(chain)}"
+        for s in result.scenarios
+        for chain in retry_chains(s.replay.spans)
+    ]
+    if not notes:
+        return []
+    return ["", "**Calls repeated during the run:**", *notes]
 
 
 def _changed_model_lines(result: CollectionResult) -> list[str]:

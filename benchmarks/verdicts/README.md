@@ -60,9 +60,32 @@ python benchmarks/verdicts/run.py --plan   # what would run; calls no model
 python benchmarks/verdicts/run.py          # all bugs, all settings, 3 repeats
 ```
 
+### On an open model
+
+Any model litellm can reach works through `BENCH_MODEL`; `BENCH_LLM_ARGS` passes
+extra arguments (JSON) to every model call, the agent's and the simulated
+customer's. Measured on task 38 (cancel a pending order), 26 November 2026:
+
+| Model | Where | Outcome |
+|---|---|---|
+| `llama3.1:8b` | local, Ollama | changed the payment method twice instead of cancelling |
+| `qwen3:8b`, thinking off | local, Ollama | never looked the customer up; invented an order id and looped |
+
+Small local models cannot plan tau2's retail lookups, so the bugs are masked by the
+model's own mistakes. A larger open-weights model through a hosted router is cheap
+enough for the full run, for example:
+
+```bash
+export OPENROUTER_API_KEY=...                      # set it yourself
+export BENCH_MODEL=openrouter/openai/gpt-oss-120b  # about $1.40 for the full run
+```
+
+For a local Ollama model, `BENCH_MODEL=ollama_chat/<model>` and, for a Qwen3 model,
+`BENCH_LLM_ARGS='{"reasoning_effort": "none"}'` (its thinking mode is slow).
+
 Results go to `benchmarks/verdicts/results/`: one JSON per bug (every live run,
 every verdict and reason) and `summary.md`, the table per setting. A full run is
-about 125 agent runs; on Claude Haiku 5.5 that is a few dollars.
+about 125 agent runs, about 4,000 model calls and 25 million tokens.
 
 `BENCH_MODEL=scripted:benchmarks/verdicts/smoke_script_task38.json` replaces the
 model with a fixed conversation for task 38, which checks the plumbing for

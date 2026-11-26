@@ -203,3 +203,24 @@ def test_only_non_verdicts_get_a_reason() -> None:
 
     fixed = _run([_scenario(passed=True)])
     assert explain_reproduction(BASE, fixed, classify_reproduction(BASE, fixed)) == {}
+
+
+def _missing_write(**kwargs: Any) -> dict[str, Any]:
+    scenario = _scenario(passed=False, **kwargs)
+    scenario["assertions"] = [{"name": "writes", "passed": False, "detail": "exchange was called 0 times"}]
+    return scenario
+
+
+def test_the_same_missing_write_after_leaving_the_recording_is_not_still_failing() -> None:
+    # Seeded-bug benchmark, B2 under fallback: the fixed branch's order lookup ran
+    # live, the live customer then ended the call before the exchange, and the run
+    # failed with the baseline's exact "0 exchanges". No error, and part of the run
+    # was live, so it says nothing about the fix: cannot judge, not still failing.
+    base = _run([_missing_write()])
+    cand = _run([_missing_write(unrecorded=["tool 'get_order_details'"])])
+    assert classify_reproduction(base, cand) == {"s": Outcome.CANNOT_JUDGE}
+    # The same missing write while both stayed on their recordings is the bug.
+    assert classify_reproduction(base, _run([_missing_write()])) == {"s": Outcome.STILL_FAILING}
+    # And when the baseline drifted, it never reproduced the failure to compare with.
+    drifted = _run([_missing_write(unrecorded=["llm 'user_llm'"])])
+    assert classify_reproduction(drifted, _run([_missing_write()])) == {"s": Outcome.CANNOT_REPRODUCE}

@@ -45,6 +45,15 @@
   path, and a live session (Claude Code 2.1.332) was captured and replayed
   with no CLI started and no tool run.
 
+### Fixed
+
+- Partial replay matched a frozen tool call by position even when an id in it
+  had changed, as long as the id looked alike: a branch that fixed an order id
+  (`#W2378156` instead of `W2378156`) was served the bug's recorded "Order not
+  found" and reported still failing. A single-token string (an id, a code, an
+  email) now has to match exactly, like a number; only text with spaces in it is
+  matched loosely. Found by the seeded-bug benchmark.
+
 ## 0.1.4
 
 Fixes every verdict issue an outside study on tau2-bench found in 0.1.3, captures

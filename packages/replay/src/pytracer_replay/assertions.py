@@ -9,12 +9,14 @@ default is a no-dependency token-overlap score.
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Protocol
+from dataclasses import dataclass, field
+from typing import Any, Protocol
 
-from pytracer_sdk.schema import SpanKind, SpanStatus
+from pytracer_sdk.schema import Span, SpanKind, SpanStatus
 
 from .engine import ReplayResult
 
@@ -237,3 +239,162 @@ class StepCount:
         return AssertionResult(
             self.name, ok, "" if ok else f"{label}step count was {actual}, expected {self.expected}"
         )
+
+
+# --- side-effect assertions (what the agent wrote, and how often) -------------
+# These judge the write tool calls in the span tree, frozen or live, so a full
+# replay checks them too: a fix that stops a duplicate refund is `fixed` only
+# when the refund now happens once, not merely when no error is visible.
+
+
+def _call_arguments(span: Span) -> dict[str, Any]:
+    """A tool call's arguments by name, whichever adapter recorded it.
+
+    ``@op`` records ``{"args": [...], "kwargs": {...}}`` (only keyword arguments
+    have names); adapters record ``{"arguments": {...}}``, ``{"args": {...}}`` or
+    ``{"input": ...}``.
+    """
+    data = span.input
+    if not isinstance(data, dict):
+        return {}
+    for key in ("arguments", "args", "input"):
+        value = data.get(key)
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                continue
+        if isinstance(value, dict):
+            return value
+    kwargs = data.get("kwargs")
+    return dict(kwargs) if isinstance(kwargs, dict) else {}
+
+
+def _matches(actual: Any, expected: Any) -> bool:
+    """``expected`` is contained in ``actual``: equal, or for mappings every
+    expected key present with a matching value (recursively)."""
+    if isinstance(expected, dict) and isinstance(actual, dict):
+        return all(k in actual and _matches(actual[k], v) for k, v in expected.items())
+    return bool(actual == expected)
+
+
+def _calls_of(result: ReplayResult, tool: str) -> list[Span]:
+    return [s for s in result.spans if s.kind is SpanKind.TOOL and (s.tool_name or s.name) == tool]
+
+
+def _describe(calls: list[Span]) -> str:
+    """Each attempt and how it ended, the retry evidence behind a repeated write."""
+    parts = []
+    for number, span in enumerate(calls, 1):
+        outcome = f"failed ({span.error_type or 'error'})" if span.status is SpanStatus.ERROR else "ok"
+        retry = " retry" if "pytracer.retry_of" in span.attributes else ""
+        parts.append(f"#{number}{retry} {outcome}")
+    return ", ".join(parts)
+
+
+def _label(tool: str, args: dict[str, Any] | None) -> str:
+    if not args:
+        return tool
+    shown = ", ".join(f"{k}={v!r}" for k, v in args.items())
+    return f"{tool}({shown})"
+
+
+@dataclass
+class WriteCall:
+    """One expected write: the tool, optionally how many times, and a subset of its
+    arguments (calls whose arguments do not contain it are not counted)."""
+
+    tool: str
+    times: int | None = None  # exact number of calls; None means at least once
+    args: dict[str, Any] | None = None
+
+
+@dataclass
+class Writes:
+    """Passes when each expected write call happened, exactly ``times`` when given.
+
+    Every call counts, failed attempts too: a timed-out write that is retried may
+    still have gone through. With ``only``, a declared write tool (``write_tools``,
+    the scenario's ``writes``) that is not expected must not be called at all.
+    """
+
+    expected: list[WriteCall]
+    write_tools: list[str] = field(default_factory=list)
+    only: bool = False
+    name: str = "writes"
+
+    def check(self, result: ReplayResult) -> AssertionResult:
+        problems = []
+        for want in self.expected:
+            calls = [s for s in _calls_of(result, want.tool) if _matches(_call_arguments(s), want.args or {})]
+            label = _label(want.tool, want.args)
+            if want.times is None and not calls:
+                problems.append(f"{label} was not called")
+            elif want.times is not None and len(calls) != want.times:
+                detail = f": {_describe(calls)}" if calls else ""
+                problems.append(f"{label} was called {len(calls)} times, expected {want.times}{detail}")
+        if self.only:
+            expected_tools = {w.tool for w in self.expected}
+            for tool in sorted(set(self.write_tools) - expected_tools):
+                calls = _calls_of(result, tool)
+                if calls:
+                    problems.append(f"{tool} was called {len(calls)} times, expected none")
+        return AssertionResult(self.name, not problems, "; ".join(problems))
+
+
+@dataclass
+class NoDuplicateWrites:
+    """Fails when a write tool was called more than once with the same arguments.
+
+    The classic case is a retry after a timeout whose write had already gone
+    through: the run looks fine, and the customer is refunded twice. ``tools`` are
+    the write tools to watch (the scenario's ``writes``).
+    """
+
+    tools: list[str]
+    name: str = "no_duplicate_writes"
+
+    def check(self, result: ReplayResult) -> AssertionResult:
+        problems = []
+        for tool in self.tools:
+            groups: dict[str, list[Span]] = {}
+            for span in _calls_of(result, tool):
+                key = json.dumps(_call_arguments(span), sort_keys=True, default=repr)
+                groups.setdefault(key, []).append(span)
+            for calls in groups.values():
+                if len(calls) > 1:
+                    label = _label(tool, _call_arguments(calls[0]))
+                    problems.append(f"{label} was called {len(calls)} times: {_describe(calls)}")
+        return AssertionResult(self.name, not problems, "; ".join(problems))
+
+
+def _plain(value: Any) -> Any:
+    """A return value as plain data, so its fields can be matched."""
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        try:
+            return dump(mode="json")
+        except Exception:  # noqa: BLE001 - fall back to the value itself
+            return value
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return dataclasses.asdict(value)
+    return value
+
+
+@dataclass
+class Returns:
+    """Passes when the agent's return value contains ``expected``.
+
+    For a mapping (or a pydantic model or dataclass, by its fields) every expected
+    key must be present with a matching value, recursively; anything else must be
+    equal. Use it to check the state the agent reports, such as ``{"status":
+    "refunded"}``, without pinning every other field.
+    """
+
+    expected: Any
+    name: str = "returns"
+
+    def check(self, result: ReplayResult) -> AssertionResult:
+        actual = _plain(result.return_value)
+        ok = _matches(actual, self.expected)
+        return AssertionResult(self.name, ok, "" if ok else f"returned {actual!r}")

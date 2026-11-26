@@ -48,6 +48,12 @@ jobs:
             adapters: "packages/agent-framework"
             frameworks: "agent-framework-core==1.26.0 agent-framework-openai==1.18.2"
             store_tests: "agent_framework"
+          # Claude Agent SDK at the adapter's floor. The tests talk to a scripted
+          # CLI, so the bundled Claude Code CLI is installed but never started.
+          - group: claude-agent-sdk
+            adapters: "packages/claude-agent-sdk"
+            frameworks: "claude-agent-sdk==0.2.189"
+            store_tests: "claude_agent_sdk"
           - group: all-frameworks
             adapters: "packages/langgraph packages/autogen packages/crewai packages/openai-agents"
             frameworks: >-

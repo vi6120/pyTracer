@@ -17,6 +17,12 @@ For each seeded bug (``bugs.py``) on its tau2-bench retail task:
    (``cannot_judge`` / ``cannot_reproduce``, with its reason), or wrong; and count
    the unsafe errors, a branch that is not fixed reported ``fixed``.
 
+With ``--max-usd`` every live model call is charged to ``<out>/usage.jsonl`` at the
+prices in ``BENCH_PRICE_IN`` / ``BENCH_PRICE_OUT`` (USD per million tokens; all input
+at the full price, so the real bill is at or below the ledger), and the benchmark
+stops before a call that would start past the cap. The ledger persists across
+runs in the same ``--out`` folder, so one budget covers several invocations.
+
 Needs tau2-bench installed (``TAU2_DATA_DIR`` pointing at its ``data`` folder), the
 pyTracer CLI, and the model's API key in the environment (``BENCH_MODEL``, default
 ``anthropic/claude-haiku-5-5``). The live steps call the model; ``--plan`` prints
@@ -105,8 +111,25 @@ def build_repo(bug: Bug, root: Path) -> Path:
     return repo
 
 
+class Stop(Exception):
+    """The spending cap was reached; nothing more runs."""
+
+
 def _env(bug: Bug) -> dict[str, str]:
     return {**os.environ, **bug.env}
+
+
+def _spent() -> float:
+    ledger = os.environ.get("BENCH_USAGE_LEDGER")
+    if not ledger or not Path(ledger).exists():
+        return 0.0
+    return sum(json.loads(line)["usd"] for line in Path(ledger).read_text().splitlines() if line.strip())
+
+
+def _check_budget() -> None:
+    cap = float(os.environ.get("BENCH_MAX_USD") or 0)
+    if cap and _spent() >= cap:
+        raise Stop(f"spending cap of ${cap:.2f} reached: ${_spent():.2f} charged")
 
 
 def _checkout(repo: Path, branch: str, root: Path) -> Path:
@@ -118,10 +141,13 @@ def _checkout(repo: Path, branch: str, root: Path) -> Path:
 
 def capture(bug: Bug, repo: Path, out: Path) -> Path:
     trace = out / bug.key / "trace.jsonl"
-    subprocess.run(
+    done = subprocess.run(
         [sys.executable, str(HERE / "child.py"), "capture", str(repo), bug.task_id, str(trace)],
-        env=_env(bug), check=True,
+        env=_env(bug),
     )
+    _check_budget()
+    if done.returncode != 0:
+        raise RuntimeError(f"capture of {bug.key} failed")
     return trace
 
 
@@ -139,6 +165,7 @@ def live_truth(bug: Bug, repo: Path, root: Path, repeats: int) -> dict[str, Any]
             # The agent's own failures are inside the JSON; a child that exits
             # non-zero is a broken harness, and must stop the benchmark rather
             # than count as a failed run.
+            _check_budget()
             lines = [line for line in done.stdout.splitlines() if line.startswith("{")]
             if done.returncode != 0 or not lines:
                 raise RuntimeError(f"live check of {bug.key}/{branch} failed:\n{done.stderr[-2000:]}")
@@ -180,6 +207,7 @@ def reproduce(bug: Bug, repo: Path, trace: Path, setting: str) -> dict[str, Any]
             "--freeze-trace", str(trace), "--trace-dest", "traces/run.jsonl", *SETTINGS[setting]["flags"],
         ]
         done = subprocess.run(command, env=_env(bug), capture_output=True, text=True)
+        _check_budget()  # a reproduce stopped by the cap has no verdict to score
         verdict, reason = None, None
         name = f"task-{bug.task_id}"
         for line in done.stdout.splitlines():
@@ -239,13 +267,36 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--out", type=Path, default=HERE / "results")
     parser.add_argument("--plan", action="store_true", help="print what would run, call no model")
+    parser.add_argument("--max-usd", type=float, default=0.0, help="stop before spending more than this")
     args = parser.parse_args()
+    if args.max_usd:
+        if not (os.environ.get("BENCH_PRICE_IN") and os.environ.get("BENCH_PRICE_OUT")):
+            sys.exit("--max-usd needs BENCH_PRICE_IN and BENCH_PRICE_OUT (USD per million tokens)")
+        args.out.mkdir(parents=True, exist_ok=True)
+        os.environ["BENCH_MAX_USD"] = str(args.max_usd)
+        os.environ["BENCH_USAGE_LEDGER"] = str((args.out / "usage.jsonl").resolve())
+        print(f"spending cap ${args.max_usd:.2f}; already charged ${_spent():.2f}")
     chosen = [b for b in BUGS if b.key in args.bugs.split(",")]
     settings = [s for s in args.settings.split(",") if s in SETTINGS]
     if "TAU2_DATA_DIR" not in os.environ:
         sys.exit("set TAU2_DATA_DIR to tau2-bench's data folder")
     root = Path(tempfile.mkdtemp(prefix="pytracer-seeded-"))
     results: dict[str, Any] = {}
+    try:
+        _run_bugs(args, chosen, settings, root, results)
+    except Stop as stop:
+        print(f"stopped: {stop}")
+    if results:
+        (args.out / "summary.md").write_text(summary(results))
+        print(summary(results))
+    if args.max_usd:
+        print(f"charged so far (conservative): ${_spent():.2f} of ${args.max_usd:.2f}")
+    shutil.rmtree(root, ignore_errors=True)
+
+
+def _run_bugs(
+    args: argparse.Namespace, chosen: list[Bug], settings: list[str], root: Path, results: dict[str, Any]
+) -> None:
     for bug in chosen:
         repo = build_repo(bug, root)
         if args.plan:
@@ -262,10 +313,6 @@ def main() -> None:
             "scores": {s: score(truth["labels"], reported[s]) for s in settings},
         }
         (args.out / f"{bug.key}.json").write_text(json.dumps(results[bug.key], indent=1))
-    if results:
-        (args.out / "summary.md").write_text(summary(results))
-        print(summary(results))
-    shutil.rmtree(root, ignore_errors=True)
 
 
 if __name__ == "__main__":

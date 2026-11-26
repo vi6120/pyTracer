@@ -215,3 +215,17 @@ def test_a_repeated_read_below_the_tool_is_not_a_duplicate_write() -> None:
              "error": None, "key": "k2"}
     second = {**first, "status": 200, "attempt": 2, "retry": True}
     assert NoDuplicateWrites(["refund"]).check(_result([_with_requests("refund", first, second)])).passed
+
+
+def test_a_write_made_with_other_arguments_reads_differently_from_none() -> None:
+    # tau2-bench retail, B2: one branch never found the order (no exchange), another
+    # exchanged it with the items paired the wrong way. Both are "0 matching calls";
+    # the detail must tell them apart, or a different failure reads as the same one.
+    expected = [WriteCall("exchange", times=1, args={"order_id": "#W1", "new_item_ids": ["a", "b"]})]
+    none = Writes(expected).check(_result([]))
+    wrong = Writes(expected).check(
+        _result([_tool("exchange", {"arguments": {"order_id": "#W1", "new_item_ids": ["b", "a"]}})])
+    )
+    assert not none.passed and not wrong.passed
+    assert none.detail != wrong.detail
+    assert wrong.detail.endswith("was called 0 times, expected 1 (1 with other arguments: new_item_ids=['b', 'a'])")

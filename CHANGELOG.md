@@ -15,6 +15,16 @@
   under the same parent (`pytracer.attempt`) and links a retry to the attempt
   that failed (`pytracer.retry_of`). Reports list each repeated call with how
   every attempt ended, and `writes` failures quote that evidence.
+- **Retries below the call.** HTTP requests sent inside a tool or model call are
+  recorded on its span (`pytracer.http`: method, URL without the query string,
+  status or error; never headers or bodies), and a request repeated after a
+  failure is marked a retry. That makes a model SDK's own retry loop, or a tool
+  that retries its POST after a timeout, visible where the call alone looks like
+  one clean success. `no_duplicate_writes` fails on a repeated non-read request
+  inside a write tool, and reports list repeated requests. Covers `httpx`,
+  `httpx2` and `urllib3` (so `requests`); set `PYTRACER_HTTP_CAPTURE=0` to turn
+  it off. A frozen call sends no requests, so this evidence comes from calls that
+  ran: the capture, and tools a replay runs live.
 - **`run --json`** now includes each scenario's return value, the spans of the
   replayed run, and its repeated calls (`retries`).
 - **Microsoft Agent Framework adapter** (`pytracer-agent-framework`). Microsoft

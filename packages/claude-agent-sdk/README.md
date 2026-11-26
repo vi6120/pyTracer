@@ -49,7 +49,12 @@ serving what the CLI said to different input.
   session instead.
 
 CI verifies the adapter with the real SDK (`query()`, `ClaudeSDKClient`, the
-control protocol, the in-process MCP bridge) talking to a scripted CLI. It has
-not yet been verified against a live Claude Code CLI session.
+control protocol, the in-process MCP bridge) talking to a scripted CLI. It was
+also checked against a live session (claude-agent-sdk 0.2.189, Claude Code
+2.1.332, 26 November 2026): a `query()` that calls an in-process tool was
+captured, then replayed with the same answer, no CLI started and no tool run.
+
+A span is named after `ClaudeAgentOptions.model`, or `claude-agent` when the
+model is left to the CLI's default.
 
 Requires `claude-agent-sdk` 0.2.189 or later. `uninstall()` removes the seams.

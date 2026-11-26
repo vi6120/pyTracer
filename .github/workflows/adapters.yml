@@ -42,6 +42,12 @@ jobs:
             adapters: "packages/openai-agents"
             frameworks: "openai-agents==0.22.1 openai==3.37.0 httpx==0.28.1"
             store_tests: "openai_agents"
+          # Microsoft Agent Framework at the adapter's floor, with its OpenAI
+          # connector for the test that captures and replays through a real client.
+          - group: agent-framework
+            adapters: "packages/agent-framework"
+            frameworks: "agent-framework-core==1.26.0 agent-framework-openai==1.18.2"
+            store_tests: "agent_framework"
           - group: all-frameworks
             adapters: "packages/langgraph packages/autogen packages/crewai packages/openai-agents"
             frameworks: >-

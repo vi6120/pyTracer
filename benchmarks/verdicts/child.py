@@ -33,6 +33,8 @@ def capture(checkout: str, task_id: str, trace: str) -> None:
     try:
         agent.run(task_id)  # type: ignore[attr-defined]
     except Exception as exc:  # noqa: BLE001 - a failing baseline is still recorded
+        if type(exc).__name__ == "BudgetExceeded":
+            sys.exit(f"stopped: {exc}")
         print(f"baseline raised {type(exc).__name__}: {exc}", file=sys.stderr)
     pytracer.get_tracer().flush()
     Path(trace).parent.mkdir(parents=True, exist_ok=True)
@@ -50,6 +52,8 @@ def live(checkout: str, task_id: str, collection: str) -> None:
     result = ReplayEngine(ReplayMode.LIVE).replay(lambda: agent.run(task_id), MockSet())  # type: ignore[attr-defined]
     checks = run_assertions(result, [build_assertion(a, scenario.writes) for a in scenario.assertions])
     session = getattr(agent.run, "last_session", None)  # type: ignore[attr-defined]
+    if result.error_type == "BudgetExceeded":
+        sys.exit(f"stopped: {result.error_message}")  # not a run outcome; the benchmark stops
     print(json.dumps({
         "assertions": {c.name: {"passed": c.passed, "detail": c.detail} for c in checks},
         "db_matches_gold": bool(session.db_matches_gold()) if session is not None else False,

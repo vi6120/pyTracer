@@ -15,6 +15,7 @@ ids, timestamps, costs), so a replay of the same conversation finds its recordin
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from typing import Any
@@ -28,6 +29,53 @@ from tau2.domains.retail.environment import get_environment, get_tasks
 from tau2.user.user_simulator import UserSimulator
 
 MODEL = os.environ.get("BENCH_MODEL", "anthropic/claude-haiku-5-5")
+# The simulated customer's model; the agent's by default.
+USER_MODEL = os.environ.get("BENCH_USER_MODEL") or MODEL
+# Extra model-call arguments for the agent and the user simulator, as JSON; e.g.
+# '{"reasoning_effort": "none"}' turns off a local Ollama model's thinking.
+LLM_ARGS: dict[str, Any] = json.loads(os.environ.get("BENCH_LLM_ARGS") or "{}")
+
+# Spending cap. Every live model call is charged to a ledger file shared by all
+# the benchmark's processes, at the configured prices (USD per million tokens,
+# all input at the full price, so the real bill is at or below it); once the
+# ledger reaches BENCH_MAX_USD, the next call refuses to start.
+LEDGER = os.environ.get("BENCH_USAGE_LEDGER")
+MAX_USD = float(os.environ.get("BENCH_MAX_USD") or 0)
+PRICES = {
+    "support-agent": (float(os.environ.get("BENCH_PRICE_IN") or 0), float(os.environ.get("BENCH_PRICE_OUT") or 0)),
+    "user-simulator": (
+        float(os.environ.get("BENCH_USER_PRICE_IN") or os.environ.get("BENCH_PRICE_IN") or 0),
+        float(os.environ.get("BENCH_USER_PRICE_OUT") or os.environ.get("BENCH_PRICE_OUT") or 0),
+    ),
+}
+
+
+class BudgetExceeded(RuntimeError):
+    """The spending cap is reached; the benchmark stops instead of spending more."""
+
+
+def spent_usd() -> float:
+    """What the ledger has charged so far."""
+    if not LEDGER or not os.path.exists(LEDGER):
+        return 0.0
+    with open(LEDGER, encoding="utf-8") as ledger:
+        return sum(float(json.loads(line)["usd"]) for line in ledger if line.strip())
+
+
+def _check_budget() -> None:
+    if MAX_USD and spent_usd() >= MAX_USD:
+        raise BudgetExceeded(f"spending cap of ${MAX_USD:.2f} reached (ledger {LEDGER})")
+
+
+def _charge(role: str, usage: Any) -> None:
+    if not LEDGER:
+        return
+    usage = usage or {}
+    prompt, completion = int(usage.get("prompt_tokens") or 0), int(usage.get("completion_tokens") or 0)
+    price_in, price_out = PRICES[role]
+    usd = (prompt * price_in + completion * price_out) / 1_000_000
+    with open(LEDGER, "a", encoding="utf-8") as ledger:
+        ledger.write(json.dumps({"role": role, "prompt": prompt, "completion": completion, "usd": usd}) + "\n")
 
 # Retail tools that change the database.
 WRITE_TOOLS = (
@@ -47,8 +95,6 @@ _generate = llm_utils.generate
 def _scripted(path: str) -> Any:
     """A model that replays fixed replies (per role, in order) from a JSON file:
     ``BENCH_MODEL=scripted:<file>`` checks the benchmark's plumbing at no cost."""
-    import json
-
     from tau2.data_model.message import ToolCall
 
     script = json.loads(open(path, encoding="utf-8").read())
@@ -61,7 +107,10 @@ def _scripted(path: str) -> Any:
             ToolCall(id=f"call_{i}", name=c["name"], arguments=c["arguments"])
             for i, c in enumerate(reply.get("tool_calls") or ())
         ]
-        return AssistantMessage(role="assistant", content=reply.get("content"), tool_calls=calls or None)
+        usage = reply.get("usage") or {"prompt_tokens": 1000, "completion_tokens": 100}
+        return AssistantMessage(
+            role="assistant", content=reply.get("content"), tool_calls=calls or None, usage=usage
+        )
 
     return generate
 
@@ -83,7 +132,9 @@ def generate(model: str, messages: list[Any], tools: Any = None, **kwargs: Any) 
     role = _ROLES.get(str(kwargs.get("call_name")), "support-agent")
 
     def call() -> Any:
+        _check_budget()
         reply = _generate(model, messages, tools=tools, **kwargs)
+        _charge(role, reply.usage)
         # The provider's raw response is per-run noise; keep the message itself.
         return reply.model_copy(update={"raw_data": None})
 
@@ -162,7 +213,7 @@ class Session:
 
 def start(task_id: str) -> Session:
     task = next(t for t in get_tasks("base") if t.id == task_id)
-    user = UserSimulator(llm=MODEL, instructions=str(task.user_scenario))
+    user = UserSimulator(llm=USER_MODEL, instructions=str(task.user_scenario), llm_args=dict(LLM_ARGS))
     session = Session(
         task_id=task_id, env=get_environment(), task=task, user=user,
         user_state=user.get_init_state(),
@@ -177,5 +228,5 @@ def system_message(text: str) -> SystemMessage:
 
 def model(messages: list[Any], tools: list[Any]) -> Any:
     """The support agent's model call."""
-    return llm_utils.generate(MODEL, messages, tools=tools, call_name="support_agent")
+    return llm_utils.generate(MODEL, messages, tools=tools, call_name="support_agent", **LLM_ARGS)
 

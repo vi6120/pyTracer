@@ -60,9 +60,61 @@ python benchmarks/verdicts/run.py --plan   # what would run; calls no model
 python benchmarks/verdicts/run.py          # all bugs, all settings, 3 repeats
 ```
 
+### On an open model
+
+Any model litellm can reach works through `BENCH_MODEL`; `BENCH_LLM_ARGS` passes
+extra arguments (JSON) to every model call, the agent's and the simulated
+customer's. Measured on task 38 (cancel a pending order), 26 November 2026:
+
+| Model | Where | Outcome |
+|---|---|---|
+| `llama3.1:8b` | local, Ollama | changed the payment method twice instead of cancelling |
+| `qwen3:8b`, thinking off | local, Ollama | never looked the customer up; invented an order id and looped |
+
+Small local models cannot plan tau2's retail lookups, so the bugs are masked by the
+model's own mistakes. A larger open-weights model through a hosted router is cheap
+enough for the full run, for example:
+
+```bash
+export OPENROUTER_API_KEY=...                      # set it yourself
+export BENCH_MODEL=openrouter/openai/gpt-oss-120b  # about $1.40 for the full run
+```
+
+For a local Ollama model, `BENCH_MODEL=ollama_chat/<model>` and, for a Qwen3 model,
+`BENCH_LLM_ARGS='{"reasoning_effort": "none"}'` (its thinking mode is slow).
+
+### The published runs: one customer, three agents
+
+The simulated customer is GPT-5.2 in every run (`BENCH_USER_MODEL`), as in Sierra's
+standardized tau2 runs, so differences between runs come from the agent alone.
+
+| Run | Agent (`BENCH_MODEL`) | Why | Scope |
+|---|---|---|---|
+| 1 | GPT-5.2 | has an independent standardized retail score (81.6) | full |
+| 2 | gpt-oss-120b | open weights: anyone can rerun it | full |
+| 3 | Claude Opus 5.5 | a top model from a third vendor | `--settings strict --repeats 1` |
+
+On Microsoft Foundry, an Azure OpenAI deployment is `azure/<deployment>` (with
+`AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION`), and Claude is
+`azure_ai/<deployment>` (with `AZURE_AI_API_KEY`, `AZURE_AI_API_BASE`). Each run
+writes to its own `--out` folder.
+
+### Capping the spend
+
+`--max-usd` charges every live model call to `<out>/usage.jsonl` at
+`BENCH_PRICE_IN` / `BENCH_PRICE_OUT` (the agent's USD per million tokens) and
+`BENCH_USER_PRICE_IN` / `BENCH_USER_PRICE_OUT` (the customer's; the agent's by
+default, `0` when it is paid from credit), all input at the full price. The
+benchmark stops before a call that would start past the cap; a call already
+running finishes, so the total can exceed the cap by at most one call. The ledger
+persists in the `--out` folder, so a budget spans several invocations. With prompt
+caching on an Anthropic model,
+`BENCH_LLM_ARGS='{"cache_control_injection_points": [{"location": "message", "role": "system"}]}'`
+caches the policy and the tool list; the cap still counts that input at full price.
+
 Results go to `benchmarks/verdicts/results/`: one JSON per bug (every live run,
 every verdict and reason) and `summary.md`, the table per setting. A full run is
-about 125 agent runs; on Claude Haiku 5.5 that is a few dollars.
+about 125 agent runs, about 4,000 model calls and 25 million tokens.
 
 `BENCH_MODEL=scripted:benchmarks/verdicts/smoke_script_task38.json` replaces the
 model with a fixed conversation for task 38, which checks the plumbing for

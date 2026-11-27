@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Retry steps.** `pytracer.step(name)` groups the model calls of a retry loop,
+  such as a model asked again until its output validates against a Pydantic model,
+  into one chain of attempts even though each retry sends a different input:
+  numbered, linked, with `step.reject(error)` recording why an attempt was not used
+  and the step recording the attempts, the rejections and the accepted attempt.
+  Without it, those calls were unrelated spans that all looked successful.
 - **Side-effect assertions.** A scenario can now check what the agent wrote, not
   only that nothing visibly failed: `writes` (each expected write call happened,
   exactly `times` when given, with `args` matching; with `only`, no other declared

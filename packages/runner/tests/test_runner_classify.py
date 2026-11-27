@@ -283,3 +283,29 @@ def test_a_full_mode_abstention_keeps_its_advice() -> None:
     verdicts = classify_reproduction(base, cand)
     reason = explain_reproduction(base, cand, verdicts)["s"]
     assert "--env-file" in reason and "partial mode" not in reason
+
+
+def test_a_baseline_that_left_its_recording_on_a_redacted_value_blames_redaction() -> None:
+    # The code read a redaction placeholder where the recording saw the original:
+    # --env-file would not help, so the reason says what does.
+    from pytracer_runner import explain_reproduction
+
+    base = _diverged(("llm", "agent_llm", "changed_input", False))
+    base["scenarios"][0]["divergences"][0]["redacted"] = True
+    cand = _run([_scenario(passed=True)])
+    verdicts = classify_reproduction(base, cand)
+    assert verdicts == {"s": Outcome.CANNOT_REPRODUCE}
+    reason = explain_reproduction(base, cand, verdicts)["s"]
+    assert "redacted value" in reason and "Redactor" in reason
+    assert "--env-file" not in reason
+
+
+def test_a_branch_that_left_its_recording_on_a_redacted_value_blames_redaction() -> None:
+    from pytracer_runner import explain_reproduction
+
+    cand = _diverged(("tool", "lookup", "changed_input", False))
+    cand["scenarios"][0]["divergences"][0]["redacted"] = True
+    verdicts = classify_reproduction(BASE, cand)
+    assert verdicts == {"s": Outcome.CANNOT_JUDGE}
+    reason = explain_reproduction(BASE, cand, verdicts)["s"]
+    assert "redacted value" in reason and "A frozen replay cannot judge" in reason

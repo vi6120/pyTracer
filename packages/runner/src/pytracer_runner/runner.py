@@ -231,13 +231,39 @@ def explain_reproduction(
                 "result and can change from run to run; repeat it, or judge it in full mode."
             )
         elif value == "cannot_judge":
-            reasons[name] = _why(cand_by_name.get(name, {}), "the branch")
+            scenario = cand_by_name.get(name, {})
+            reasons[name] = _why(scenario, "the branch") + _live_model_path(scenario, "the branch")
         elif value == "cannot_reproduce":
-            reasons[name] = _why(base_by_name.get(name, {}), "the baseline") + (
-                " The baseline never reproduced the captured failure: pass the run's "
-                "settings with --env-file, or re-record from the baseline."
-            )
+            scenario = base_by_name.get(name, {})
+            mode = scenario.get("mode")
+            if mode in _LIVE_MODEL_MODES:
+                # Settings are not the likely cause: a live model answers
+                # differently from the recorded one and takes another path.
+                advice = (
+                    f" The baseline never reproduced the captured failure: in {mode} mode "
+                    "the model runs live and took another path than the recording. Judge "
+                    "it in full mode, or re-record from the baseline."
+                )
+            else:
+                advice = (
+                    " The baseline never reproduced the captured failure: pass the run's "
+                    "settings with --env-file, or re-record from the baseline."
+                )
+            reasons[name] = _why(scenario, "the baseline") + advice
     return reasons
+
+
+def _live_model_path(scenario: Mapping[str, Any], who: str) -> str:
+    """For a run whose model was live: leaving the recording may be the model's
+    doing, not the code's."""
+    mode = scenario.get("mode")
+    if mode not in _LIVE_MODEL_MODES:
+        return ""
+    return (
+        f" In {mode} mode the model runs live, so {who} may have left its recording "
+        "because the model answered differently, not because of the change; full mode "
+        "tells the two apart."
+    )
 
 
 _LIVE_MODEL_MODES = {"partial", "live"}

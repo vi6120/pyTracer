@@ -1,5 +1,33 @@
 # pyTracer benchmarks
 
+| Folder | What it answers |
+| --- | --- |
+| [`verdicts/`](verdicts/README.md) | When pyTracer says a branch fixed a bug, is it right? (seeded bugs on tau2-bench) |
+| [`overhead/`](#sdk-overhead) | How much time does the SDK add to an agent run? |
+| this page | How much can one ingestion gateway take? (k6 + Prometheus) |
+
+## SDK overhead
+
+`overhead/overhead.py` replays a real recorded agent run (`overhead/fixture_run.jsonl`:
+GPT-5.2 on tau2-bench retail task 88, 19 spans, endpoint details removed) with the
+model and tools stubbed, so only the agent's own code and pyTracer's instrumentation
+are timed; a live model call (about 2 s) would drown the difference in noise. Each
+configuration (no SDK; SDK; SDK without redaction; SDK shipping spans over HTTP to a
+local endpoint) runs 1,000 times, interleaved, timed on the agent's thread.
+`overhead/results/` holds the raw times and the summary with the machine it ran on.
+
+```bash
+python benchmarks/overhead/overhead.py   # about 30 s; your numbers will differ
+```
+
+Measured on an Apple M1 Pro, Python 3.12, pytracer-sdk 0.1.4 (28 November 2026):
+the SDK adds 9.7 ms per run at the median (about 0.5 ms per span), 0.035% of the 27.6 s
+the recorded run waited on its model. Redaction is about 90% of that cost: without it
+the SDK adds 0.9 ms per run (47 µs per span). Shipping over HTTP costs the agent's
+thread nothing extra, since a background thread sends the spans.
+
+## Gateway ingestion
+
 Load-test the ingestion gateway with [k6](https://k6.io) while
 [Prometheus](https://prometheus.io) scrapes the gateway's own metrics, so you
 can line up client-side throughput and latency (k6) against server-side counters

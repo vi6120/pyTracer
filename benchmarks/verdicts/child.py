@@ -39,8 +39,9 @@ def capture(checkout: str, task_id: str, trace: str, collection: str) -> None:
     sink = InMemoryTransport()
     pytracer.configure(sink, service_name="seeded-bugs", branch="main", commit="baseline")
     error: Exception | None = None
+    returned: object = None
     try:
-        agent.run(task_id)  # type: ignore[attr-defined]
+        returned = agent.run(task_id)  # type: ignore[attr-defined]
     except Exception as exc:  # noqa: BLE001 - a failing baseline is still recorded
         if type(exc).__name__ == "BudgetExceeded":
             sys.exit(f"stopped: {exc}")
@@ -50,7 +51,7 @@ def capture(checkout: str, task_id: str, trace: str, collection: str) -> None:
     Path(trace).parent.mkdir(parents=True, exist_ok=True)
     Path(trace).write_text("".join(s.to_json() + "\n" for s in sink.spans), encoding="utf-8")
     result = ReplayResult(
-        return_value=None,
+        return_value=returned,  # the run's record, which B6 to B10 check
         status=SpanStatus.ERROR if error else SpanStatus.OK,
         mode=ReplayMode.LIVE,
         spans=sorted(sink.spans, key=lambda s: s.start_time_ns),

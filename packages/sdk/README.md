@@ -102,3 +102,17 @@ with pytracer.step("extract_order") as step:
             messages += [{"role": "user", "content": f"Fix: {exc}"}]
 ```
 
+`pytracer run` (in `--json` as `retry_steps`, and in the PR report), and `pytracer
+traces show`, then report each step's attempts, the accepted one, why the others
+were rejected, and the tokens (and cost, when recorded) spent on attempts that were
+not used:
+
+```text
+extract_order: 3 attempts, #3 accepted; #1 rejected (ValidationError);
+#2 rejected (ValidationError); 2,500 of 3,600 tokens wasted
+```
+
+A frozen replay calls no model, so a replayed attempt reports the tokens it cost when
+it was recorded, and only when it sent exactly the recorded attempt's input;
+otherwise the waste is reported as unknown.
+

@@ -13,8 +13,8 @@ A recorded 19-span agent run (model and tools stubbed), 1000 runs per configurat
 | Configuration | p50 | p95 | p99 | Added at p50 | Added per span at p50 | Share of the run's model time |
 |---|---|---|---|---|---|---|
 | none | 0.002 | 0.003 | 0.004 | - | - | - |
-| sdk | 9.710 | 10.256 | 16.200 | 9.708 | 510.9 µs | 0.035% |
-| sdk-no-redaction | 0.895 | 6.537 | 9.602 | 0.893 | 47.0 µs | 0.003% |
-| sdk-http | 9.710 | 10.162 | 15.880 | 9.708 | 510.9 µs | 0.035% |
+| sdk | 2.971 | 6.134 | 8.316 | 2.970 | 156.3 µs | 0.011% |
+| sdk-no-redaction | 0.893 | 4.767 | 6.351 | 0.891 | 46.9 µs | 0.003% |
+| sdk-http | 2.963 | 5.614 | 8.480 | 2.962 | 155.9 µs | 0.011% |
 
 The share compares the added time with the 27.6 s the recorded run spent waiting on its model calls (GPT-5.2 agent and customer), which is what a live run adds on top of the code measured here.

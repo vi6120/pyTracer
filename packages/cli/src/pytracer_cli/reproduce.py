@@ -34,6 +34,18 @@ def _tail(text: str, limit: int = 2000) -> str:
     return text if len(text) <= limit else "...\n" + text[-limit:]
 
 
+def _no_results(which: str, ref: str, run: Any) -> str:
+    """Why a run produced no results. A run stopped by the time limit says so
+    first: its output ends wherever the agent was, which looks like any other
+    failure."""
+    if getattr(run, "timed_out", False):
+        return (
+            f"{which} run on {ref!r} timed out before it finished (raise the limit "
+            f"with --timeout); its output up to then:\n{_tail(run.stderr)}"
+        )
+    return f"{which} run on {ref!r} produced no results:\n{_tail(run.stderr)}"
+
+
 def run_reproduction(
     runner: _Runner,
     *,
@@ -74,14 +86,9 @@ def run_reproduction(
         evaluate_changed_prompts=evaluate_changed_prompts,
         install=install,
     )
-    if baseline.results is None:
-        raise RuntimeError(
-            f"baseline run on {baseline_ref!r} produced no results:\n{_tail(baseline.stderr)}"
-        )
-    if candidate.results is None:
-        raise RuntimeError(
-            f"candidate run on {candidate_ref!r} produced no results:\n{_tail(candidate.stderr)}"
-        )
+    for which, ref, run in (("baseline", baseline_ref, baseline), ("candidate", candidate_ref, candidate)):
+        if run.results is None:
+            raise RuntimeError(_no_results(which, ref, run))
     verdicts = classify(baseline.results, candidate.results)
     return baseline, candidate, verdicts
 

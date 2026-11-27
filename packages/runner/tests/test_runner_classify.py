@@ -250,3 +250,36 @@ def test_a_frozen_verdict_and_a_live_mode_abstention_get_no_live_note() -> None:
     assert explain_reproduction(base, cand, verdicts) == {}
     # An abstention keeps its own reason: it already says there is no verdict.
     assert live_model_verdicts(base, cand, {"s": Outcome.CANNOT_JUDGE}) == {}
+
+
+def test_a_live_model_abstention_blames_the_live_path_not_the_settings() -> None:
+    # In partial mode a baseline that leaves its recording usually followed a live
+    # model down another path: --env-file advice would send the user the wrong way.
+    from pytracer_runner import explain_reproduction
+
+    base = _diverged(("tool", "get_user_details", "not_recorded", True))
+    base["scenarios"][0]["mode"] = "partial"
+    cand = _run([_scenario(passed=True)])
+    verdicts = classify_reproduction(base, cand)
+    assert verdicts == {"s": Outcome.CANNOT_REPRODUCE}
+    reason = explain_reproduction(base, cand, verdicts)["s"]
+    assert "in partial mode the model runs live" in reason and "full mode" in reason
+    assert "--env-file" not in reason
+
+    branch = _diverged(("tool", "exchange_items", "changed_input", True))
+    branch["scenarios"][0]["mode"] = "partial"
+    verdicts = classify_reproduction(BASE, branch)
+    assert verdicts == {"s": Outcome.CANNOT_JUDGE}
+    reason = explain_reproduction(BASE, branch, verdicts)["s"]
+    assert "re-record" in reason and "In partial mode the model runs live" in reason
+
+
+def test_a_full_mode_abstention_keeps_its_advice() -> None:
+    from pytracer_runner import explain_reproduction
+
+    base = _diverged(("llm", "user_llm", "changed_input", True))
+    base["scenarios"][0]["mode"] = "full"
+    cand = _run([_scenario(passed=True)])
+    verdicts = classify_reproduction(base, cand)
+    reason = explain_reproduction(base, cand, verdicts)["s"]
+    assert "--env-file" in reason and "partial mode" not in reason

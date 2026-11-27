@@ -4,8 +4,7 @@ For each seeded bug (``bugs.py``) on its tau2-bench retail task:
 
 1. Build a throwaway git repository: ``main`` carries the bug; ``fix``, ``nofix``
    and ``other`` branch from it (see ``bugs.py``).
-2. Capture ``main`` live once: the recording every replay freezes against.
-3. Ground truth: run every branch live ``--repeats`` times and judge each run by
+2. Ground truth: run every branch live ``--repeats`` times and judge each run by
    the scenario's assertions and tau2's own database check. A branch whose runs
    pass (by majority) is truly fixed. How a failing branch fails follows from how
    it was built, not from comparing live runs (a live model fails a little
@@ -14,6 +13,10 @@ For each seeded bug (``bugs.py``) on its tau2-bench retail task:
    model hides cannot be scored: if ``main`` passes anyway (the bug never shows)
    or ``fix`` fails anyway (the model fails the task without the bug), the bug is
    reported as masked, with its live counts, and left out of the score.
+3. Record ``main`` live: the recording every replay freezes against. It must show
+   the bug, failing the same checks as most of ``main``'s live runs; a try that
+   fails another way is recorded again, up to ``CAPTURE_TRIES`` times, and a bug
+   no try shows is reported as masked too.
 4. Run ``pytracer reproduce`` for every branch under each setting:
    ``strict`` (everything frozen, strict), ``fallback`` (frozen but not strict: a
    call with no recording runs live, a changed model call too with
@@ -66,6 +69,9 @@ ABSTAIN = {"cannot_judge", "cannot_reproduce"}
 # Seconds each reproduce run may take: with the model live (partial, or a call that
 # falls back to live), a slow model needs far longer than pyTracer's default.
 REPRODUCE_TIMEOUT = os.environ.get("BENCH_REPRODUCE_TIMEOUT", "3600")
+# How many times the baseline is recorded before giving up on a recording that
+# shows the bug (a live model does not fail the same way every run).
+CAPTURE_TRIES = 3
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -151,16 +157,32 @@ def _checkout(repo: Path, branch: str, root: Path) -> Path:
     return path
 
 
-def capture(bug: Bug, repo: Path, out: Path) -> Path:
+def capture(bug: Bug, repo: Path, out: Path, main_runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Record the baseline live until the recording fails the way ``main`` fails.
+
+    A recording is only worth judging if it shows the bug. A live model sometimes
+    fails another way (it never reaches the write the bug is in), and a recording of
+    that failure cannot tell a fix from no fix. So each try is judged like a live run
+    and kept only if its failure matches the most common failure of ``main``'s live
+    runs; after ``CAPTURE_TRIES`` misses the bug is reported as not captured.
+    """
     trace = out / bug.key / "trace.jsonl"
-    done = subprocess.run(
-        [sys.executable, str(HERE / "child.py"), "capture", str(repo), bug.task_id, str(trace)],
-        env=_env(bug),
-    )
-    _check_budget()
-    if done.returncode != 0:
-        raise RuntimeError(f"capture of {bug.key} failed")
-    return trace
+    target = _bug_failure(main_runs)
+    tries: list[dict[str, Any]] = []
+    for _ in range(CAPTURE_TRIES):
+        done = subprocess.run(
+            [sys.executable, str(HERE / "child.py"), "capture", str(repo), bug.task_id, str(trace),
+             str(repo / "collection-strict.yaml")],
+            env=_env(bug), capture_output=True, text=True,
+        )
+        _check_budget()
+        lines = [line for line in done.stdout.splitlines() if line.startswith("{")]
+        if done.returncode != 0 or not lines:
+            raise RuntimeError(f"capture of {bug.key} failed:\n{done.stderr[-2000:]}")
+        tries.append(json.loads(lines[-1]))
+        if target is not None and _failure(tries[-1]) == target:
+            return {"trace": str(trace), "tries": tries, "shows_bug": True}
+    return {"trace": str(trace), "tries": tries, "shows_bug": False}
 
 
 def live_truth(bug: Bug, repo: Path, root: Path, repeats: int) -> dict[str, Any]:
@@ -198,7 +220,21 @@ def _majority_pass(runs: list[dict[str, Any]]) -> bool:
     return 2 * sum(_passed(r) for r in runs) > len(runs)
 
 
-def _labels(runs: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+def _failure(run: dict[str, Any]) -> tuple[str, ...] | None:
+    """How a run failed: its failed checks, by name. None if it passed."""
+    if _passed(run):
+        return None
+    failed = sorted(name for name, a in (run.get("assertions") or {}).items() if not a["passed"])
+    return (*failed, *([] if run.get("db_matches_gold") else ["db_matches_gold"]))
+
+
+def _bug_failure(runs: list[dict[str, Any]]) -> tuple[str, ...] | None:
+    """The most common failure among the runs (the first seen on a tie)."""
+    failures = [f for f in map(_failure, runs) if f is not None]
+    return collections.Counter(failures).most_common(1)[0][0] if failures else None
+
+
+def _labels(runs: dict[str, list[dict[str, Any]]], captured: dict[str, Any] | None = None) -> dict[str, Any]:
     """Each candidate's true outcome. Whether it is fixed is measured live (the
     majority of its repeats); how a failing branch fails follows from how it was
     built (see the module docstring). ``masked`` says why a bug cannot be scored."""
@@ -207,6 +243,10 @@ def _labels(runs: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
         labels["masked"] = "main passes live: the bug does not show on this task"
     elif not _majority_pass(runs["fix"]):
         labels["masked"] = "fix fails live: the model fails the task without the bug"
+    elif captured is not None and not captured["shows_bug"]:
+        labels["masked"] = (
+            f"no recording showed the bug: {len(captured['tries'])} tries, none failed as main fails live"
+        )
     built = {"fix": "fixed", "nofix": "still_failing", "other": "diverged"}
     for branch in BRANCHES:
         label = "fixed" if _majority_pass(runs[branch]) else built[branch]
@@ -314,7 +354,7 @@ def rescore(folder: Path) -> None:
     results: dict[str, Any] = {}
     for path in sorted(folder.glob("B*.json")):
         result = json.loads(path.read_text())
-        result["truth"]["labels"] = _labels(result["truth"]["runs"])
+        result["truth"]["labels"] = _labels(result["truth"]["runs"], result["truth"].get("capture"))
         result["scores"] = {s: score(result["truth"]["labels"], v) for s, v in result["reproduce"].items()}
         path.write_text(json.dumps(result, indent=1))
         results[path.stem] = result
@@ -368,14 +408,21 @@ def _run_bugs(
     for bug in chosen:
         repo = build_repo(bug, root)
         if args.plan:
-            live_runs = 1 + 4 * args.repeats
-            print(f"{bug.key} task {bug.task_id}: repo {repo}; {live_runs} live runs, "
+            live_runs = f"{4 * args.repeats} live runs, then 1 to {CAPTURE_TRIES} recordings"
+            print(f"{bug.key} task {bug.task_id}: repo {repo}; {live_runs}, "
                   f"then reproduce x{len(BRANCHES)} per setting {settings}")
             continue
         args.out.mkdir(parents=True, exist_ok=True)
-        trace = capture(bug, repo, args.out)
+        # Live truth first: it says whether the bug shows at all, and how main fails,
+        # which the recording must match. A masked bug is not recorded or judged.
         truth = live_truth(bug, repo, root, args.repeats)
-        reported = {s: reproduce(bug, repo, trace, s) for s in settings}
+        captured = None if truth["labels"]["masked"] else capture(bug, repo, args.out, truth["runs"]["main"])
+        if captured is not None:
+            truth["capture"] = captured
+            truth["labels"] = _labels(truth["runs"], captured)
+        reported = {}
+        if captured is not None and captured["shows_bug"]:
+            reported = {s: reproduce(bug, repo, Path(captured["trace"]), s) for s in settings}
         results[bug.key] = {
             "title": bug.title, "task": bug.task_id, "truth": truth, "reproduce": reported,
             "scores": {s: score(truth["labels"], reported[s]) for s in settings},

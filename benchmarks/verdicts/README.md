@@ -63,7 +63,11 @@ pinned at `v2.0.0`), and scores `pytracer reproduce` against what really happene
      results, and pyTracer says so.
 4. **The result** per branch: correct, an abstention (`cannot_judge` or
    `cannot_reproduce`, with pyTracer's reason), or wrong. The headline is the unsafe
-   count: branches that are not fixed but reported `fixed`. It must be 0.
+   count: branches that are not fixed but reported `fixed`. It must be 0. Every
+   share comes with its exact (Clopper-Pearson) 95% interval, the unsafe count with
+   its upper bound, `fixed` with its precision and recall, and the verdicts are
+   also split by the shape of each bug's fix, since that is what decides whether a
+   frozen replay can judge it.
 
 A verdict is drawn only from runs that stayed on their recording. A fix that
 changes the calls themselves (B1's fix adds a status check before retrying) cannot

@@ -10,6 +10,11 @@
   numbered, linked, with `step.reject(error)` recording why an attempt was not used
   and the step recording the attempts, the rejections and the accepted attempt.
   Without it, those calls were unrelated spans that all looked successful.
+- **Retry waste.** `pytracer run --json` (`retry_steps`), the PR report and
+  `pytracer traces show` report each retry step's attempts, the accepted one, why
+  the others were rejected, and the tokens and cost spent on attempts that were not
+  used. A frozen replay reports what each attempt cost when it was recorded, only
+  when it sent the recorded input; otherwise the waste is reported as unknown.
 - **Side-effect assertions.** A scenario can now check what the agent wrote, not
   only that nothing visibly failed: `writes` (each expected write call happened,
   exactly `times` when given, with `args` matching; with `only`, no other declared

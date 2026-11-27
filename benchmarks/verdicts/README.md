@@ -14,7 +14,7 @@ pinned at `v2.0.0`), and scores `pytracer reproduce` against what really happene
 
   | Bug | What goes wrong | Task |
   |---|---|---|
-  | B1 | a write is retried after a timeout that had already committed it | 38 (cancel) |
+  | B1 | a write is retried after a timeout that had already committed it | 88 (cancel) |
   | B2 | order ids lose their `#`, so every order lookup fails | 0 (exchange) |
   | B3 | tool results are cut to 400 characters to save context | 1 (exchange) |
   | B4 | only the last 6 messages are sent to the model | 5 (return) |
@@ -27,18 +27,26 @@ pinned at `v2.0.0`), and scores `pytracer reproduce` against what really happene
 
 ## How it is scored
 
-1. **Ground truth, measured live.** Every branch runs live `--repeats` times (3 by
-   default) and is judged by the test above and by tau2's own check (the database
-   against the gold actions). A branch whose runs pass is truly fixed; one that
-   fails as `main` fails is still failing; one that fails another way diverged
-   (majority over the repeats). Labels are measured, not assumed.
-2. **pyTracer's verdict.** `main` is captured live once; then `pytracer reproduce`
+1. **Ground truth.** Every branch runs live `--repeats` times (3 by default) and
+   is judged by the test above and by tau2's own check (the database against the
+   gold actions). Whether a branch is fixed is measured: it is if most of its
+   runs pass. How a failing branch fails follows from how it was built, because a
+   live model fails a little differently every run, so comparing live failures
+   cannot tell "the same bug" from "another bug": `nofix` behaves exactly as
+   `main`, so it is still failing; a failing `other` carries a different bug, so
+   it diverged.
+2. **Masked bugs are not scored.** If `main` passes live anyway (the bug never
+   shows) or `fix` fails live anyway (the model fails the task without the bug),
+   the bug cannot be judged on that model. The summary lists it with its live
+   pass counts and leaves it out of the score.
+3. **pyTracer's verdict.** `main` is captured live once; then `pytracer reproduce`
    judges every branch against that recording, under three settings:
    - `strict`: everything frozen, strict;
    - `fallback`: frozen but not strict (a call with no recording runs live), and a
      changed model call runs live (`--evaluate-changed-prompts`);
-   - `partial`: tools frozen, the model live.
-3. **The result** per branch: correct, an abstention (`cannot_judge` or
+   - `partial`: tools frozen, the model live. Its verdicts are not frozen
+     results, and pyTracer says so.
+4. **The result** per branch: correct, an abstention (`cannot_judge` or
    `cannot_reproduce`, with pyTracer's reason), or wrong. The headline is the unsafe
    count: branches that are not fixed but reported `fixed`. It must be 0.
 
@@ -46,6 +54,11 @@ A verdict is drawn only from runs that stayed on their recording. A fix that
 changes the calls themselves (B1's fix adds a status check before retrying) cannot
 be judged from a recording made on the buggy branch, so pyTracer abstains and names
 the call; the benchmark reports how often that happens.
+
+`python benchmarks/verdicts/run.py --rescore <out folder>` recomputes the labels and
+scores of a finished run from its saved JSON without calling a model.
+`BENCH_REPRODUCE_TIMEOUT` (seconds, 3600 by default) is how long each reproduce run
+may take; a slow model running live needs far longer than pyTracer's default.
 
 ## Run it
 
@@ -118,6 +131,6 @@ Results go to `benchmarks/verdicts/results/`: one JSON per bug (every live run,
 every verdict and reason) and `summary.md`, the table per setting. A full run is
 about 125 agent runs, about 4,000 model calls and 25 million tokens.
 
-`BENCH_MODEL=scripted:benchmarks/verdicts/smoke_script_task38.json` replaces the
-model with a fixed conversation for task 38, which checks the plumbing for
+`BENCH_MODEL=scripted:benchmarks/verdicts/smoke_script_task88.json` replaces the
+model with a fixed conversation for task 88, which checks the plumbing for
 `--bugs B1` at no cost.

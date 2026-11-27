@@ -45,6 +45,15 @@
   path, and a live session (Claude Code 2.1.332) was captured and replayed
   with no CLI started and no tool run.
 
+### Changed
+
+- Redaction is about 3x faster on the agent's thread: each default rule first runs
+  a cheap check that every match must pass (a key prefix, an `@`, a run of 13
+  digits) and skips its regex when the text cannot hold that secret. A rule's
+  optional `may_match` does the same for custom rules. What is redacted does not
+  change. On the SDK overhead benchmark the SDK's added time per agent run fell from
+  9.7 ms to 3.0 ms (511 to 156 µs per span).
+
 ### Fixed
 
 - A recording could not replay itself when the code sliced or truncated a value

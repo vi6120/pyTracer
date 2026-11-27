@@ -75,3 +75,30 @@ print(tracer.buffer.dropped, tracer.buffer.send_errors)  # 0 0 when nothing was 
 If `dropped` grows, raise the queue bound with
 `SpanBuffer(transport, max_queue_size=...)` passed as `Tracer(..., buffer=...)`,
 or ship to a closer or larger gateway.
+
+## Retries of one step
+
+A model asked again until its output validates (a Pydantic model, a JSON schema)
+sends a different input each time, since the error goes back into the prompt. Wrap
+the loop in `pytracer.step` and every model call made directly inside it is
+recorded as an attempt at one result: numbered (`pytracer.attempt`), each linked to
+the one before (`pytracer.retry_of`). `step.reject(error)` records why an attempt
+was not used, and the step's own span records how many attempts it took
+(`pytracer.step.attempts`), the rejections, and which attempt was accepted
+(`pytracer.step.accepted`).
+
+```python
+import pytracer_sdk as pytracer
+from pydantic import ValidationError
+
+with pytracer.step("extract_order") as step:
+    for _ in range(3):
+        raw = call_model(messages)            # an @op(kind=SpanKind.LLM) function
+        try:
+            order = Order.model_validate_json(raw)
+            break
+        except ValidationError as exc:
+            step.reject(exc)
+            messages += [{"role": "user", "content": f"Fix: {exc}"}]
+```
+

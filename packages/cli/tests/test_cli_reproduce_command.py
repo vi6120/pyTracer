@@ -44,6 +44,21 @@ def test_run_error_exits_two(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.exit_code == 2
 
 
+def test_timeout_sets_the_executor_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    def fake(runner: Any, **kwargs: Any) -> Any:
+        seen["timeout"] = runner._executor._timeout
+        return (None, None, {"s": Outcome.FIXED})
+
+    monkeypatch.setattr("pytracer_cli.reproduce.run_reproduction", fake)
+    args = ["reproduce", "--branch", "feature", "--isolation", "local", "--timeout", "1800"]
+    assert runner.invoke(app, args).exit_code == 0
+    assert seen["timeout"] == 1800
+    assert runner.invoke(app, args[:-2]).exit_code == 0
+    assert seen["timeout"] == 600  # the local default
+
+
 @pytest.fixture(autouse=True)
 def _clear_github_env(monkeypatch: pytest.MonkeyPatch) -> None:
     # Behave the same locally and inside GitHub Actions (which sets these).

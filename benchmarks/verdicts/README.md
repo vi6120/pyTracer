@@ -9,8 +9,9 @@ pinned at `v2.0.0`), and scores `pytracer reproduce` against what really happene
 
 - **The agent** (`support_agent/`): a customer-support agent on tau2's retail
   tools, policy and LLM user simulator. Its loop and instrumentation are fixed;
-  `glue.py`, the code between the model and the tools, is where bugs live.
-- **The bugs** (`bugs.py`): five edits to `glue.py`, each exercised on one tau2 task.
+  `glue.py`, the code between the model and the tools and the record the run
+  returns, is where bugs live.
+- **The bugs** (`bugs.py`): edits to `glue.py`, each exercised on one tau2 task.
 
   | Bug | What goes wrong | Task |
   |---|---|---|
@@ -19,11 +20,21 @@ pinned at `v2.0.0`), and scores `pytracer reproduce` against what really happene
   | B3 | tool results are cut to 400 characters to save context | 1 (exchange) |
   | B4 | only the last 6 messages are sent to the model | 5 (return) |
   | B5 | a "batch limit" returns at most 2 items per call | 13 (return) |
+  | B6 | the run's record drops its last write | 88 (cancel) |
+  | B7 | order ids lose their `#` in the run's record | 13 (return) |
+  | B8 | a write counts as failed when it worked | 0 (exchange) |
+  | B9 | a guard rejects valid order ids | 1 (exchange) |
+  | B10 | cancellations are left out of the run's record | 88 (cancel) |
+
+  B1 to B5 are fixed by changing the calls the agent makes; B6 to B10 by changing
+  only `run_record`, which builds the record after the conversation, so their fix
+  leaves every call unchanged and a frozen replay can judge it.
 
 - **The branches**: for each bug, `main` carries it; `fix` fixes it; `nofix` makes
   a cosmetic edit; `other` fixes it and adds a different bug.
 - **The test** each branch is judged by: no error, exactly the task's gold writes
-  (tool and arguments, once each, and no other write), and no duplicated write.
+  (tool and arguments, once each, and no other write), and no duplicated write;
+  for B6 to B10, also that the returned record lists the gold writes as resolved.
 
 ## How it is scored
 
@@ -140,6 +151,7 @@ Results go to `benchmarks/verdicts/results/`: one JSON per bug (every live run,
 every verdict and reason) and `summary.md`, the table per setting. A full run is
 about 125 to 135 agent runs, about 4,000 model calls and 25 million tokens.
 
-`BENCH_MODEL=scripted:benchmarks/verdicts/smoke_script_task88.json` replaces the
-model with a fixed conversation for task 88, which checks the plumbing for
-`--bugs B1` at no cost.
+`BENCH_MODEL=scripted:benchmarks/verdicts/smoke_script_task88.json` (and the same
+for `BENCH_USER_MODEL`) replaces both models with a fixed conversation for task 88,
+which checks the plumbing for `--bugs B1,B6,B10` at no cost; `smoke_script_task13`,
+`task0` and `task1` do the same for B7, B8 and B9.

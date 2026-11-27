@@ -1,9 +1,10 @@
 """A customer-support agent for tau2-bench's retail domain.
 
 The agent loop is fixed; ``glue.py`` is the code between the model and the tools
-(argument preparation, tool calls and their errors, the history the model sees),
-and is where each seeded bug lives. The run returns the writes the agent made, in
-order, which is what the benchmark's assertions judge.
+(argument preparation, tool calls and their errors, the history the model sees,
+and the record the run returns), and is where each seeded bug lives. The run
+returns its record: the order writes that worked and a status, built by
+``glue.run_record`` after the conversation is over.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ def run(task_id: str) -> dict[str, Any]:
     run.last_session = session  # type: ignore[attr-defined]  # for the live check, even if the run raises
     history: list[Any] = [harness.system_message(session.policy)]
     agent_text = GREETING
+    calls: list[tuple[str, dict[str, Any], str]] = []  # every tool call: name, args as sent, result
     for _ in range(MAX_TURNS):
         customer = session.user_says(agent_text)
         if customer is None:
@@ -39,6 +41,8 @@ def run(task_id: str) -> dict[str, Any]:
                 agent_text = reply.content or ""
                 break
             for call in reply.tool_calls:
-                result = glue.call_tool(session, call.name, glue.prepare_args(call.name, call.arguments))
+                args = glue.prepare_args(call.name, call.arguments)
+                result = glue.call_tool(session, call.name, args)
+                calls.append((call.name, args, result))
                 history.append(ToolMessage(id=call.id, role="tool", content=result, requestor="assistant"))
-    return {"task": task_id, "last_reply": agent_text}
+    return {"task": task_id, "last_reply": agent_text, **glue.run_record(calls)}

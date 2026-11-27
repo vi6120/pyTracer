@@ -106,6 +106,13 @@ def _collection(bug: Bug, setting: str) -> dict[str, Any]:
             {"type": "no_duplicate_writes"},
         ],
     }
+    if bug.checks_record:
+        # The record the run returns must list the gold writes, as sent, and say
+        # they worked (B6 to B10 live in the code that builds it).
+        record = [{"tool": a["name"], "order_id": a["arguments"]["order_id"]} for a in gold]
+        scenario["assertions"].append(
+            {"type": "returns", "name": "record", "expected": {"status": "resolved", "writes": record}}
+        )
     return {"name": f"seeded-{bug.key}-{setting}", "scenarios": [scenario]}
 
 
@@ -424,7 +431,7 @@ def _run_bugs(
         if captured is not None and captured["shows_bug"]:
             reported = {s: reproduce(bug, repo, Path(captured["trace"]), s) for s in settings}
         results[bug.key] = {
-            "title": bug.title, "task": bug.task_id, "truth": truth, "reproduce": reported,
+            "title": bug.title, "task": bug.task_id, "shape": bug.shape, "truth": truth, "reproduce": reported,
             "scores": {s: score(truth["labels"], v) for s, v in reported.items()},  # none for a masked bug
         }
         (args.out / f"{bug.key}.json").write_text(json.dumps(results[bug.key], indent=1))

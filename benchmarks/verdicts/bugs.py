@@ -18,6 +18,12 @@ as masked.
 
 Each edit is ``(old, new)``, applied to the correct glue; an edit whose ``old``
 text is missing fails loudly, so the catalog cannot drift from the glue.
+
+Each bug is tagged with the shape of its fix (see PREREGISTRATION.md): whether the
+fix adds a call, changes a call's arguments, changes the model's input, or leaves
+every call unchanged. B6 to B10 are of the last kind: they live in
+``run_record``, which runs after the conversation, so their scenarios also check
+the record the run returns.
 """
 
 from __future__ import annotations
@@ -51,6 +57,27 @@ _SWALLOW = '''    except Exception as exc:  # noqa: BLE001 - the model reads the
 '''
 
 
+# run_record's pieces, each the target of a v2 bug (B6 to B10).
+_RECORD_WRITES = '        writes.append({"tool": name, "order_id": order_id})\n'
+_RECORD_RETURN = '    return {"status": status, "writes": writes}\n'
+_RECORD_FAILED = '    failed = [name for name, _, result in made if result.startswith("Error")]\n'
+_RECORD_ID = 'ORDER_ID = re.compile(r"#W\\d{7}")\n'
+_RECORD_MADE = '    made = [(name, args, result) for name, args, result in calls if name in ORDER_WRITES]\n'
+
+_DROP_LAST = (_RECORD_RETURN, '    return {"status": status, "writes": writes[:-1]}\n')
+_ID_LOSES_HASH = (_RECORD_WRITES, '        writes.append({"tool": name, "order_id": order_id.lstrip("#")})\n')
+_INVERTED_STATUS = (
+    _RECORD_FAILED,
+    '    failed = [name for name, _, result in made if not result.startswith("Error")]\n',
+)
+
+# The shape of a bug's fix.
+ADDS_CALL = "adds a call"
+CHANGES_ARGS = "changes arguments"
+CHANGES_MODEL_INPUT = "changes the model's input"
+KEEPS_CALLS = "leaves every call unchanged"
+
+
 def _prepare(body: str) -> Edit:
     return (_PREPARE, f'    """The tool arguments, as the model gave them."""\n    args = dict(args)\n{body}    return args\n')
 
@@ -63,12 +90,15 @@ class Bug:
     bug: list[Edit]
     cosmetic: list[Edit]  # applied on top of ``bug`` for the nofix branch
     other: list[Edit]  # a different bug, applied to the correct glue
+    shape: str  # the shape of the fix (ADDS_CALL, CHANGES_ARGS, ...)
     env: dict[str, str] = field(default_factory=dict)
+    checks_record: bool = False  # the scenario also checks the record the run returns
 
 
 BUGS: list[Bug] = [
     Bug(
         key="B1",
+        shape=ADDS_CALL,
         title="a write retried after a timeout that had already committed it",
         # Task 88: the customer cancels outright once the agent finds no 4-foot
         # shelf. Task 38 left the cancellation to the model's judgement, so most
@@ -83,6 +113,7 @@ BUGS: list[Bug] = [
     ),
     Bug(
         key="B2",
+        shape=CHANGES_ARGS,
         title="order ids lose their '#', so every order lookup fails",
         task_id="0",
         bug=[_prepare('    if "order_id" in args:\n        args["order_id"] = str(args["order_id"]).lstrip("#")\n')],
@@ -92,6 +123,7 @@ BUGS: list[Bug] = [
     ),
     Bug(
         key="B3",
+        shape=CHANGES_MODEL_INPUT,
         title="tool results cut to 400 characters to save context",
         task_id="1",
         bug=[(_CALL, "        return session.tool(name, args)[:400]\n    except TimeoutError:")],
@@ -101,6 +133,7 @@ BUGS: list[Bug] = [
     ),
     Bug(
         key="B4",
+        shape=CHANGES_MODEL_INPUT,
         title="only the last 6 messages are sent to the model",
         task_id="5",
         bug=[(_HISTORY, '    """The conversation the model sees: the recent part."""\n    return list(history[-6:])\n')],
@@ -110,12 +143,64 @@ BUGS: list[Bug] = [
     ),
     Bug(
         key="B5",
+        shape=CHANGES_ARGS,
         title="a 'batch limit' that returns at most 2 items per call",
         task_id="13",
         bug=[_prepare('    if "item_ids" in args:\n        args["item_ids"] = list(args["item_ids"])[:2]\n')],
         cosmetic=[('list(args["item_ids"])[:2]', 'list(args["item_ids"][:2])')],
         # All items, but the refund's payment method is dropped.
         other=[_prepare('    if name == "return_delivered_order_items":\n        args.pop("payment_method_id", None)\n')],
+    ),
+    # v2: bugs whose fix leaves every call unchanged (see PREREGISTRATION.md).
+    Bug(
+        key="B6",
+        title="the run's record drops its last write",
+        task_id="88",
+        shape=KEEPS_CALLS,
+        checks_record=True,
+        bug=[_DROP_LAST],
+        cosmetic=[("writes[:-1]", "writes[: len(writes) - 1]")],
+        other=[_ID_LOSES_HASH],
+    ),
+    Bug(
+        key="B7",
+        title="order ids lose their '#' in the run's record",
+        task_id="13",
+        shape=KEEPS_CALLS,
+        checks_record=True,
+        bug=[_ID_LOSES_HASH],
+        cosmetic=[('order_id.lstrip("#")', 'order_id.replace("#", "", 1)')],
+        other=[_DROP_LAST],
+    ),
+    Bug(
+        key="B8",
+        title="a write counts as failed when it worked",
+        task_id="0",
+        shape=KEEPS_CALLS,
+        checks_record=True,
+        bug=[_INVERTED_STATUS],
+        cosmetic=[('not result.startswith("Error")', 'result[:5] != "Error"')],
+        other=[_DROP_LAST],
+    ),
+    Bug(
+        key="B9",
+        title="a guard rejects valid order ids",
+        task_id="1",
+        shape=KEEPS_CALLS,
+        checks_record=True,
+        bug=[(_RECORD_ID, 'ORDER_ID = re.compile(r"#W\\d{6}")\n')],
+        cosmetic=[('r"#W\\d{6}"', 'r"#W[0-9]{6}"')],
+        other=[_ID_LOSES_HASH],
+    ),
+    Bug(
+        key="B10",
+        title="cancellations are left out of the run's record",
+        task_id="88",
+        shape=KEEPS_CALLS,
+        checks_record=True,
+        bug=[(_RECORD_MADE, _RECORD_MADE.replace("in ORDER_WRITES]", "in ORDER_WRITES[1:]]"))],
+        cosmetic=[("ORDER_WRITES[1:]]", "ORDER_WRITES[1:len(ORDER_WRITES)]]")],
+        other=[_INVERTED_STATUS],
     ),
 ]
 

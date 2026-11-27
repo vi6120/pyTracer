@@ -59,6 +59,11 @@ changes the calls themselves (B1's fix adds a status check before retrying) cann
 be judged from a recording made on the buggy branch, so pyTracer abstains and names
 the call; the benchmark reports how often that happens.
 
+Version 2 of the benchmark (15 bugs, a baseline, and bugs whose fix leaves the
+calls unchanged, so `fixed` can be tested) is pre-registered in
+[PREREGISTRATION.md](PREREGISTRATION.md): its bugs, metrics and predictions were
+fixed before any v2 run.
+
 `python benchmarks/verdicts/run.py --rescore <out folder>` recomputes the labels and
 scores of a finished run from its saved JSON without calling a model.
 `BENCH_REPRODUCE_TIMEOUT` (seconds, 3600 by default) is how long each reproduce run

@@ -12,9 +12,10 @@ from pytracer_cli.reproduce import all_fixed, format_verdicts, run_reproduction
 
 
 class _Result:
-    def __init__(self, results: Any, stderr: str = "") -> None:
+    def __init__(self, results: Any, stderr: str = "", timed_out: bool = False) -> None:
         self.results = results
         self.stderr = stderr
+        self.timed_out = timed_out
 
 
 class FakeRunner:
@@ -167,3 +168,22 @@ def test_format_verdicts_prints_each_reason_instead_of_the_generic_hint() -> Non
     table = format_verdicts({"s": Outcome.CANNOT_JUDGE}, {"s": reason})
     assert f"s: {reason}" in table
     assert "evaluate-changed-prompts" not in table  # the generic prompt hint is not added
+
+
+class _TimedOutRunner(FakeRunner):
+    def reproduce(self, ref: str, collection_path: str, **kwargs: Any) -> _Result:
+        if ref == "feature":
+            return _Result(None, stderr="agent still talking", timed_out=True)
+        return _Result(_run([{"name": "s", "passed": False}]))
+
+
+def test_a_run_stopped_by_the_time_limit_says_so() -> None:
+    runner = _TimedOutRunner({})
+    with pytest.raises(RuntimeError) as err:
+        run_reproduction(
+            runner, collection_path="c.yaml", baseline_ref="main", candidate_ref="feature",
+            classify=classify_reproduction,
+        )
+    message = str(err.value)
+    assert "candidate run on 'feature' timed out" in message and "--timeout" in message
+    assert "agent still talking" in message

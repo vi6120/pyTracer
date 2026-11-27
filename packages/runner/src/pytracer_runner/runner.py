@@ -214,13 +214,23 @@ def explain_reproduction(
     what kind of change that was; for ``cannot_reproduce``, where the baseline did.
     Only a changed model input gets the ``--evaluate-changed-prompts`` advice: a
     changed tool call, or one the recording never made, needs a re-recording.
+
+    A verdict drawn with the model running live (a ``partial`` or ``live`` mode
+    scenario) is not a frozen result: the model may answer differently on the next
+    run, so it gets a note saying so (see ``live_model_verdicts``).
     """
     base_by_name = {s["name"]: s for s in baseline.get("scenarios", [])}
     cand_by_name = {s["name"]: s for s in candidate.get("scenarios", [])}
     reasons: dict[str, str] = {}
+    live = live_model_verdicts(baseline, candidate, verdicts)
     for name, verdict in verdicts.items():
         value = getattr(verdict, "value", verdict)
-        if value == "cannot_judge":
+        if name in live:
+            reasons[name] = (
+                f"The model ran live ({live[name]} mode), so this verdict is not a frozen "
+                "result and can change from run to run; repeat it, or judge it in full mode."
+            )
+        elif value == "cannot_judge":
             reasons[name] = _why(cand_by_name.get(name, {}), "the branch")
         elif value == "cannot_reproduce":
             reasons[name] = _why(base_by_name.get(name, {}), "the baseline") + (
@@ -228,6 +238,29 @@ def explain_reproduction(
                 "settings with --env-file, or re-record from the baseline."
             )
     return reasons
+
+
+_LIVE_MODEL_MODES = {"partial", "live"}
+
+
+def live_model_verdicts(
+    baseline: Mapping[str, Any], candidate: Mapping[str, Any], verdicts: Mapping[str, Any]
+) -> dict[str, str]:
+    """Scenarios whose verdict (fixed, still failing or diverged) was drawn with the
+    model running live, mapped to that mode. Abstentions are left out: they already
+    say why there is no verdict."""
+    modes = {
+        s["name"]: s.get("mode")
+        for run in (baseline, candidate)
+        for s in run.get("scenarios", [])
+        if s.get("mode") in _LIVE_MODEL_MODES
+    }
+    return {
+        name: modes[name]
+        for name, verdict in verdicts.items()
+        if name in modes
+        and getattr(verdict, "value", verdict) in {"fixed", "still_failing", "diverged"}
+    }
 
 
 _WHAT = {

@@ -224,3 +224,29 @@ def test_the_same_missing_write_after_leaving_the_recording_is_not_still_failing
     # And when the baseline drifted, it never reproduced the failure to compare with.
     drifted = _run([_missing_write(unrecorded=["llm 'user_llm'"])])
     assert classify_reproduction(drifted, _run([_missing_write()])) == {"s": Outcome.CANNOT_REPRODUCE}
+
+
+def test_a_verdict_drawn_with_a_live_model_says_so() -> None:
+    # Partial mode freezes the tools but runs the model live: the verdict holds
+    # for this run only, so it carries a note instead of passing as frozen.
+    from pytracer_runner import explain_reproduction, live_model_verdicts
+
+    base = _run([{"name": "s", "passed": False, "fingerprint": "fp1", "mode": "partial"}])
+    cand = _run([{"name": "s", "passed": True, "mode": "partial"}])
+    verdicts = classify_reproduction(base, cand)
+    assert verdicts == {"s": Outcome.FIXED}
+    assert live_model_verdicts(base, cand, verdicts) == {"s": "partial"}
+    reason = explain_reproduction(base, cand, verdicts)["s"]
+    assert reason.startswith("The model ran live (partial mode)") and "full mode" in reason
+
+
+def test_a_frozen_verdict_and_a_live_mode_abstention_get_no_live_note() -> None:
+    from pytracer_runner import explain_reproduction, live_model_verdicts
+
+    base = _run([{"name": "s", "passed": False, "fingerprint": "fp1", "mode": "full"}])
+    cand = _run([{"name": "s", "passed": True, "mode": "full"}])
+    verdicts = classify_reproduction(base, cand)
+    assert live_model_verdicts(base, cand, verdicts) == {}
+    assert explain_reproduction(base, cand, verdicts) == {}
+    # An abstention keeps its own reason: it already says there is no verdict.
+    assert live_model_verdicts(base, cand, {"s": Outcome.CANNOT_JUDGE}) == {}

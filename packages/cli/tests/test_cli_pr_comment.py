@@ -258,3 +258,16 @@ def test_reasons_replace_the_generic_prompt_edit_note() -> None:
     )
     assert "**Why there is no verdict:**" in body and reason in body
     assert "prompt edit" not in body  # the actual cause was a tool call
+
+
+def test_render_separates_live_model_notes_from_abstentions() -> None:
+    body = render_comment(
+        candidate_ref="fix",
+        baseline_ref="main",
+        verdicts={"a": Outcome.FIXED, "b": Outcome.CANNOT_JUDGE},
+        reasons={"a": "The model ran live (partial mode), so ...", "b": "The branch left it."},
+    )
+    assert "model running live" in body
+    notes = body.split("**Verdicts from a live model:**")[1].split("**Why there is no verdict:**")
+    assert "`a`" in notes[0] and "`b`" not in notes[0]
+    assert "`b`" in notes[1] and "`a`" not in notes[1]

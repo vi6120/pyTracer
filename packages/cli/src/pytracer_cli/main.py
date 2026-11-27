@@ -343,6 +343,13 @@ def reproduce(
         "(it is your own environment, which must already have the project's "
         "dependencies; installing would change it).",
     ),
+    timeout: float | None = typer.Option(
+        None,
+        "--timeout",
+        min=1,
+        help="Seconds each ref's run may take before it is stopped (default: 600 "
+        "local, 900 docker). Raise it when the model runs live and is slow.",
+    ),
 ) -> None:
     """Reproduce a captured failure on another branch.
 
@@ -371,9 +378,9 @@ def reproduce(
 
     executor: Executor
     if isolation == "docker":
-        executor = DockerExecutor()
+        executor = DockerExecutor() if timeout is None else DockerExecutor(timeout=timeout)
     else:
-        executor = LocalExecutor()
+        executor = LocalExecutor() if timeout is None else LocalExecutor(timeout=timeout)
     runner = CrossBranchRunner(GitSourceProvider(repo), executor)
     try:
         baseline_run, candidate, verdicts = run_reproduction(

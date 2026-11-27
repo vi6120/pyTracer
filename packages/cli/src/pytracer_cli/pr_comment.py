@@ -34,6 +34,9 @@ class _CommentClient(Protocol):
     def update_comment(self, comment_id: int, body: str) -> None: ...
 
 
+_NO_VERDICT = {"cannot_judge", "cannot_reproduce"}
+
+
 def _value(outcome: Any) -> str:
     return getattr(outcome, "value", str(outcome))
 
@@ -93,11 +96,21 @@ def render_comment(
         summary = "**" + ", ".join(parts) + " on this branch.**"
 
     reasons = reasons or {}
+    # A reason for a scenario with a verdict is the live-model note; the others
+    # say why there is no verdict.
+    abstained = {n: r for n, r in reasons.items() if _value(verdicts.get(n)) in _NO_VERDICT}
+    noted = {n: r for n, r in reasons.items() if n not in abstained}
     if reasons and not evaluate_changed_prompts:
         # The reasons name the actual divergence (a changed tool call, a new call,
         # or a changed model input); the generic prompt-edit note would mislead.
         changed = {}
-    if reasons:
+    if noted:
+        intro = (
+            f"Reproduced the captured failure on `{candidate_ref}` (baseline "
+            f"`{baseline_ref}`) with the recorded tool responses frozen and the model "
+            f"running live, so a verdict can change from run to run (see below)."
+        )
+    elif reasons:
         intro = (
             f"Reproduced the captured failure on `{candidate_ref}` (baseline "
             f"`{baseline_ref}`) with the recorded responses frozen; where a run left its "
@@ -145,11 +158,17 @@ def render_comment(
             heading,
             *(f"- `{name}`: {', '.join(changed[name])}" for name in sorted(changed)),
         ]
-    if reasons:
+    if noted:
+        lines += [
+            "",
+            "**Verdicts from a live model:**",
+            *(f"- `{name}`: {noted[name]}" for name in sorted(noted)),
+        ]
+    if abstained:
         lines += [
             "",
             "**Why there is no verdict:**",
-            *(f"- `{name}`: {reasons[name]}" for name in sorted(reasons)),
+            *(f"- `{name}`: {abstained[name]}" for name in sorted(abstained)),
         ]
     elif any(_value(v) == "cannot_reproduce" for v in verdicts.values()):
         lines += [

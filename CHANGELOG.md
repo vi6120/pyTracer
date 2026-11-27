@@ -64,6 +64,16 @@
   both runs stayed on their recordings; otherwise the verdict is `cannot_judge`
   (or `cannot_reproduce`). The same error fingerprint still counts despite drift.
   Found by the seeded-bug benchmark.
+- A `reproduce` run stopped by the time limit was reported as "produced no
+  results", followed by whatever the agent printed last, so it read as a crash.
+  It now says the run timed out, and `reproduce --timeout` sets the limit per
+  ref (600 seconds local, 900 docker by default), for a slow live model in
+  partial mode. Found by the seeded-bug benchmark.
+- A `reproduce` verdict in partial or live mode was presented like a frozen one,
+  though the model ran live and can answer differently next time. Such a verdict
+  now carries a note that it came from a live model (in the CLI output and the
+  PR comment), and `run --json` records each scenario's `mode`. Found by the
+  seeded-bug benchmark.
 
 ## 0.1.4
 

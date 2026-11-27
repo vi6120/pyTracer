@@ -45,6 +45,7 @@ def test_changed_model_note_and_json_explain_a_prompt_edit() -> None:
     assert "call_model" in note and "partial mode" in note
     result = CollectionResult("suite", [s])
     assert to_json(result)["scenarios"][0]["changed_models"] == ["call_model"]
+    assert to_json(result)["scenarios"][0]["mode"] == "full"
     assert "Model inputs changed" in to_markdown(result)
 
 

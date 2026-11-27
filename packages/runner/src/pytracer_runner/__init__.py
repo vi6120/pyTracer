@@ -8,6 +8,7 @@ from .runner import (
     ReproduceResult,
     classify_reproduction,
     explain_reproduction,
+    live_model_verdicts,
 )
 from .source import CheckoutError, GitSourceProvider, SourceProvider
 
@@ -23,6 +24,7 @@ __all__ = [
     "SourceProvider",
     "classify_reproduction",
     "explain_reproduction",
+    "live_model_verdicts",
 ]
 
 __version__ = "0.1.4"

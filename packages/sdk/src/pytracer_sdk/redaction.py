@@ -5,6 +5,13 @@ reaches the network layer. The ruleset is intentionally conservative regex -
 API keys, emails, and card numbers - and is applied recursively to nested
 structures. Redacted values are replaced with a stable placeholder so the
 shape of the data is preserved for debugging.
+
+The placeholder keeps the length of what it replaces when it can: a value at least
+as long as ``[redacted:<label>]`` is padded with ``*`` to its own length. Code that
+slices or truncates text (``result[:400]``) then cuts a replayed, redacted value at
+the same place it cut the original, so the replay sends the same input as the
+recording. A shorter value gets the bare placeholder. The cost is that the length
+of a redacted value is kept; ``Redactor(preserve_length=False)`` drops it.
 """
 
 from __future__ import annotations
@@ -15,6 +22,9 @@ from re import Pattern
 from typing import Any
 
 PLACEHOLDER = "[redacted:{label}]"
+# Every placeholder starts with this, so replay can tell a redacted value apart.
+MARKER = "[redacted:"
+PAD = "*"
 MAX_DEPTH = 20  # guard against pathological / cyclic structures
 
 
@@ -41,14 +51,17 @@ class RedactionRule:
         )
         self.validate = validate
 
-    def apply(self, text: str) -> str:
+    def apply(self, text: str, *, preserve_length: bool = False) -> str:
         placeholder = PLACEHOLDER.format(label=self.label)
         validate = self.validate
-        if validate is None:
-            return self.pattern.sub(placeholder, text)
 
         def _repl(match: re.Match[str]) -> str:
-            return placeholder if validate(match.group(0)) else match.group(0)
+            value = match.group(0)
+            if validate is not None and not validate(value):
+                return value
+            if preserve_length and len(value) > len(placeholder):
+                return placeholder + PAD * (len(value) - len(placeholder))
+            return placeholder
 
         return self.pattern.sub(_repl, text)
 
@@ -88,15 +101,22 @@ DEFAULT_RULES: list[RedactionRule] = [
 class Redactor:
     """Applies a set of redaction rules to arbitrary JSON-like values."""
 
-    def __init__(self, rules: list[RedactionRule] | None = None, *, enabled: bool = True) -> None:
+    def __init__(
+        self,
+        rules: list[RedactionRule] | None = None,
+        *,
+        enabled: bool = True,
+        preserve_length: bool = True,
+    ) -> None:
         self.rules = DEFAULT_RULES if rules is None else rules
         self.enabled = enabled
+        self.preserve_length = preserve_length
 
     def redact_text(self, text: str) -> str:
         if not self.enabled:
             return text
         for rule in self.rules:
-            text = rule.apply(text)
+            text = rule.apply(text, preserve_length=self.preserve_length)
         return text
 
     def redact(self, value: Any, _depth: int = 0) -> Any:

@@ -56,3 +56,33 @@ def test_non_string_scalars_pass_through() -> None:
 def test_redaction_can_be_disabled() -> None:
     secret = "sk-abc123DEF456ghi789JKL012mno"
     assert Redactor(enabled=False).redact_text(secret) == secret
+
+
+def test_a_long_value_keeps_its_length_so_slicing_replays_the_same() -> None:
+    # Code that truncates text (result[:N]) must cut a replayed, redacted value at
+    # the same place it cut the original, or the replay sends another input.
+    record = '{"email": "yusuf.rossi7110@example.com", "last_four": "2478"}, "orders": [1]}'
+    redact = Redactor().redact_text
+    out = redact(record)
+    assert len(out) == len(record)
+    assert "[redacted:email]" in out and "example.com" not in out
+    # Cuts before the email and after it (a cut through it is the remaining edge).
+    for cut in (8, 45, 60, len(record)):
+        # Recorded: the original cut, then redacted. Replayed: the redacted value cut.
+        assert redact(record[:cut]) == redact(out[:cut])
+
+
+def test_a_value_shorter_than_the_placeholder_gets_the_bare_placeholder() -> None:
+    assert Redactor().redact_text("a@b.co") == "[redacted:email]"
+
+
+def test_length_preservation_can_be_turned_off() -> None:
+    out = Redactor(preserve_length=False).redact_text("yusuf.rossi7110@example.com")
+    assert out == "[redacted:email]"
+
+
+def test_redacting_twice_changes_nothing() -> None:
+    once = Redactor().redact_text(
+        "mail yusuf.rossi7110@example.com, key sk-abc123DEF456ghi789JKL012mno"
+    )
+    assert Redactor().redact_text(once) == once

@@ -212,6 +212,8 @@ def explain_reproduction(
 
     For ``cannot_judge`` it names where the candidate first left its recording and
     what kind of change that was; for ``cannot_reproduce``, where the baseline did.
+    When the input that changed holds a redacted value, it says redaction may be
+    the cause, since the code read the placeholder and not the original.
     Only a changed model input gets the ``--evaluate-changed-prompts`` advice: a
     changed tool call, or one the recording never made, needs a re-recording.
 
@@ -243,6 +245,12 @@ def explain_reproduction(
                     f" The baseline never reproduced the captured failure: in {mode} mode "
                     "the model runs live and took another path than the recording. Judge "
                     "it in full mode, or re-record from the baseline."
+                )
+            elif _redacted(scenario):
+                # Settings are not the likely cause either: the code read a
+                # redaction placeholder where the recording saw the original.
+                advice = (
+                    " The baseline never reproduced the captured failure." + _REDACTED_ADVICE
                 )
             else:
                 advice = (
@@ -333,7 +341,23 @@ def _why(scenario: Mapping[str, Any], who: str) -> str:
                 " A frozen replay cannot judge a change to the calls themselves; "
                 "re-record the scenario on this branch to judge it."
             )
+    if first.get("redacted") and who == "the branch":
+        sentence += _REDACTED_ADVICE
     return sentence
+
+
+_REDACTED_ADVICE = (
+    " Its input holds a redacted value, which may be why: the recording stores a "
+    "placeholder ([redacted:...]) in place of the original, and code that slices or "
+    "parses that value reads something different on replay. If so, leave the "
+    "matching rule out of the Redactor for this scenario and re-record."
+)
+
+
+def _redacted(scenario: Mapping[str, Any]) -> bool:
+    """True when the first call to leave the recording had a redacted input."""
+    divergences = scenario.get("divergences") or []
+    return bool(divergences and divergences[0].get("redacted"))
 
 
 def _missed(scenario: Mapping[str, Any]) -> bool:

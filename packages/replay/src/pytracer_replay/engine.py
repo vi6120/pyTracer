@@ -20,6 +20,7 @@ from typing import Any
 
 import pytracer_sdk as pytracer
 from pytracer_sdk import InMemoryTransport, Intercept, Resource, Span, SpanKind, SpanStatus, Tracer
+from pytracer_sdk.redaction import MARKER as REDACTION_MARKER
 from pytracer_sdk.tracer import intercepted_span
 
 from .fidelity import (
@@ -30,7 +31,7 @@ from .fidelity import (
     SideEffectLog,
     controlled,
 )
-from .hashing import input_hash
+from .hashing import canonical_json, input_hash
 from .mocks import MockSet, RecordedError, _identifier
 from .sandbox import NetworkSandbox
 
@@ -120,7 +121,8 @@ class ReplayResult:
     live_fallbacks: list[str] = field(default_factory=list)
     # The same misses with why each happened, in order: ``{"call", "kind", "op",
     # "reason", "ran_live"}``, where ``reason`` is ``extra_call``, ``changed_input``
-    # or ``not_recorded`` (see ``MockSet.miss_reason``). The first is where the run
+    # or ``not_recorded`` (see ``MockSet.miss_reason``); a changed input that holds
+    # a redacted value also has ``"redacted": True``. The first is where the run
     # left its recording, which is what a cross-branch verdict reports.
     divergences: list[dict[str, Any]] = field(default_factory=list)
     # Identifiers of ops called concurrently from different OS threads with the same
@@ -294,6 +296,10 @@ class ReplayEngine:
                     "reason": mocks.miss_reason(identifier, inp),
                     "ran_live": False,
                 }
+                if divergence["reason"] == "changed_input" and _holds_redacted(inp):
+                    # The code read a redaction placeholder where the recording
+                    # saw the original value, which may be why the input changed.
+                    divergence["redacted"] = True
                 with se_lock:
                     unrecorded_calls.append(label)
                     divergences.append(divergence)
@@ -413,3 +419,11 @@ class ReplayEngine:
             uninstrumented=(len(mocks) > 0 and not seen_op["any"]),
             evaluated_changed_prompts=self.evaluate_changed_prompts,
         )
+
+
+def _holds_redacted(value: Any) -> bool:
+    """True if a call's input holds a redaction placeholder (``[redacted:...]``)."""
+    try:
+        return REDACTION_MARKER in canonical_json(value)
+    except (TypeError, ValueError):
+        return False

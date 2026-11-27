@@ -109,6 +109,9 @@ def to_json(result: CollectionResult) -> dict[str, Any]:
                 "name": s.name,
                 "passed": s.passed,
                 "status": s.replay.status.value,
+                # The replay mode: in partial or live mode the model ran live, so a
+                # cross-branch verdict from this run is not a frozen result.
+                "mode": s.replay.mode.value,
                 "error_type": s.replay.error_type,
                 "error_message": s.replay.error_message,
                 "config_error": s.config_error,

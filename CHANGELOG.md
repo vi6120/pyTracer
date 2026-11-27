@@ -47,6 +47,15 @@
 
 ### Fixed
 
+- A recording could not replay itself when the code sliced or truncated a value
+  the SDK had redacted: the placeholder (`[redacted:email]`) is shorter than the
+  email it replaced, so `result[:400]` kept more text on replay than when it was
+  recorded, the model input changed, and the baseline read as `cannot_reproduce`
+  with advice to pass `--env-file`. A placeholder now keeps the length of a value
+  at least as long as itself (padded with `*`; `Redactor(preserve_length=False)`
+  turns it off), and a changed input that holds a redacted value is flagged, so
+  the reason names redaction as the likely cause. Found by the seeded-bug
+  benchmark (B3).
 - Partial replay matched a frozen tool call by position even when an id in it
   had changed, as long as the id looked alike: a branch that fixed an order id
   (`#W2378156` instead of `W2378156`) was served the bug's recorded "Order not

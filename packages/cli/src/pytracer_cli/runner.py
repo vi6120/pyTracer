@@ -59,6 +59,9 @@ class ScenarioResult:
     assertions: list[AssertionResult] = field(default_factory=list)
     fingerprint: str | None = None
     config_error: str | None = None
+    # The recording the scenario replayed, so a report can read what a frozen call
+    # cost when it was recorded (a replayed call costs nothing).
+    recording: list[Span] = field(default_factory=list)
 
 
 @dataclass
@@ -288,6 +291,7 @@ def run_scenario(
         replay=result,
         assertions=assertion_results,
         fingerprint=fingerprint(result),
+        recording=spans,
     )
 
 

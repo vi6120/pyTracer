@@ -87,6 +87,97 @@ def retry_chains(spans: list[Span]) -> list[dict[str, Any]]:
     return chains
 
 
+def _step_attempts(spans: list[Span]) -> dict[tuple[str, int], tuple[Span, list[Span]]]:
+    """Each step span and its attempt spans in order, keyed by (step name, occurrence)."""
+    seen: dict[str, int] = {}
+    out: dict[tuple[str, int], tuple[Span, list[Span]]] = {}
+    for step in sorted(spans, key=lambda s: s.start_time_ns):
+        if "pytracer.step.attempts" not in step.attributes:
+            continue
+        occurrence = seen.get(step.name, 0)
+        seen[step.name] = occurrence + 1
+        out[(step.name, occurrence)] = (step, sorted(
+            (
+                s for s in spans
+                if s.parent_span_id == step.span_id and "pytracer.attempt" in s.attributes
+            ),
+            key=lambda s: s.attributes["pytracer.attempt"],
+        ))
+    return out
+
+
+def _total(values: list[Any]) -> Any:
+    """The sum, or None when any value is unknown."""
+    return None if any(v is None for v in values) else sum(values)
+
+
+def retry_steps(spans: list[Span], recording: list[Span] | None = None) -> list[dict[str, Any]]:
+    """Each ``pytracer.step`` of a run: its attempts, which one was accepted, and
+    the tokens and cost spent on attempts that were not used (the waste).
+
+    A frozen replay costs nothing, so a replayed attempt takes its tokens and cost
+    from ``recording``, but only when it sent exactly the recorded attempt's input
+    (it was served that recording); otherwise they stay unknown.
+    """
+    recorded = _step_attempts(recording or [])
+    steps = []
+    for (name, occurrence), (step, attempts) in _step_attempts(spans).items():
+        rejections = {r["attempt"]: r for r in step.attributes.get("pytracer.step.rejections") or []}
+        accepted = step.attributes.get("pytracer.step.accepted")
+        twins = recorded[(name, occurrence)][1] if (name, occurrence) in recorded else []
+        rows = []
+        for span in attempts:
+            number = span.attributes["pytracer.attempt"]
+            tokens, cost, source = span.token_count, span.cost_usd, "run" if span.token_count is not None else None
+            if tokens is None and span.attributes.get("pytracer.replayed"):
+                twin = twins[number - 1] if number <= len(twins) else None
+                if twin is not None and twin.input == span.input:
+                    tokens, cost, source = twin.token_count, twin.cost_usd, "recording"
+            rejection = rejections.get(number)
+            rows.append({
+                "attempt": number,
+                "span_id": span.span_id,
+                "rejected": rejection is not None,
+                "error_type": rejection["error_type"] if rejection else span.error_type,
+                "error": rejection["error"] if rejection else span.error_message,
+                "tokens": tokens,
+                "cost_usd": cost,
+                "tokens_from": source if tokens is not None else None,
+            })
+        wasted = [r for r in rows if r["attempt"] != accepted]
+        steps.append({
+            "step": name,
+            "span_id": step.span_id,
+            "attempts": len(rows),
+            "accepted": accepted,
+            "rejected": sum(r["rejected"] for r in rows),
+            "tokens": _total([r["tokens"] for r in rows]),
+            "wasted_tokens": _total([r["tokens"] for r in wasted]),
+            "wasted_cost_usd": _total([r["cost_usd"] for r in wasted]) if wasted else 0,
+            "attempt_detail": rows,
+        })
+    return steps
+
+
+def step_text(step: dict[str, Any]) -> str:
+    """One line per step: attempts, the accepted one, why others were rejected, the waste."""
+    accepted = f"#{step['accepted']} accepted" if step["accepted"] else "none accepted"
+    rejected = [
+        f"#{r['attempt']} rejected ({r['error_type'] or 'rejected'})"
+        for r in step["attempt_detail"] if r["rejected"]
+    ]
+    if step["wasted_tokens"] is None:
+        waste = "tokens wasted unknown (the calls did not record token counts)"
+    elif step["tokens"]:
+        waste = f"{step['wasted_tokens']:,} of {step['tokens']:,} tokens wasted"
+        if step["wasted_cost_usd"]:
+            waste += f" (${step['wasted_cost_usd']:.4f})"
+    else:
+        waste = "no tokens wasted"
+    attempts = f"{step['attempts']} attempt{'s' if step['attempts'] != 1 else ''}"
+    return f"{step['step']}: {attempts}, {accepted}" + "".join(f"; {r}" for r in rejected) + f"; {waste}"
+
+
 def _chain_text(chain: dict[str, Any]) -> str:
     if chain["kind"] == "http":
         return f"{chain['op']} repeated {chain['text']}"
@@ -137,6 +228,8 @@ def to_json(result: CollectionResult) -> dict[str, Any]:
                 "return_value": _json_value(s.replay.return_value),
                 "spans": [json.loads(span.to_json()) for span in s.replay.spans],
                 "retries": retry_chains(s.replay.spans),
+                # Each retry step: its attempts, the accepted one, and the waste.
+                "retry_steps": retry_steps(s.replay.spans, s.recording),
             }
             for s in result.scenarios
         ],
@@ -211,7 +304,21 @@ def to_markdown(result: CollectionResult) -> str:
     lines += _changed_model_lines(result)
     lines += _side_effect_lines(result)
     lines += _retry_lines(result)
+    lines += _retry_step_lines(result)
     return "\n".join(lines) + "\n"
+
+
+def _retry_step_lines(result: CollectionResult) -> list[str]:
+    """A footer for retry steps: how many attempts each took and what the unused ones cost."""
+    notes = [
+        f"- `{s.name}`: {step_text(step)}"
+        for s in result.scenarios
+        for step in retry_steps(s.replay.spans, s.recording)
+        if step["attempts"] > 1
+    ]
+    if not notes:
+        return []
+    return ["", "**Retry steps (attempts not used are wasted):**", *notes]
 
 
 def _retry_lines(result: CollectionResult) -> list[str]:

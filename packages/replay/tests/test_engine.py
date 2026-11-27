@@ -825,3 +825,40 @@ def test_a_changed_input_without_a_redacted_value_is_not_flagged() -> None:
         _support_agent("1", calls), _recorded_support()
     )
     assert all("redacted" not in d for d in res.divergences)
+
+
+def _retrying_extractor(calls: dict[str, int]) -> Any:
+    """Asks a model until its answer has a valid order id, inside a retry step."""
+    replies = ["W2378156", "#W2378156"]
+
+    @pytracer.op(kind=SpanKind.LLM, name="extractor")
+    def model(prompt: str) -> str:
+        calls["model"] += 1
+        return replies[prompt.count("Fix")]
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="extract")
+    def agent() -> str:
+        prompt = "Extract the order id."
+        with pytracer.step("extract_order") as step:
+            for _ in range(3):
+                answer = model(prompt)
+                if answer.startswith("#W"):
+                    return answer
+                step.reject(f"not an order id: {answer}")
+                prompt += " Fix: it must start with #W."
+        return ""
+
+    return agent
+
+
+def test_a_retry_step_replays_frozen_with_its_attempts_numbered() -> None:
+    rec = _record(_retrying_extractor({"model": 0}))
+    mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+    calls = {"model": 0}
+    res = ReplayEngine(ReplayMode.FULL, strict=True).replay(_retrying_extractor(calls), mocks)
+    assert not res.failed and res.return_value == "#W2378156"
+    assert calls == {"model": 0} and res.divergences == []
+    attempts = [s.attributes.get("pytracer.attempt") for s in res.spans if s.kind is SpanKind.LLM]
+    assert attempts == [1, 2]
+    step = next(s for s in res.spans if "pytracer.step.attempts" in s.attributes)
+    assert step.attributes["pytracer.step.accepted"] == 2

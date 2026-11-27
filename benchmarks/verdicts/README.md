@@ -39,7 +39,11 @@ pinned at `v2.0.0`), and scores `pytracer reproduce` against what really happene
    shows) or `fix` fails live anyway (the model fails the task without the bug),
    the bug cannot be judged on that model. The summary lists it with its live
    pass counts and leaves it out of the score.
-3. **pyTracer's verdict.** `main` is captured live once; then `pytracer reproduce`
+3. **pyTracer's verdict.** `main` is recorded live; the recording must show the
+   bug, failing the same checks as most of `main`'s live runs. A live model
+   sometimes fails another way (it never reaches the write the bug is in), and
+   such a recording cannot tell a fix from no fix, so it is recorded again, up to
+   3 tries; a bug no try shows is reported as masked. Then `pytracer reproduce`
    judges every branch against that recording, under three settings:
    - `strict`: everything frozen, strict;
    - `fallback`: frozen but not strict (a call with no recording runs live), and a
@@ -129,7 +133,7 @@ caches the policy and the tool list; the cap still counts that input at full pri
 
 Results go to `benchmarks/verdicts/results/`: one JSON per bug (every live run,
 every verdict and reason) and `summary.md`, the table per setting. A full run is
-about 125 agent runs, about 4,000 model calls and 25 million tokens.
+about 125 to 135 agent runs, about 4,000 model calls and 25 million tokens.
 
 `BENCH_MODEL=scripted:benchmarks/verdicts/smoke_script_task88.json` replaces the
 model with a fixed conversation for task 88, which checks the plumbing for

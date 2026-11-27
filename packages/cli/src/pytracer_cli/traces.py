@@ -15,6 +15,8 @@ from typing import Any
 import yaml
 from pytracer_sdk.schema import Span
 
+from .report import retry_steps, step_text
+
 
 def parse_entry(items: list[str] | None) -> dict[str, Any]:
     """Parse repeated ``key=value`` options into a dict (values JSON-decoded)."""
@@ -63,12 +65,27 @@ def format_trace_tree(spans: list[Span]) -> str:
             roots.append(span)
 
     lines: list[str] = []
+    # Retry steps: the step's summary on its own line, each attempt's number and
+    # whether it was rejected on the attempt's line.
+    step_notes: dict[str, str] = {}
+    attempt_notes: dict[str, str] = {}
+    for summary in retry_steps(spans):
+        step_notes[summary["span_id"]] = step_text(summary).split(": ", 1)[1]
+        for row in summary["attempt_detail"]:
+            tokens = f", {row['tokens']:,} tokens" if row["tokens"] is not None else ""
+            outcome = f"rejected ({row['error_type'] or 'rejected'})" if row["rejected"] else (
+                "accepted" if row["attempt"] == summary["accepted"] else "not used")
+            attempt_notes[row["span_id"]] = f"attempt {row['attempt']}, {outcome}{tokens}"
 
     def render(span: Span, depth: int) -> None:
         mark = "x" if span.status.value == "error" else " "
         latency = f"{span.latency_ms:.0f}ms" if span.latency_ms is not None else "-"
         label = span.tool_name or span.agent_name or span.name
-        lines.append(f"{'  ' * depth}[{mark}] {span.kind.value:<8} {label} ({latency})")
+        note = step_notes.get(span.span_id) or attempt_notes.get(span.span_id)
+        lines.append(
+            f"{'  ' * depth}[{mark}] {span.kind.value:<8} {label} ({latency})"
+            + (f"  [{note}]" if note else "")
+        )
         for child in children[span.span_id]:
             render(child, depth + 1)
 

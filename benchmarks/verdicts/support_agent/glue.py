@@ -7,6 +7,7 @@ fix it while breaking something else.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .harness import Session
@@ -20,6 +21,9 @@ ORDER_WRITES = (
     "modify_pending_order_payment",
     "return_delivered_order_items",
 )
+
+# An order id as the retail tools write it.
+ORDER_ID = re.compile(r"#W\d{7}")
 
 
 def prepare_args(name: str, args: dict[str, Any]) -> dict[str, Any]:
@@ -46,3 +50,25 @@ def call_tool(session: Session, name: str, args: dict[str, Any]) -> str:
 def history_for_model(history: list[Any]) -> list[Any]:
     """The conversation the model sees: all of it, policy first."""
     return list(history)
+
+
+def run_record(calls: list[tuple[str, dict[str, Any], str]]) -> dict[str, Any]:
+    """What the run reports to its caller once the conversation is over: each order
+    write that worked (its tool and the order id as sent), and a status.
+
+    ``calls`` is every tool call of the run, in order: its name, the arguments as
+    sent, and the result the model was given. Nothing here reaches the model or a
+    tool, so a change to it never changes the run's calls.
+    """
+    made = [(name, args, result) for name, args, result in calls if name in ORDER_WRITES]
+    failed = [name for name, _, result in made if result.startswith("Error")]
+    writes = []
+    for name, args, result in made:
+        if result.startswith("Error"):
+            continue
+        order_id = str(args.get("order_id"))
+        if not ORDER_ID.fullmatch(order_id):
+            raise ValueError(f"not an order id: {order_id!r}")
+        writes.append({"tool": name, "order_id": order_id})
+    status = "failed" if failed else "resolved" if writes else "no_action"
+    return {"status": status, "writes": writes}

@@ -425,7 +425,7 @@ def _run_bugs(
             reported = {s: reproduce(bug, repo, Path(captured["trace"]), s) for s in settings}
         results[bug.key] = {
             "title": bug.title, "task": bug.task_id, "truth": truth, "reproduce": reported,
-            "scores": {s: score(truth["labels"], reported[s]) for s in settings},
+            "scores": {s: score(truth["labels"], v) for s, v in reported.items()},  # none for a masked bug
         }
         (args.out / f"{bug.key}.json").write_text(json.dumps(results[bug.key], indent=1))
 

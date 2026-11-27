@@ -74,6 +74,11 @@
   now carries a note that it came from a live model (in the CLI output and the
   PR comment), and `run --json` records each scenario's `mode`. Found by the
   seeded-bug benchmark.
+- In partial or live mode, a `reproduce` abstention blamed the settings ("pass
+  the run's settings with --env-file") when the baseline left its recording,
+  though the usual cause there is the live model taking another path. It now
+  says so and points to full mode; a branch that left its recording gets the
+  same caveat. Found by the seeded-bug benchmark.
 
 ## 0.1.4
 

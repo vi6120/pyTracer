@@ -21,10 +21,12 @@ python benchmarks/overhead/overhead.py   # about 30 s; your numbers will differ
 ```
 
 Measured on an Apple M1 Pro, Python 3.12, pytracer-sdk 0.1.4 (28 November 2026):
-the SDK adds 9.7 ms per run at the median (about 0.5 ms per span), 0.035% of the 27.6 s
-the recorded run waited on its model. Redaction is about 90% of that cost: without it
-the SDK adds 0.9 ms per run (47 µs per span). Shipping over HTTP costs the agent's
-thread nothing extra, since a background thread sends the spans.
+the SDK adds 3.0 ms per run at the median (about 156 µs per span), 0.011% of the 27.6 s
+the recorded run waited on its model. Most of it is redaction: without it the SDK
+adds 0.9 ms per run (47 µs per span). Shipping over HTTP costs the agent's thread
+nothing extra, since a background thread sends the spans. The first measurement,
+before each redaction rule got a cheap pre-check, was 9.7 ms per run (511 µs per
+span); the pre-checks skip a rule's regex on text it cannot match.
 
 ## Gateway ingestion
 

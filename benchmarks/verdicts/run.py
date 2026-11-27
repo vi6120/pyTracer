@@ -329,7 +329,6 @@ def summary(results: dict[str, Any]) -> str:
         ]
         if not rows:
             continue
-        counts = collections.Counter(s["outcome"] for _, _, s in rows)
         unsafe = sum(s["unsafe"] for _, _, s in rows)
         broken = sum(s["truth"] != "fixed" for _, _, s in rows)
         lines += [f"## {setting}", ""]

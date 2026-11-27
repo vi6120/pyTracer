@@ -225,6 +225,75 @@ class ActiveSpan:
         return self._ctx
 
 
+class StepSpan(ActiveSpan):
+    """One logical step whose model calls are attempts at the same result.
+
+    Open it with :meth:`Tracer.step` (or ``pytracer.step``) around a retry loop,
+    such as a model asked again until its output validates against a Pydantic
+    model. Every model call made directly inside it is numbered as an attempt
+    (``pytracer.attempt`` 1, 2, ...), each later one pointing at the one before
+    (``pytracer.retry_of``), even though each retry sends a different input (the
+    validation error goes back into the prompt). :meth:`reject` records why an
+    attempt was not used. When the step closes it records how many attempts it
+    took (``pytracer.step.attempts``), the rejections
+    (``pytracer.step.rejections``), and which attempt was accepted
+    (``pytracer.step.accepted``: the last one, unless it was rejected or the step
+    raised; otherwise ``None``).
+    """
+
+    def __init__(self, tracer: Tracer, ctx: SpanContext, span: Span) -> None:
+        super().__init__(tracer, ctx, span)
+        self._lock = threading.Lock()
+        self.attempt_ids: list[str] = []
+        self.rejections: list[dict[str, Any]] = []
+        span.attributes["pytracer.step"] = span.name
+        _open_steps[span.span_id] = self
+
+    def add_attempt(self, attempt: ActiveSpan) -> None:
+        with self._lock:
+            number = len(self.attempt_ids) + 1
+            previous = self.attempt_ids[-1] if self.attempt_ids else None
+            self.attempt_ids.append(attempt.span.span_id)
+        attempt.span.attributes["pytracer.step"] = self.span.name
+        attempt.span.attributes["pytracer.attempt"] = number
+        if previous is not None:
+            attempt.span.attributes["pytracer.retry_of"] = previous
+
+    def reject(self, error: BaseException | str) -> None:
+        """Record that the latest attempt's result was not used, and why."""
+        if isinstance(error, BaseException):
+            error_type, message = type(error).__name__, str(error)
+        else:
+            error_type, message = None, error
+        with self._lock:
+            self.rejections.append({
+                "attempt": len(self.attempt_ids),
+                "error_type": error_type,
+                "error": self._tracer.redactor.redact_text(message),
+            })
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        _open_steps.pop(self.span.span_id, None)
+        attempts = len(self.attempt_ids)
+        rejected = {r["attempt"] for r in self.rejections}
+        accepted = (
+            attempts
+            if attempts and attempts not in rejected and self.span.status is not SpanStatus.ERROR
+            else None
+        )
+        self.span.attributes["pytracer.step.attempts"] = attempts
+        self.span.attributes["pytracer.step.rejections"] = list(self.rejections)
+        self.span.attributes["pytracer.step.accepted"] = accepted
+        super().close()
+
+
+# Steps open in this process, by span id: a model call whose parent is one of
+# these is an attempt of that step.
+_open_steps: dict[str, StepSpan] = {}
+
+
 def _call_key(span: Span) -> str:
     """Identifies an op call by what was called and with what, for linking repeats."""
     try:
@@ -262,6 +331,12 @@ class _Attempts:
     def mark(self, active: ActiveSpan) -> None:
         span = active.span
         if span.kind not in _RETRIED_KINDS:
+            return
+        step = _open_steps.get(span.parent_span_id or "")
+        if step is not None and span.kind is SpanKind.LLM:
+            # A model call directly inside a step is one of its attempts, whatever
+            # its input; the step numbers it instead of the same-input rule below.
+            step.add_attempt(active)
             return
         scope = span.parent_span_id or span.trace_id
         key = _call_key(span)
@@ -337,6 +412,13 @@ class Tracer:
             resource=self.resource,
         )
         return ActiveSpan(self, SpanContext(trace_id, span_id), span)
+
+    def step(self, name: str, *, input: Any | None = None) -> StepSpan:
+        """Open a step (use as a context manager): the model calls made directly
+        inside it are attempts at one result, numbered and linked. See
+        :class:`StepSpan`."""
+        active = self.start_span(name, kind=SpanKind.UNKNOWN, input=input)
+        return StepSpan(self, active.context, active.span)
 
     def op(
         self,

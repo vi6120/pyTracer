@@ -7,10 +7,14 @@ bug, and three candidate branches:
 - ``nofix``: the bug, with a cosmetic edit (nothing fixed);
 - ``other``: the bug fixed, and a different bug added.
 
-The expected verdicts are ``fixed``, ``still_failing`` and ``diverged``. They are not
-assumed: the benchmark runs every branch live and records what tau2's own check
-(the database against the gold actions) and the scenario's assertions say, and
-scores pyTracer against that.
+The expected verdicts are ``fixed``, ``still_failing`` and ``diverged``. Whether a
+branch is fixed is measured, not assumed: the benchmark runs every branch live and
+records what tau2's own check (the database against the gold actions) and the
+scenario's assertions say. How a failing branch fails follows from how it was
+built: ``nofix`` behaves exactly as ``main``, so it is still failing; ``other``
+carries a different bug, so if it fails, it diverged. A bug the live model hides
+(``main`` passes anyway, or ``fix`` fails anyway) cannot be scored and is reported
+as masked.
 
 Each edit is ``(old, new)``, applied to the correct glue; an edit whose ``old``
 text is missing fails loudly, so the catalog cannot drift from the glue.
@@ -66,12 +70,16 @@ BUGS: list[Bug] = [
     Bug(
         key="B1",
         title="a write retried after a timeout that had already committed it",
-        task_id="38",
+        # Task 88: the customer cancels outright once the agent finds no 4-foot
+        # shelf. Task 38 left the cancellation to the model's judgement, so most
+        # live runs never cancelled and the bug never showed.
+        task_id="88",
         env={"BENCH_FLAKY_WRITES": "1"},  # the first write times out after it commits
         bug=[(_RETRY_CHECK, _BLIND_RETRY)],
         cosmetic=[("# a timeout is transient: try again", "# timeouts are transient, so retry")],
-        # Fixed retry, but every cancellation is filed with the wrong reason.
-        other=[_prepare('    if name == "cancel_pending_order":\n        args["reason"] = "ordered by mistake"\n')],
+        # Fixed retry, but every cancellation is filed with the wrong reason (the
+        # task's gold reason is "ordered by mistake").
+        other=[_prepare('    if name == "cancel_pending_order":\n        args["reason"] = "no longer needed"\n')],
     ),
     Bug(
         key="B2",

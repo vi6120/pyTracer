@@ -7,15 +7,24 @@ For each seeded bug (``bugs.py``) on its tau2-bench retail task:
 2. Capture ``main`` live once: the recording every replay freezes against.
 3. Ground truth: run every branch live ``--repeats`` times and judge each run by
    the scenario's assertions and tau2's own database check. A branch whose runs
-   pass is truly fixed; one that fails the way ``main`` fails is still failing;
-   one that fails another way diverged (the majority over its repeats).
+   pass (by majority) is truly fixed. How a failing branch fails follows from how
+   it was built, not from comparing live runs (a live model fails a little
+   differently every time): ``nofix`` behaves exactly as ``main``, so it is still
+   failing; ``other`` carries a different bug, so it diverged. A bug the live
+   model hides cannot be scored: if ``main`` passes anyway (the bug never shows)
+   or ``fix`` fails anyway (the model fails the task without the bug), the bug is
+   reported as masked, with its live counts, and left out of the score.
 4. Run ``pytracer reproduce`` for every branch under each setting:
    ``strict`` (everything frozen, strict), ``fallback`` (frozen but not strict: a
    call with no recording runs live, a changed model call too with
    ``--evaluate-changed-prompts``) and ``partial`` (tools frozen, the model live).
 5. Score each reported verdict against the ground truth: correct, an abstention
    (``cannot_judge`` / ``cannot_reproduce``, with its reason), or wrong; and count
-   the unsafe errors, a branch that is not fixed reported ``fixed``.
+   the unsafe errors, a branch that is not fixed reported ``fixed``. In ``partial``
+   the model runs live, so its verdicts are not frozen results; pyTracer says so.
+
+``--rescore <folder>`` recomputes the labels and scores of a finished run from its
+saved JSON, calling no model.
 
 With ``--max-usd`` every live model call is charged to ``<out>/usage.jsonl`` at the
 prices in ``BENCH_PRICE_IN`` / ``BENCH_PRICE_OUT`` (USD per million tokens; all input
@@ -54,6 +63,9 @@ SETTINGS = {
     "partial": {"mode": "partial", "strict": False, "flags": []},
 }
 ABSTAIN = {"cannot_judge", "cannot_reproduce"}
+# Seconds each reproduce run may take: with the model live (partial, or a call that
+# falls back to live), a slow model needs far longer than pyTracer's default.
+REPRODUCE_TIMEOUT = os.environ.get("BENCH_REPRODUCE_TIMEOUT", "3600")
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -173,32 +185,34 @@ def live_truth(bug: Bug, repo: Path, root: Path, repeats: int) -> dict[str, Any]
     return {"runs": runs, "labels": _labels(runs)}
 
 
-def _signature(run: dict[str, Any]) -> tuple[Any, ...]:
-    """How a live run failed: which assertions failed and with what detail (as
-    pyTracer compares failures), whether the database matched the gold one, and
-    the error. Names alone are too coarse: an order never exchanged and one
-    exchanged wrongly both fail ``writes``, with different details."""
-    failed = sorted((n, a["detail"]) for n, a in (run.get("assertions") or {}).items() if not a["passed"])
-    return (tuple(failed), run.get("db_matches_gold"), run.get("error_type"))
-
-
 def _passed(run: dict[str, Any]) -> bool:
     checks = run.get("assertions") or {}
     return bool(checks) and all(a["passed"] for a in checks.values()) and bool(run.get("db_matches_gold"))
 
 
+def _passes(runs: list[dict[str, Any]]) -> str:
+    return f"{sum(_passed(r) for r in runs)}/{len(runs)}"
+
+
+def _majority_pass(runs: list[dict[str, Any]]) -> bool:
+    return 2 * sum(_passed(r) for r in runs) > len(runs)
+
+
 def _labels(runs: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
-    """Each candidate's true outcome, by majority over its live repeats."""
-    baseline = collections.Counter(_signature(r) for r in runs["main"] if not _passed(r))
-    main_signature = baseline.most_common(1)[0][0] if baseline else None
-    labels: dict[str, Any] = {"baseline_fails": sum(not _passed(r) for r in runs["main"])}
+    """Each candidate's true outcome. Whether it is fixed is measured live (the
+    majority of its repeats); how a failing branch fails follows from how it was
+    built (see the module docstring). ``masked`` says why a bug cannot be scored."""
+    labels: dict[str, Any] = {"passes": {b: _passes(r) for b, r in runs.items()}, "masked": None}
+    if _majority_pass(runs["main"]):
+        labels["masked"] = "main passes live: the bug does not show on this task"
+    elif not _majority_pass(runs["fix"]):
+        labels["masked"] = "fix fails live: the model fails the task without the bug"
+    built = {"fix": "fixed", "nofix": "still_failing", "other": "diverged"}
     for branch in BRANCHES:
-        votes = collections.Counter(
-            "fixed" if _passed(r) else ("still_failing" if _signature(r) == main_signature else "diverged")
-            for r in runs[branch]
-        )
-        label, count = votes.most_common(1)[0]
-        labels[branch] = {"label": label, "votes": dict(votes), "unanimous": count == len(runs[branch])}
+        label = "fixed" if _majority_pass(runs[branch]) else built[branch]
+        if branch == "nofix":
+            label = "still_failing"  # a cosmetic edit: it behaves exactly as main
+        labels[branch] = {"label": label, "passes": labels["passes"][branch]}
     return labels
 
 
@@ -208,7 +222,8 @@ def reproduce(bug: Bug, repo: Path, trace: Path, setting: str) -> dict[str, Any]
         command = [
             "pytracer", "reproduce", "--repo", str(repo), "--baseline", "main", "--branch", branch,
             "--collection", f"collection-{setting}.yaml", "--isolation", "local", "--no-install",
-            "--freeze-trace", str(trace), "--trace-dest", "traces/run.jsonl", *SETTINGS[setting]["flags"],
+            "--freeze-trace", str(trace), "--trace-dest", "traces/run.jsonl",
+            "--timeout", REPRODUCE_TIMEOUT, *SETTINGS[setting]["flags"],
         ]
         done = subprocess.run(command, env=_env(bug), capture_output=True, text=True)
         _check_budget()  # a reproduce stopped by the cap has no verdict to score
@@ -233,7 +248,9 @@ def score(truth: dict[str, Any], reported: dict[str, Any]) -> dict[str, Any]:
     out = {}
     for branch in BRANCHES:
         label, verdict = truth[branch]["label"], reported[branch]["verdict"]
-        if verdict in ABSTAIN:
+        if truth.get("masked"):
+            outcome = "masked"
+        elif verdict in ABSTAIN:
             outcome = "abstained"
         elif verdict == label:
             outcome = "correct"
@@ -241,30 +258,70 @@ def score(truth: dict[str, Any], reported: dict[str, Any]) -> dict[str, Any]:
             outcome = "wrong"
         out[branch] = {
             "truth": label, "verdict": verdict, "outcome": outcome,
-            "unsafe": verdict == "fixed" and label != "fixed",
+            "unsafe": outcome != "masked" and verdict == "fixed" and label != "fixed",
         }
     return out
 
 
 def summary(results: dict[str, Any]) -> str:
     lines = ["# Seeded-bug verdict benchmark", ""]
+    masked = {k: r["truth"]["labels"] for k, r in results.items() if r["truth"]["labels"].get("masked")}
+    if masked:
+        lines += ["## Masked by the model (not scored)", "", "| Bug | Task | Why | Live passes |", "|---|---|---|---|"]
+        for key, labels in masked.items():
+            passes = ", ".join(f"{b} {n}" for b, n in labels["passes"].items())
+            lines.append(f"| {key} | {results[key]['task']} | {labels['masked']} | {passes} |")
+        lines.append("")
     for setting in SETTINGS:
-        rows = [(k, b, r["scores"][setting][b]) for k, r in results.items() if setting in r["scores"] for b in BRANCHES]
+        rows = [
+            (k, b, r["scores"][setting][b])
+            for k, r in results.items() if setting in r["scores"] and k not in masked for b in BRANCHES
+        ]
         if not rows:
             continue
         counts = collections.Counter(s["outcome"] for _, _, s in rows)
         unsafe = sum(s["unsafe"] for _, _, s in rows)
+        lines += [f"## {setting}", ""]
+        if SETTINGS[setting]["mode"] != "full":
+            lines += ["The model runs live here, so these verdicts are not frozen results.", ""]
         lines += [
-            f"## {setting}", "",
             f"Broken branches reported fixed: **{unsafe}** of {sum(s['truth'] != 'fixed' for _, _, s in rows)}. "
             f"Correct {counts['correct']}, abstained {counts['abstained']}, wrong {counts['wrong']} (of {len(rows)}).",
-            "", "| Bug | Branch | True outcome | pyTracer | Result | Reason |", "|---|---|---|---|---|---|",
+            "", "| Bug | Branch | True outcome | Live passes | pyTracer | Result | Reason |",
+            "|---|---|---|---|---|---|---|",
         ]
         for key, branch, s in rows:
-            reason = (results[key]["reproduce"][setting][branch].get("reason") or "").replace("|", "/")
-            lines.append(f"| {key} | {branch} | {s['truth']} | {s['verdict']} | {s['outcome']} | {reason} |")
+            reported = results[key]["reproduce"][setting][branch]
+            reason = (reported.get("reason") or "").replace("|", "/")
+            if reported.get("verdict") is None:
+                reason = reason or _first_error(reported.get("stderr") or "")
+            passes = results[key]["truth"]["labels"][branch].get("passes", "")
+            lines.append(f"| {key} | {branch} | {s['truth']} | {passes} | {s['verdict']} | {s['outcome']} | {reason} |")
         lines.append("")
     return "\n".join(lines)
+
+
+def _first_error(stderr: str) -> str:
+    """pyTracer's own error line, for a reproduce that gave no verdict."""
+    for line in stderr.splitlines():
+        if line.startswith("error:"):
+            return line.replace("|", "/")
+    return ""
+
+
+def rescore(folder: Path) -> None:
+    """Recompute labels and scores of a finished run from its saved JSON."""
+    results: dict[str, Any] = {}
+    for path in sorted(folder.glob("B*.json")):
+        result = json.loads(path.read_text())
+        result["truth"]["labels"] = _labels(result["truth"]["runs"])
+        result["scores"] = {s: score(result["truth"]["labels"], v) for s, v in result["reproduce"].items()}
+        path.write_text(json.dumps(result, indent=1))
+        results[path.stem] = result
+    if not results:
+        sys.exit(f"no B*.json in {folder}")
+    (folder / "summary.md").write_text(summary(results))
+    print(summary(results))
 
 
 def main() -> None:
@@ -275,7 +332,11 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=HERE / "results")
     parser.add_argument("--plan", action="store_true", help="print what would run, call no model")
     parser.add_argument("--max-usd", type=float, default=0.0, help="stop before spending more than this")
+    parser.add_argument("--rescore", type=Path, help="recompute a finished run's scores, call no model")
     args = parser.parse_args()
+    if args.rescore:
+        rescore(args.rescore)
+        return
     if args.max_usd:
         if not (os.environ.get("BENCH_PRICE_IN") and os.environ.get("BENCH_PRICE_OUT")):
             sys.exit("--max-usd needs BENCH_PRICE_IN and BENCH_PRICE_OUT (USD per million tokens)")

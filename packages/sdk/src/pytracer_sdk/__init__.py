@@ -25,7 +25,7 @@ from .ids import new_span_id, new_trace_id
 from .recorder import SpanRecorder
 from .redaction import DEFAULT_RULES, RedactionRule, Redactor
 from .schema import Resource, Span, SpanKind, SpanStatus
-from .tracer import ActiveSpan, Intercept, Interceptor, SpanContext, Tracer, _OpMeta
+from .tracer import ActiveSpan, Intercept, Interceptor, SpanContext, StepSpan, Tracer, _OpMeta
 from .transport import HTTPTransport, InMemoryTransport, Transport, TransportError
 
 __all__ = [
@@ -45,6 +45,7 @@ __all__ = [
     "SpanKind",
     "SpanRecorder",
     "SpanStatus",
+    "StepSpan",
     "Tracer",
     "Transport",
     "TransportError",
@@ -57,6 +58,7 @@ __all__ = [
     "set_tracer",
     "shutdown",
     "start_span",
+    "step",
 ]
 
 __version__ = "0.1.4"
@@ -163,6 +165,23 @@ def op(func: Any = None, **kwargs: Any) -> Any:
 def start_span(name: str, **kwargs: Any) -> ActiveSpan:
     """Open a span on the default tracer (use as a context manager)."""
     return get_tracer().start_span(name, **kwargs)
+
+
+def step(name: str, **kwargs: Any) -> StepSpan:
+    """Open a retry step on the default tracer (use as a context manager): every
+    model call made directly inside it is an attempt at one result, numbered and
+    linked, and ``step.reject(error)`` records why an attempt was not used::
+
+        with pytracer.step("extract_order") as step:
+            for _ in range(3):
+                raw = call_model(messages)
+                try:
+                    return Order.model_validate_json(raw)
+                except ValidationError as exc:
+                    step.reject(exc)
+                    messages += [...]  # send the error back
+    """
+    return get_tracer().step(name, **kwargs)
 
 
 def flush(timeout: float | None = DEFAULT_FLUSH_TIMEOUT) -> None:

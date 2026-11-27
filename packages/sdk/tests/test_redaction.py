@@ -86,3 +86,45 @@ def test_redacting_twice_changes_nothing() -> None:
         "mail yusuf.rossi7110@example.com, key sk-abc123DEF456ghi789JKL012mno"
     )
     assert Redactor().redact_text(once) == once
+
+
+def _corpus() -> list[str]:
+    """Seeded text with secrets, near misses and noise, for the pre-check tests."""
+    import random
+
+    rng = random.Random(20261128)
+    alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_.@#:/{}\",+%"
+    texts = [f"value: {secret} done" for _, secret, _ in SECRETS]
+    texts += [
+        "4242-4242-4242-4242", "4 2 4 2 4 2 4 2 4 2 4 2 4 2 4 2", "order #W2378156 on 2026-11-28",
+        "sk-short", "ghp_tooShort", "github_pat_" + "a" * 30, "AKIAIOSFODNN7EXAMPL", "xoxb-1234567890",
+        "user@host", "a@b.co", '{"email": "yusuf.rossi7110@example.com", "last_four": "2478"}',
+    ]
+    for _ in range(3000):
+        noise = "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 120)))
+        if rng.random() < 0.3:
+            secret = rng.choice(SECRETS)[1]
+            cut = rng.randint(0, len(noise))
+            noise = noise[:cut] + secret + noise[cut:]
+        texts.append(noise)
+    return texts
+
+
+def test_pre_checks_never_change_what_is_redacted() -> None:
+    from pytracer_sdk.redaction import DEFAULT_RULES, RedactionRule
+
+    plain = [RedactionRule(r.label, r.pattern, validate=r.validate) for r in DEFAULT_RULES]
+    for preserve in (True, False):
+        fast, slow = Redactor(preserve_length=preserve), Redactor(plain, preserve_length=preserve)
+        for text in _corpus():
+            assert fast.redact_text(text) == slow.redact_text(text), text
+
+
+def test_each_pre_check_holds_wherever_its_pattern_matches() -> None:
+    from pytracer_sdk.redaction import DEFAULT_RULES
+
+    for rule in DEFAULT_RULES:
+        assert rule.may_match is not None
+        for text in _corpus():
+            for match in rule.pattern.finditer(text):
+                assert rule.may_match(match.group(0)), (rule.label, match.group(0))

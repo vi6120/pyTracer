@@ -1,0 +1,10 @@
+{
+  "user-simulator": [
+    {"content": "Hi, I'm Daiki Silva, daiki.silva6295@example.com. Please cancel my order #W8835847, I ordered it by mistake."},
+    {"content": "Thanks! ###STOP###"}
+  ],
+  "support-agent": [
+    {"tool_calls": [{"name": "cancel_pending_order", "arguments": {"order_id": "#W8835847", "reason": "ordered by mistake"}}]},
+    {"content": "Your order #W8835847 is cancelled."}
+  ]
+}

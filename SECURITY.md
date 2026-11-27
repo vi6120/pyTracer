@@ -12,7 +12,10 @@ the same principles scale up.
   (API keys, emails, card numbers, and your own patterns) over span inputs and
   outputs *before anything leaves the process*, so secrets are scrubbed at the
   source rather than in storage. See `pytracer_sdk.redaction`. This is the
-  hardest part of the problem and it is handled in the client.
+  hardest part of the problem and it is handled in the client. A placeholder
+  keeps the length of the value it replaces (so replayed code that truncates
+  text behaves as it did when recorded); `Redactor(preserve_length=False)` drops
+  the length too.
 - **Per-project authentication.** Every span batch is authenticated by an API
   key that maps to a project; an invalid or missing key is rejected before any
   span is processed.

@@ -34,9 +34,14 @@ class RedactionRule:
     An optional ``validate`` callable gates replacement: a match is redacted only
     when ``validate(match_text)`` is true. This lets a broad pattern (such as the
     card-number regex) avoid false positives on ordinary long numbers.
+
+    An optional ``may_match`` callable is a cheap test run before the regex: when
+    it returns false the regex is skipped. It must be true for every text the
+    pattern could match (a necessary condition, such as "contains @" for an email),
+    or a secret would go unredacted; it only saves time, never changes the output.
     """
 
-    __slots__ = ("label", "pattern", "validate")
+    __slots__ = ("label", "may_match", "pattern", "validate")
 
     def __init__(
         self,
@@ -44,14 +49,18 @@ class RedactionRule:
         pattern: str | Pattern[str],
         *,
         validate: Callable[[str], bool] | None = None,
+        may_match: Callable[[str], bool] | None = None,
     ) -> None:
         self.label = label
+        self.may_match = may_match
         self.pattern: Pattern[str] = (
             re.compile(pattern) if isinstance(pattern, str) else pattern
         )
         self.validate = validate
 
     def apply(self, text: str, *, preserve_length: bool = False) -> str:
+        if self.may_match is not None and not self.may_match(text):
+            return text
         placeholder = PLACEHOLDER.format(label=self.label)
         validate = self.validate
 
@@ -86,15 +95,41 @@ def _luhn_ok(text: str) -> bool:
     return total % 10 == 0
 
 
-# Order matters: more specific patterns first.
+# The start every card match must have: 13 digits, at most one space or hyphen
+# between each pair. Searching for it is cheap; the card regex itself is not.
+_CARD_RUN = re.compile(r"\d(?:[ -]?\d){12}")
+_GITHUB_PREFIXES = ("ghp_", "gho_", "ghu_", "ghs_", "ghr_")
+
+
+def _may_be_github_token(text: str) -> bool:
+    return ("gh" in text and any(p in text for p in _GITHUB_PREFIXES)) or "github_pat_" in text
+
+
+# Order matters: more specific patterns first. Each ``may_match`` is something
+# every match must contain (a prefix, an "@", a run of 13 digits), so the regex
+# only runs on text that could hold a secret: the SDK redacts every span's input
+# and output on the agent's thread, and most text holds none.
 DEFAULT_RULES: list[RedactionRule] = [
     # Common provider API keys (OpenAI sk-..., Anthropic, GitHub, AWS, Slack, generic bearer).
-    RedactionRule("api_key", r"\bsk-[A-Za-z0-9_-]{16,}\b"),
-    RedactionRule("api_key", r"\b(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{20,}\b"),
-    RedactionRule("api_key", r"\bAKIA[0-9A-Z]{16}\b"),
-    RedactionRule("api_key", r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
-    RedactionRule("credit_card", r"\b(?:\d[ -]?){13,19}\b", validate=_luhn_ok),
-    RedactionRule("email", r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
+    RedactionRule("api_key", r"\bsk-[A-Za-z0-9_-]{16,}\b", may_match=lambda t: "sk-" in t),
+    RedactionRule(
+        "api_key",
+        r"\b(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{20,}\b",
+        may_match=_may_be_github_token,
+    ),
+    RedactionRule("api_key", r"\bAKIA[0-9A-Z]{16}\b", may_match=lambda t: "AKIA" in t),
+    RedactionRule("api_key", r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b", may_match=lambda t: "xox" in t),
+    RedactionRule(
+        "credit_card",
+        r"\b(?:\d[ -]?){13,19}\b",
+        validate=_luhn_ok,
+        may_match=lambda t: _CARD_RUN.search(t) is not None,
+    ),
+    RedactionRule(
+        "email",
+        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+        may_match=lambda t: "@" in t,
+    ),
 ]
 
 

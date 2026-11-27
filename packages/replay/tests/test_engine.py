@@ -777,3 +777,51 @@ def test_miss_reason_tells_extra_changed_and_new_calls_apart() -> None:
     assert mocks.miss_reason("tool:lookup", {"q": "a"}) == "extra_call"
     assert mocks.miss_reason("tool:lookup", {"q": "b"}) == "changed_input"
     assert mocks.miss_reason("tool:refund", {"q": "a"}) == "not_recorded"
+
+
+def _truncating_agent() -> Any:
+    """Looks a customer up and passes the first 45 characters to the model."""
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="get_user")
+    def get_user() -> str:
+        return '{"email": "yusuf.rossi7110@example.com", "last_four": "2478"}'
+
+    @pytracer.op(kind=SpanKind.LLM, name="agent_llm")
+    def agent_llm(context: str) -> str:
+        return f"reply to {context}"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="support")
+    def agent() -> str:
+        return agent_llm(get_user()[:45])
+
+    return agent
+
+
+def test_code_that_truncates_a_redacted_value_replays_its_own_recording() -> None:
+    rec = _record(_truncating_agent())
+    mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+    res = ReplayEngine(ReplayMode.FULL, strict=True).replay(_truncating_agent(), mocks)
+    assert not res.failed and res.divergences == []
+
+
+def test_a_changed_input_holding_a_redacted_value_is_flagged(monkeypatch: Any) -> None:
+    # Without length preservation the placeholder is shorter than the email, so the
+    # truncation keeps more text on replay and the model input changes.
+    from pytracer_sdk.redaction import Redactor
+
+    monkeypatch.setitem(Redactor.__init__.__kwdefaults__, "preserve_length", False)
+    rec = _record(_truncating_agent())
+    mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+    res = ReplayEngine(ReplayMode.FULL, strict=True).replay(_truncating_agent(), mocks)
+    assert res.failed and res.error_type == "MissingMockError"
+    assert res.divergences[0]["call"] == "llm 'agent_llm'"
+    assert res.divergences[0]["reason"] == "changed_input"
+    assert res.divergences[0]["redacted"] is True
+
+
+def test_a_changed_input_without_a_redacted_value_is_not_flagged() -> None:
+    calls = {"tool": 0, "model": 0}
+    res = ReplayEngine(ReplayMode.FULL, strict=False, sandbox=False).replay(
+        _support_agent("1", calls), _recorded_support()
+    )
+    assert all("redacted" not in d for d in res.divergences)

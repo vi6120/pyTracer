@@ -46,6 +46,7 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -322,19 +323,23 @@ def summary(results: dict[str, Any]) -> str:
     for setting in SETTINGS:
         rows = [
             (k, b, r["scores"][setting][b])
-            for k, r in results.items() if setting in r["scores"] and k not in masked for b in BRANCHES
+            for k, r in sorted(results.items(), key=lambda kv: _bug_order(kv[0]))
+            if setting in r["scores"] and k not in masked
+            for b in BRANCHES
         ]
         if not rows:
             continue
         counts = collections.Counter(s["outcome"] for _, _, s in rows)
         unsafe = sum(s["unsafe"] for _, _, s in rows)
+        broken = sum(s["truth"] != "fixed" for _, _, s in rows)
         lines += [f"## {setting}", ""]
         if SETTINGS[setting]["mode"] != "full":
             lines += ["The model runs live here, so these verdicts are not frozen results.", ""]
         lines += [
-            f"Broken branches reported fixed: **{unsafe}** of {sum(s['truth'] != 'fixed' for _, _, s in rows)}. "
-            f"Correct {counts['correct']}, abstained {counts['abstained']}, wrong {counts['wrong']} (of {len(rows)}).",
-            "", "| Bug | Branch | True outcome | Live passes | pyTracer | Result | Reason |",
+            f"Broken branches reported fixed: **{unsafe}** of {broken} "
+            f"(95% upper bound on the unsafe rate: {_pct(_interval(unsafe, broken)[1])}).",
+            "", *_scores(rows), "", *_by_shape(results, rows), "",
+            "| Bug | Branch | True outcome | Live passes | pyTracer | Result | Reason |",
             "|---|---|---|---|---|---|---|",
         ]
         for key, branch, s in rows:
@@ -346,6 +351,82 @@ def summary(results: dict[str, Any]) -> str:
             lines.append(f"| {key} | {branch} | {s['truth']} | {passes} | {s['verdict']} | {s['outcome']} | {reason} |")
         lines.append("")
     return "\n".join(lines)
+
+
+def _bug_order(key: str) -> tuple[int, str]:
+    """B2 before B10."""
+    digits = "".join(c for c in key if c.isdigit())
+    return (int(digits) if digits else 0, key)
+
+
+def _binom_cdf(k: int, n: int, p: float) -> float:
+    """P(X <= k) for X ~ Binomial(n, p)."""
+    return sum(math.comb(n, i) * p**i * (1 - p) ** (n - i) for i in range(k + 1))
+
+
+def _interval(k: int, n: int, alpha: float = 0.05) -> tuple[float, float]:
+    """Two-sided exact (Clopper-Pearson) interval for k successes in n trials."""
+    if n == 0:
+        return 0.0, 1.0
+
+    def solve(f: Any, target: float) -> float:  # f(p) rises with p: find f(p) = target
+        lo, hi = 0.0, 1.0
+        for _ in range(80):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if f(mid) < target else (lo, mid)
+        return (lo + hi) / 2
+
+    # Lower: P(X >= k) = alpha/2. Upper: P(X <= k) = alpha/2, i.e. P(X > k) = 1 - alpha/2.
+    lower = 0.0 if k == 0 else solve(lambda p: 1 - _binom_cdf(k - 1, n, p), alpha / 2)
+    upper = 1.0 if k == n else solve(lambda p: 1 - _binom_cdf(k, n, p), 1 - alpha / 2)
+    return lower, upper
+
+
+def _pct(x: float) -> str:
+    return f"{100 * x:.0f}%"
+
+
+def _share(k: int, n: int) -> str:
+    lo, hi = _interval(k, n)
+    return f"{k} of {n} | {_pct(k / n) if n else '-'} | {_pct(lo)} to {_pct(hi)}"
+
+
+def _scores(rows: list[tuple[str, str, dict[str, Any]]]) -> list[str]:
+    """Correct, abstained and wrong with 95% intervals, and how far `fixed` can be trusted."""
+    n = len(rows)
+    counts = collections.Counter(s["outcome"] for _, _, s in rows)
+    said_fixed = [s for _, _, s in rows if s["verdict"] == "fixed"]
+    truly_fixed = [s for _, _, s in rows if s["truth"] == "fixed"]
+    right = sum(s["truth"] == "fixed" for s in said_fixed)
+    caught = sum(s["verdict"] == "fixed" for s in truly_fixed)
+    return [
+        "| Verdicts | Count | Share | 95% interval |",
+        "|---|---|---|---|",
+        f"| Correct | {_share(counts['correct'], n)} |",
+        f"| Abstained | {_share(counts['abstained'], n)} |",
+        f"| Wrong | {_share(counts['wrong'], n)} |",
+        f"| `fixed` precision (reported fixed, and fixed) | {_share(right, len(said_fixed))} |",
+        f"| `fixed` recall (fixed, and reported fixed) | {_share(caught, len(truly_fixed))} |",
+    ]
+
+
+def _by_shape(results: dict[str, Any], rows: list[tuple[str, str, dict[str, Any]]]) -> list[str]:
+    """The same verdicts split by the shape of each bug's fix (bugs.py)."""
+    shapes = {b.key: b.shape for b in BUGS}
+    groups: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    for key, _, s in rows:
+        groups[results[key].get("shape") or shapes.get(key, "unknown")].append(s)
+    lines = [
+        "| Shape of the fix | Branches | Correct | Abstained | Wrong | Unsafe |",
+        "|---|---|---|---|---|---|",
+    ]
+    for shape, scores in sorted(groups.items()):
+        c = collections.Counter(s["outcome"] for s in scores)
+        lines.append(
+            f"| {shape} | {len(scores)} | {c['correct']} | {c['abstained']} | {c['wrong']} "
+            f"| {sum(s['unsafe'] for s in scores)} |"
+        )
+    return lines
 
 
 def _first_error(stderr: str) -> str:

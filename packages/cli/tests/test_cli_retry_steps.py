@@ -95,3 +95,28 @@ def test_traces_show_marks_the_step_and_each_attempt() -> None:
     assert "extract_order" in tree and "3 attempts, #3 accepted" in tree
     assert "attempt 1, rejected (ValueError), 1,200 tokens" in tree
     assert "attempt 3, accepted, 1,100 tokens" in tree
+
+
+def test_a_retry_step_over_a_provider_response_reports_its_waste_with_no_token_code() -> None:
+    # The model call returns an OpenAI-style response; its usage is read by default.
+    from types import SimpleNamespace
+
+    answers = iter(["W1", "#W2378156"])
+
+    @pytracer.op(kind=SpanKind.LLM, name="extractor")
+    def model(prompt: str) -> Any:
+        return SimpleNamespace(text=next(answers), usage=SimpleNamespace(total_tokens=1500))
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="extract")
+    def agent() -> str:
+        with pytracer.step("extract_order") as step:
+            for _ in range(2):
+                answer = model("Extract the order id.").text
+                if answer.startswith("#W"):
+                    return answer
+                step.reject(ValueError("not an order id"))
+        return ""
+
+    spans = ReplayEngine(ReplayMode.LIVE).replay(agent, MockSet()).spans
+    (step,) = retry_steps(spans)
+    assert step["tokens"] == 3000 and step["wasted_tokens"] == 1500

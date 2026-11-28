@@ -10,6 +10,17 @@
   numbered, linked, with `step.reject(error)` recording why an attempt was not used
   and the step recording the attempts, the rejections and the accepted attempt.
   Without it, those calls were unrelated spans that all looked successful.
+- **Cut-point replay (experimental).** `pytracer run --cut-point` and `pytracer
+  reproduce --cut-point` (or `cut_point: true` on a scenario) serve the recording up to
+  the first call that leaves it, then run that call and every later tool and model
+  call live, so a fix that changes the calls gets a verdict (`fixed`, `still_failing`
+  or `diverged`) from that live run instead of `cannot_judge`; the verdict says it
+  came from a live run. A write served from the recording before the cut still means
+  `cannot_judge`, since the live run then starts from a state the recording does not
+  describe. `run --json` reports `cut_at`, `live_after_cut` and
+  `frozen_writes_before_cut`. On the seeded-bug benchmark's call-changing bugs
+  (scripted), it took the correct verdicts from 5 of 15 to 14 of 15, with no wrong
+  verdict.
 - **Token counts on your own model calls.** An `@op(kind=SpanKind.LLM)` function
   that returns a provider response (OpenAI, Anthropic, LangChain, or a dict of the
   same) now records its token count from the response's usage, and

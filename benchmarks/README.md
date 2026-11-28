@@ -4,6 +4,7 @@
 | --- | --- |
 | [`verdicts/`](verdicts/README.md) | When pyTracer says a branch fixed a bug, is it right? (seeded bugs on tau2-bench) |
 | [`overhead/`](#sdk-overhead) | How much time does the SDK add to an agent run? |
+| [`storage/`](#trace-storage) | What does a trace cost to keep, and how much of it repeats? |
 | this page | How much can one ingestion gateway take? (k6 + Prometheus) |
 
 ## SDK overhead
@@ -27,6 +28,25 @@ adds 0.9 ms per run (47 µs per span). Shipping over HTTP costs the agent's thre
 nothing extra, since a background thread sends the spans. The first measurement,
 before each redaction rule got a cheap pre-check, was 9.7 ms per run (511 µs per
 span); the pre-checks skip a rule's regex on text it cannot match.
+
+## Trace storage
+
+`storage/storage.py` measures trace files as written: bytes per span and per run,
+raw and compressed (gzip, zstd, xz), and what a store that keeps each repeated value
+(a message, a tool result, the policy) once by its hash would save, within a run and
+across runs. `storage/results/summary.md` is the measurement below.
+
+```bash
+python benchmarks/storage/storage.py                       # the committed fixture
+python benchmarks/storage/storage.py path/to/*.jsonl ...   # your own traces
+```
+
+Measured on 9 recorded benchmark runs (GPT-5.2 and Opus 5.5 on tau2-bench retail, 174
+spans, 1.2 MiB; 28 November 2026): a run is about 108 KiB as written, 6.8 KiB per span,
+because every model call resends the policy and the conversation so far. That
+repetition compresses very well: zstd makes traces 16x smaller (gzip 13.5x, xz 18x),
+while storing each repeated value once saves only about 3x (2.9x within a run, 3.6x
+across runs), most of which compression already captures.
 
 ## Gateway ingestion
 

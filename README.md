@@ -181,7 +181,10 @@ pytracer record <trace_id> --agent myapp.agents:run --entry task="summarize the 
 
 `record` writes the trace's spans to JSONL and creates a **collection**: a small
 YAML file naming the agent to run, the recorded trace to mock from, and the
-assertions that should hold.
+assertions that should hold. With `--zstd` it writes the trace compressed
+(`.jsonl.zst`), about 16 times smaller, since an agent resends its prompt and the
+conversation on every model call; `pytracer run` and `reproduce` read either form.
+Before Python 3.14 this needs `pip install "pytracer-cli[zstd]"`.
 
 ```yaml
 # tests/collection.yaml

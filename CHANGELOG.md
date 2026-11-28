@@ -17,6 +17,12 @@
 
 ### Added
 
+- **Compressed traces.** A trace file ending in `.jsonl.zst` is read transparently
+  by `pytracer run`, `reproduce` and `record --from-file`, and `pytracer record
+  --zstd` writes one. Traces repeat the prompt and conversation on every model call,
+  so zstd makes them about 16 times smaller (measured on the seeded-bug benchmark's
+  recordings, `benchmarks/storage`). zstd is built into Python 3.14; before that,
+  `pip install "pytracer-cli[zstd]"`. Plain `.jsonl` works as before.
 - **Retry steps.** `pytracer.step(name)` groups the model calls of a retry loop,
   such as a model asked again until its output validates against a Pydantic model,
   into one chain of attempts even though each retry sends a different input:

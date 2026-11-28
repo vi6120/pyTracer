@@ -29,6 +29,8 @@ Issues = "https://github.com/vi6120/pyTracer/issues"
 stores = ["pytracer-stores==0.1.4"]
 # The reproduce command needs the cross-branch runner.
 runner = ["pytracer-runner==0.1.4"]
+# Compressed traces (.jsonl.zst) before Python 3.14, which has zstd built in.
+zstd = ["zstandard>=0.22"]
 # The pytest plugin (run collections as native pytest tests) needs pytest.
 pytest = ["pytest>=8.0"]
 dev = [

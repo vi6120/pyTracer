@@ -47,6 +47,12 @@ the same principles scale up.
   (Trivy), and the code itself for unsafe patterns (Semgrep), and fail the build on
   what they find (`.github/workflows/security.yml`). Dependabot keeps dependencies and
   pinned actions up to date.
+- **Signed, traceable releases.** Packages are published from GitHub Actions by
+  PyPI Trusted Publishing (no stored token), and every file on PyPI carries a PEP 740
+  attestation tying it to the workflow run that built it. Each GitHub Release also
+  carries the same files and an SBOM (CycloneDX) of what `pytracer-all` installs, all
+  attested with GitHub's build provenance (`gh attestation verify <file> --repo
+  vi6120/pyTracer`).
 
 ## What you must configure
 

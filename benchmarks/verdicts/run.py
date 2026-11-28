@@ -65,7 +65,11 @@ SETTINGS = {
     "strict": {"mode": "full", "strict": True, "flags": []},
     "fallback": {"mode": "full", "strict": False, "flags": ["--evaluate-changed-prompts"]},
     "partial": {"mode": "partial", "strict": False, "flags": []},
+    # Added after the pre-registration and reported apart (amendment 1): frozen up to
+    # the first call that leaves the recording, live from there. Not run by default.
+    "cut-point": {"mode": "full", "strict": True, "flags": ["--cut-point"]},
 }
+PREREGISTERED_SETTINGS = ("strict", "fallback", "partial")
 ABSTAIN = {"cannot_judge", "cannot_reproduce"}
 # Seconds each reproduce run may take: with the model live (partial, or a call that
 # falls back to live), a slow model needs far longer than pyTracer's default.
@@ -334,6 +338,10 @@ def summary(results: dict[str, Any]) -> str:
         lines += [f"## {setting}", ""]
         if SETTINGS[setting]["mode"] != "full":
             lines += ["The model runs live here, so these verdicts are not frozen results.", ""]
+        elif setting == "cut-point":
+            lines += ["From the first call that left the recording these runs are live, tools "
+                      "included, so those verdicts are not frozen results. Added after the "
+                      "pre-registration and reported apart.", ""]
         lines += [
             f"Broken branches reported fixed: **{unsafe}** of {broken} "
             f"(95% upper bound on the unsafe rate: {_pct(_interval(unsafe, broken)[1])}).",
@@ -454,7 +462,8 @@ def rescore(folder: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--bugs", default=",".join(b.key for b in BUGS))
-    parser.add_argument("--settings", default=",".join(SETTINGS))
+    parser.add_argument("--settings", default=",".join(PREREGISTERED_SETTINGS),
+                        help="comma-separated; also: cut-point (added analysis, not run by default)")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--out", type=Path, default=HERE / "results")
     parser.add_argument("--plan", action="store_true", help="print what would run, call no model")

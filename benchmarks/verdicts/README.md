@@ -25,7 +25,14 @@ pinned at `v2.0.0`), and scores `pytracer reproduce` against what really happene
   | B8 | a write counts as failed when it worked | 0 (exchange) |
   | B9 | a guard rejects valid order ids | 1 (exchange) |
   | B10 | cancellations are left out of the run's record | 88 (cancel) |
+  | B11 | an upstream error from a tool ends the run ([openai-agents#879](https://github.com/openai/openai-agents-python/issues/879)) | 13 (return) |
+  | B12 | text sent alongside tool calls is dropped ([llama_index#21124](https://github.com/run-llama/llama_index/issues/21124)) | 0 (exchange) |
+  | B13 | the model gets an empty tool result ([openai-agents#2110](https://github.com/openai/openai-agents-python/issues/2110)) | 88 (cancel) |
+  | B14 | tool arguments silently dropped ([crewAI#5275](https://github.com/crewAIInc/crewAI/issues/5275)) | 0 (exchange) |
+  | B15 | the policy never reaches the model ([llama_index#20872](https://github.com/run-llama/llama_index/issues/20872)) | 13 (return) |
 
+  B11 to B15 are ported from real, fixed issues in agent frameworks, chosen by the
+  rule and seeded draw in [PREREGISTRATION.md](PREREGISTRATION.md) (amendment 1).
   B1 to B5 are fixed by changing the calls the agent makes; B6 to B10 by changing
   only `run_record`, which builds the record after the conversation, so their fix
   leaves every call unchanged and a frozen replay can judge it.

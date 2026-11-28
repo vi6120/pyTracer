@@ -159,3 +159,76 @@ Written now so they can be checked; a prediction that fails is reported as faile
   the fix is reported beside it, never instead of it.
 - **Every run is reported**, including stopped, crashed and repeated ones, in
   `results/` with its `run.log`.
+
+---
+
+## Amendment 1 (28 November 2026, before any v2 run)
+
+The one amendment section 3 allows: the real-issue candidates, the pick, and the
+ports, with every departure from the text above disclosed.
+
+### The candidates
+
+The pool under section 3's rule: closed issues mentioning "tool", labelled bug
+(AutoGen marks bugs with GitHub's issue type, so its query used `type:Bug`), opened
+1 June 2025 to 27 November 2026, in the five frameworks: **782**. Screened in
+creation order until 15 passed (212 screened). The full list and a reason for every
+issue screened are published with the v2 results (`candidates.md`,
+`screening-log.csv`). Disclosed departures:
+
+1. **Added: the issue must be closed by a merged pull request**, so that "the fix is
+   in that code" can be checked by reading the fix (231 of the 782). Added after
+   reading the first few issues, some of which were closed with no fix attached.
+2. **Criterion 3 was read as "observable by the pre-registered checks"**: a port must
+   be able to fail the scenario's assertions (one candidate was rejected because its
+   only effect was the wording of the final reply, which no check reads).
+3. **A second pass** over issues first rejected on their title alone, with the same
+   criteria, added two candidates and rejected three.
+
+### The pick
+
+The planned picker, Nagesha (GitHub `sfdnas-adm`), has contributed to pyTracer, so he
+is not "a developer outside the project". The pre-registered fallback was used:
+`random.Random(20261127).sample(candidates, 5)`, Python 3.12.4.
+
+One drawn candidate, crewAI#5460 (a greedy `{.*}` pattern matching non-JSON text),
+**cannot fail in tau2**: every tau2 tool result is pure JSON, where that pattern
+happens to work. Passing it in screening was an error. Before redrawing, this rule was
+fixed: one replacement from the 10 unpicked candidates,
+`random.Random(20261128).sample(remaining, 1)`, and if that one cannot be ported
+either, the next seed. The redraw gave crewAI#5275.
+
+### The ports
+
+| Bug | Issue | Fix | Task | Shape of the fix | Notes |
+|---|---|---|---|---|---|
+| B11 | [openai-agents-python#879](https://github.com/openai/openai-agents-python/issues/879) | [#2598](https://github.com/openai/openai-agents-python/pull/2598) | 13 | adds a call | the first order lookup fails upstream (502) through a new harness flag, `BENCH_FLAKY_LOOKUPS`, as B1's timeout uses `BENCH_FLAKY_WRITES`; the bug raises it and ends the run |
+| B12 | [llama_index#21124](https://github.com/run-llama/llama_index/issues/21124) | [#21180](https://github.com/run-llama/llama_index/pull/21180) | 0 | changes the model's input | text sent alongside tool calls is dropped from the history |
+| B13 | [openai-agents-python#2110](https://github.com/openai/openai-agents-python/issues/2110) | [#2112](https://github.com/openai/openai-agents-python/pull/2112) | 88 | changes the model's input | the order lookup's result reaches the model as an empty string (the effect of the original, ported onto a tool) |
+| B14 | [crewAI#5275](https://github.com/crewAIInc/crewAI/issues/5275) | [#5415](https://github.com/crewAIInc/crewAI/pull/5415) | 0 | changes arguments | the arguments are looked up with a truthy default, so the tool runs with none |
+| B15 | [llama_index#20872](https://github.com/run-llama/llama_index/issues/20872) | [#20873](https://github.com/run-llama/llama_index/pull/20873) | 13 | changes the model's input | the policy (system prompt) never reaches the model |
+
+Each has `fix`, `nofix` and `other` branches under the rules above (`bugs.py`).
+Scripted runs at no cost: B11 and B14 fail on `main` as intended; B12, B13 and B15
+need a live model to show and are masked under a script.
+
+**Outside review of the ports.** We wrote the ports, so a reviewer with no link to
+pyTracer (anydesk) checks each one against its issue and fix (same mechanism, same
+fix, fair variants). Their verdicts are published with v2, whatever they say.
+
+### Other changes since the tag
+
+- **Harness fixes, before any v2 run:** the recording now keeps the run's return
+  value, so the record check on B6 to B10 judges the real record (#170); a masked bug
+  no longer crashes the run (#166).
+- **Reporting as specified:** the exact intervals, `fixed` precision and recall, and
+  the breakdown by fix shape (#171).
+- **Added analyses, reported apart and not changing any metric or prediction above:**
+  time and money saved by replay against live runs, from the v2 data; a scripted
+  mutation benchmark (many mechanical variants of `glue.py`, scripted conversations,
+  no model spend), which tests the verdict logic at scale but not live-model
+  behaviour; and an opt-in cut-point replay mode for fixes that change the calls,
+  whose verdicts come from a live model and are labelled so.
+- **DeepSeek-V3.2 is dropped** from the published runs: its first attempt was
+  stopped before this pre-registration, and GPT-5.2 and Opus 5.5 are the two runs
+  in section 4.

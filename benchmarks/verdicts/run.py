@@ -45,13 +45,16 @@ from __future__ import annotations
 
 import argparse
 import collections
+import itertools
 import json
 import math
 import os
 import shutil
+import statistics
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -182,6 +185,7 @@ def capture(bug: Bug, repo: Path, out: Path, main_runs: list[dict[str, Any]]) ->
     target = _bug_failure(main_runs)
     tries: list[dict[str, Any]] = []
     for _ in range(CAPTURE_TRIES):
+        started = time.monotonic()
         done = subprocess.run(
             [sys.executable, str(HERE / "child.py"), "capture", str(repo), bug.task_id, str(trace),
              str(repo / "collection-strict.yaml")],
@@ -191,32 +195,44 @@ def capture(bug: Bug, repo: Path, out: Path, main_runs: list[dict[str, Any]]) ->
         lines = [line for line in done.stdout.splitlines() if line.startswith("{")]
         if done.returncode != 0 or not lines:
             raise RuntimeError(f"capture of {bug.key} failed:\n{done.stderr[-2000:]}")
-        tries.append(json.loads(lines[-1]))
+        tries.append({**json.loads(lines[-1]), "seconds": round(time.monotonic() - started, 1)})
         if target is not None and _failure(tries[-1]) == target:
             return {"trace": str(trace), "tries": tries, "shows_bug": True}
     return {"trace": str(trace), "tries": tries, "shows_bug": False}
+
+
+def _live_once(bug: Bug, checkout: Path, branch: str) -> dict[str, Any]:
+    """One live run of a branch, judged, with how long it took."""
+    started = time.monotonic()
+    done = subprocess.run(
+        [sys.executable, str(HERE / "child.py"), "live", str(checkout), bug.task_id,
+         str(checkout / "collection-strict.yaml")],
+        env=_env(bug), capture_output=True, text=True,
+    )
+    # The agent's own failures are inside the JSON; a child that exits non-zero is a
+    # broken harness, and must stop the benchmark rather than count as a failed run.
+    _check_budget()
+    lines = [line for line in done.stdout.splitlines() if line.startswith("{")]
+    if done.returncode != 0 or not lines:
+        raise RuntimeError(f"live check of {bug.key}/{branch} failed:\n{done.stderr[-2000:]}")
+    return {**json.loads(lines[-1]), "seconds": round(time.monotonic() - started, 1)}
 
 
 def live_truth(bug: Bug, repo: Path, root: Path, repeats: int) -> dict[str, Any]:
     runs: dict[str, list[dict[str, Any]]] = {}
     for branch in ("main", *BRANCHES):
         checkout = repo if branch == "main" else _checkout(repo, branch, root)
-        runs[branch] = []
-        for _ in range(repeats):
-            done = subprocess.run(
-                [sys.executable, str(HERE / "child.py"), "live", str(checkout), bug.task_id,
-                 str(checkout / "collection-strict.yaml")],
-                env=_env(bug), capture_output=True, text=True,
-            )
-            # The agent's own failures are inside the JSON; a child that exits
-            # non-zero is a broken harness, and must stop the benchmark rather
-            # than count as a failed run.
-            _check_budget()
-            lines = [line for line in done.stdout.splitlines() if line.startswith("{")]
-            if done.returncode != 0 or not lines:
-                raise RuntimeError(f"live check of {bug.key}/{branch} failed:\n{done.stderr[-2000:]}")
-            runs[branch].append(json.loads(lines[-1]))
+        runs[branch] = [_live_once(bug, checkout, branch) for _ in range(repeats)]
     return {"runs": runs, "labels": _labels(runs)}
+
+
+def baseline_runs(bug: Bug, repo: Path, root: Path, repeats: int) -> dict[str, list[dict[str, Any]]]:
+    """The baseline's own live runs of each candidate branch (PREREGISTRATION.md
+    section 5): separate from the ground-truth runs, which it must not be scored on."""
+    return {
+        branch: [_live_once(bug, _checkout(repo, branch, root), branch) for _ in range(repeats)]
+        for branch in BRANCHES
+    }
 
 
 def _passed(run: dict[str, Any]) -> bool:
@@ -277,7 +293,9 @@ def reproduce(bug: Bug, repo: Path, trace: Path, setting: str) -> dict[str, Any]
             "--freeze-trace", str(trace), "--trace-dest", "traces/run.jsonl",
             "--timeout", REPRODUCE_TIMEOUT, *SETTINGS[setting]["flags"],
         ]
+        started = time.monotonic()
         done = subprocess.run(command, env=_env(bug), capture_output=True, text=True)
+        seconds = round(time.monotonic() - started, 1)
         _check_budget()  # a reproduce stopped by the cap has no verdict to score
         verdict, reason = None, None
         name = f"task-{bug.task_id}"
@@ -287,7 +305,7 @@ def reproduce(bug: Bug, repo: Path, trace: Path, setting: str) -> dict[str, Any]
                 verdict = parts[1]
             elif line.startswith(f"{name}: "):
                 reason = line[len(name) + 2:]
-        results[branch] = {"verdict": verdict, "reason": reason, "exit": done.returncode}
+        results[branch] = {"verdict": verdict, "reason": reason, "exit": done.returncode, "seconds": seconds}
         if verdict is None:
             # pyTracer's own output, without tau2's debug log, so the cause is kept.
             errors = [line for line in done.stderr.splitlines() if "| DEBUG" not in line]
@@ -357,7 +375,98 @@ def summary(results: dict[str, Any]) -> str:
             passes = results[key]["truth"]["labels"][branch].get("passes", "")
             lines.append(f"| {key} | {branch} | {s['truth']} | {passes} | {s['verdict']} | {s['outcome']} | {reason} |")
         lines.append("")
+    lines += _baseline_lines(results)
     return "\n".join(lines)
+
+
+BASELINE_NS = (1, 3, 5)
+
+
+def _baseline_verdict(runs: tuple[dict[str, Any], ...]) -> str:
+    """The rerun-live baseline: fixed if most runs pass, else still failing (it cannot
+    tell a different failure from the same one)."""
+    return "fixed" if _majority_pass(list(runs)) else "still_failing"
+
+
+def baseline_scores(results: dict[str, Any], n: int) -> dict[str, float] | None:
+    """Expected correct, wrong and unsafe verdicts of the baseline at N live runs,
+    averaged over every subset of N of each branch's baseline runs, with its average
+    tokens and seconds per verdict. None when the bugs lack N baseline runs."""
+    totals = {"verdicts": 0.0, "correct": 0.0, "wrong": 0.0, "unsafe": 0.0, "tokens": 0.0, "seconds": 0.0}
+    for r in results.values():
+        labels, runs = r["truth"]["labels"], r["truth"].get("baseline_runs")
+        if labels.get("masked") or not runs:
+            continue
+        for branch in BRANCHES:
+            pool = runs.get(branch) or []
+            if len(pool) < n:
+                return None
+            truth = labels[branch]["label"]
+            verdicts = [_baseline_verdict(subset) for subset in itertools.combinations(pool, n)]
+            totals["verdicts"] += 1
+            totals["correct"] += sum(v == truth for v in verdicts) / len(verdicts)
+            totals["wrong"] += sum(v != truth for v in verdicts) / len(verdicts)
+            totals["unsafe"] += sum(v == "fixed" and truth != "fixed" for v in verdicts) / len(verdicts)
+            totals["tokens"] += n * statistics.mean(x.get("tokens") or 0 for x in pool)
+            totals["seconds"] += n * statistics.mean(x.get("seconds") or 0 for x in pool)
+    return totals if totals["verdicts"] else None
+
+
+def pytracer_cost(results: dict[str, Any], setting: str) -> dict[str, float] | None:
+    """pyTracer's verdicts in ``setting`` on the bugs the baseline judged, with the
+    recording's tokens and time shared by its three branches, plus each replay's time."""
+    totals = {"verdicts": 0.0, "correct": 0.0, "abstained": 0.0, "wrong": 0.0, "unsafe": 0.0,
+              "tokens": 0.0, "seconds": 0.0}
+    for r in results.values():
+        if r["truth"]["labels"].get("masked") or not r["truth"].get("baseline_runs"):
+            continue
+        scores, reported = r["scores"].get(setting), r["reproduce"].get(setting)
+        if not scores:
+            continue
+        tries = (r["truth"].get("capture") or {}).get("tries") or []
+        share_tokens = sum(t.get("tokens") or 0 for t in tries) / len(BRANCHES)
+        share_seconds = sum(t.get("seconds") or 0 for t in tries) / len(BRANCHES)
+        for branch in BRANCHES:
+            outcome = scores[branch]["outcome"]
+            totals["verdicts"] += 1
+            totals[outcome if outcome in ("correct", "abstained") else "wrong"] += 1
+            totals["unsafe"] += bool(scores[branch]["unsafe"])
+            totals["tokens"] += share_tokens
+            totals["seconds"] += share_seconds + (reported[branch].get("seconds") or 0)
+    return totals if totals["verdicts"] else None
+
+
+def _baseline_lines(results: dict[str, Any]) -> list[str]:
+    rows = [(n, baseline_scores(results, n)) for n in BASELINE_NS]
+    found = [(n, t) for n, t in rows if t]
+    if not found:
+        return []
+    lines = [
+        "## Baseline: rerun the branch live N times", "",
+        "The obvious alternative: run the branch live N times and call it fixed if most runs "
+        "pass. Its runs are separate from the ground truth; for N below 5 every subset of the "
+        "5 runs is scored and averaged. It cannot tell a new failure from the same one, so a "
+        "failing `other` branch counts as wrong for it. pyTracer's cost is its recording, "
+        "shared by the three branches, plus each replay (a strict replay calls no model). "
+        "Tokens include the simulated customer's.", "",
+        "| Method | Verdicts | Correct | Abstained | Wrong | Unsafe | Tokens per verdict | Minutes per verdict |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for setting in ("strict", "cut-point"):
+        t = pytracer_cost(results, setting)
+        if t:
+            v = t["verdicts"]
+            lines.append(
+                f"| pyTracer {setting} | {v:.0f} | {t['correct']:.0f} | {t['abstained']:.0f} | "
+                f"{t['wrong']:.0f} | {t['unsafe']:.0f} | {t['tokens'] / v:,.0f} | {t['seconds'] / v / 60:.1f} |"
+            )
+    for n, t in found:
+        v = t["verdicts"]
+        lines.append(
+            f"| rerun live, N = {n} | {v:.0f} | {t['correct']:.1f} | 0 | {t['wrong']:.1f} | "
+            f"{t['unsafe']:.1f} | {t['tokens'] / v:,.0f} | {t['seconds'] / v / 60:.1f} |"
+        )
+    return [*lines, ""]
 
 
 def _bug_order(key: str) -> tuple[int, str]:
@@ -465,6 +574,9 @@ def main() -> None:
     parser.add_argument("--settings", default=",".join(PREREGISTERED_SETTINGS),
                         help="comma-separated; also: cut-point (added analysis, not run by default)")
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--baseline-repeats", type=int, default=0,
+                        help="live runs per branch for the rerun-live baseline, separate from the "
+                             "ground truth (the v2 GPT-5.2 run uses 5)")
     parser.add_argument("--out", type=Path, default=HERE / "results")
     parser.add_argument("--plan", action="store_true", help="print what would run, call no model")
     parser.add_argument("--max-usd", type=float, default=0.0, help="stop before spending more than this")
@@ -505,6 +617,8 @@ def _run_bugs(
         repo = build_repo(bug, root)
         if args.plan:
             live_runs = f"{4 * args.repeats} live runs, then 1 to {CAPTURE_TRIES} recordings"
+            if args.baseline_repeats:
+                live_runs += f", then {len(BRANCHES) * args.baseline_repeats} baseline live runs"
             print(f"{bug.key} task {bug.task_id}: repo {repo}; {live_runs}, "
                   f"then reproduce x{len(BRANCHES)} per setting {settings}")
             continue
@@ -519,6 +633,8 @@ def _run_bugs(
         reported = {}
         if captured is not None and captured["shows_bug"]:
             reported = {s: reproduce(bug, repo, Path(captured["trace"]), s) for s in settings}
+            if args.baseline_repeats:
+                truth["baseline_runs"] = baseline_runs(bug, repo, root, args.baseline_repeats)
         results[bug.key] = {
             "title": bug.title, "task": bug.task_id, "shape": bug.shape, "truth": truth, "reproduce": reported,
             "scores": {s: score(truth["labels"], v) for s, v in reported.items()},  # none for a masked bug

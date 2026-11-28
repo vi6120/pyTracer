@@ -6,6 +6,7 @@
 | [`overhead/`](#sdk-overhead) | How much time does the SDK add to an agent run? |
 | [`storage/`](#trace-storage) | What does a trace cost to keep, and how much of it repeats? |
 | [`determinism/`](#determinism) | How often does a live test change its answer, and does a replay ever? |
+| [`mutation/`](#scripted-mutation-benchmark) | Are pyTracer's verdicts right on many mechanical bugs, not just 15 hand-written ones? |
 | this page | How much can one ingestion gateway take? (k6 + Prometheus) |
 
 ## SDK overhead
@@ -67,6 +68,29 @@ BENCH_MODEL=openai/gpt-5.2 python benchmarks/determinism/determinism.py   # plus
 
 The replays need tau2-bench and the model names the run recorded (they are part of
 every recorded input), but no key. Results go to `determinism/results/`.
+
+## Scripted mutation benchmark
+
+The seeded-bug benchmark judges 15 hand-written bugs with a live model: realistic,
+but a small sample. `mutation/mutation.py` judges many more, made by rule
+(`mutation/mutants.py`: every flipped comparison, emptied string, removed statement,
+swapped exception and so on in the agent's glue, 70 mutants) on six scripted
+scenarios, where the model and the customer reply from a fixed script, so every run
+is free and repeatable. Each mutant a scenario shows becomes a case with the same
+branches as the live benchmark: `fix` (the correct glue), `nofix` (the mutant plus a
+comment-only line) and `other` (another mutant, drawn with a fixed seed from those
+that fail the scenario a different way). Every branch is replayed in the strict,
+fallback, partial and cut-point settings and scored against what the scripted runs
+show. Mutants no scenario shows are listed as survivors.
+
+```bash
+python benchmarks/mutation/mutation.py --list       # the mutants
+python benchmarks/mutation/mutation.py --jobs 4     # all cases; about an hour, no API key
+```
+
+It tests pyTracer's verdict logic on many bug shapes; it says nothing about how
+live models behave, and is reported apart from the live benchmark. Cases that share
+a mutant are not independent, so the summary also counts unsafe verdicts per mutant.
 
 ## Gateway ingestion
 

@@ -90,6 +90,10 @@ calls unchanged, so `fixed` can be tested) is pre-registered in
 [PREREGISTRATION.md](PREREGISTRATION.md): its bugs, metrics and predictions were
 fixed before any v2 run.
 
+`--baseline-repeats 5` adds the rerun-live baseline: 5 more live runs of each branch,
+separate from the ground truth, scored at N = 1, 3 and 5 against pyTracer's verdicts,
+tokens and minutes per verdict (the "Baseline" table in `summary.md`).
+
 `python benchmarks/verdicts/run.py --rescore <out folder>` recomputes the labels and
 scores of a finished run from its saved JSON without calling a model.
 `BENCH_REPRODUCE_TIMEOUT` (seconds, 3600 by default) is how long each reproduce run

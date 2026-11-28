@@ -90,6 +90,12 @@
 
 ### Fixed
 
+- **`pytracer reproduce` quoted the collection path into its shell command.** The
+  runner builds one shell command (it chains steps with `&&`, and `--install` takes a
+  shell command), and pasted `--collection` into it unquoted, so a path with a space
+  broke the run and a path containing shell syntax (`x.yaml; ...`) ran it, in both the
+  local and the Docker executor. The path is now quoted. Found by the new Semgrep scan.
+
 - A recording could not replay itself when the code sliced or truncated a value
   the SDK had redacted: the placeholder (`[redacted:email]`) is shorter than the
   email it replaced, so `result[:400]` kept more text on replay than when it was

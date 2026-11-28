@@ -58,6 +58,12 @@
 
 ### Changed
 
+- **Every package is now Apache-2.0.** `pytracer-gateway` and `pytracer-registry`,
+  released under AGPL-3.0-or-later up to 0.1.4, are Apache-2.0 from this release, so
+  teams whose policies rule out AGPL can self-host them. Published versions keep
+  their license. The hosted service and its enterprise features remain a separate
+  commercial product.
+
 - Redaction is about 3x faster on the agent's thread: each default rule first runs
   a cheap check that every match must pass (a key prefix, an `@`, a run of 13
   digits) and skips its regex when the text cannot hold that secret. A rule's

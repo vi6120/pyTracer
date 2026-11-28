@@ -88,3 +88,23 @@ jobs:
             aquasec/trivy:0.65.0@sha256:a22415a38938a56c379387a8163fcb0ce38b10ace73e593475d3658d578b2436 image \
             --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 \
             pytracer-gateway:ci
+
+  sast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # Static analysis of our own code with Semgrep's maintained Python rules.
+      # Pinned like pip-audit above, so the gate does not change when Semgrep is
+      # released; bump deliberately. Only ERROR-severity findings fail the build;
+      # the rest are printed for review. --metrics=off sends no usage data.
+      - name: Semgrep
+        run: |
+          python -m pip install "semgrep==1.185.0"
+          semgrep scan --config p/python --severity ERROR --error --metrics=off \
+            --exclude "benchmarks/verdicts/results" packages benchmarks
+

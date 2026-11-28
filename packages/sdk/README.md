@@ -112,6 +112,12 @@ extract_order: 3 attempts, #3 accepted; #1 rejected (ValidationError);
 #2 rejected (ValidationError); 2,500 of 3,600 tokens wasted
 ```
 
+Token counts come from the model call's result: an `@op(kind=SpanKind.LLM)` function
+that returns a provider response (OpenAI, Anthropic, LangChain, or the same as a
+dict) has its usage read automatically, and `@op(..., tokens=reader)` reads any other
+shape. The framework adapters count tokens themselves. A function that returns only
+text has no count, and the waste is then reported as unknown.
+
 A frozen replay calls no model, so a replayed attempt reports the tokens it cost when
 it was recorded, and only when it sent exactly the recorded attempt's input;
 otherwise the waste is reported as unknown.

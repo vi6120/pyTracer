@@ -16,7 +16,7 @@
 <p align="center">
   <a href="https://pypi.org/project/pytracer-all/"><img src="https://img.shields.io/pypi/v/pytracer-all.svg?color=2563eb" alt="PyPI"></a>
   <img src="https://img.shields.io/pypi/pyversions/pytracer-sdk.svg" alt="Python versions 3.10">
-  <img src="https://img.shields.io/badge/license-Apache--2.0%20%7C%20AGPL--3.0-blue.svg" alt="License">
+  <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License">
 </p>
 
 pyTracer is an **agent test and replay platform**. It captures what an AI agent
@@ -399,13 +399,10 @@ quality gates, and the pull-request process, and note that a one-time
 
 ## License
 
-pyTracer is split-licensed. The client toolchain you embed and run yourself (the
-SDK, framework adapters, replay engine, runner, and CLI) is **Apache-2.0**; the
-hosted-server components (`pytracer-gateway` and `pytracer-registry`) are
-**AGPL-3.0-or-later**. So you can embed the SDK in a proprietary agent freely,
-while a competing hosted service built on the server components must share its
-changes. See [LICENSING.md](LICENSING.md) for the per-package breakdown and what
-it means in practice.
+pyTracer is open source under **Apache-2.0**, every package: embed it, run it,
+self-host it, including in closed-source and commercial products. Releases of
+`pytracer-gateway` and `pytracer-registry` up to 0.1.4 were AGPL-3.0-or-later; they
+are Apache-2.0 from the next release. See [LICENSING.md](LICENSING.md).
 
 The license covers the code; the **pyTracer** name and logo are trademarks. See
 [TRADEMARK.md](TRADEMARK.md) for how you may use them (you can say "works with

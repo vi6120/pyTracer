@@ -10,9 +10,8 @@ By participating you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md)
 - **Sign the CLA.** The first time you open a pull request, a bot will ask you to
   sign the [Contributor License Agreement](CLA.md) by leaving a one-line comment.
   You only sign once. We cannot merge contributions without it.
-- **Know the license split.** Most of the project is Apache-2.0, but the
-  `pytracer-gateway` and `pytracer-registry` packages are AGPL-3.0. A change to
-  those packages is contributed under AGPL-3.0. See [LICENSING.md](LICENSING.md).
+- **Know the license.** Every package is Apache-2.0, and contributions are made
+  under Apache-2.0. See [LICENSING.md](LICENSING.md).
 
 ## Ways to contribute
 

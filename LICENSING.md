@@ -1,54 +1,46 @@
 # Licensing
 
-pyTracer is split-licensed by component. Most of it is permissive so you can
-embed and run it freely; the hosted-server components are copyleft so a
-competing hosted service has to share its changes.
+pyTracer is open source under the **Apache-2.0** license, every package. You can
+embed it, run it, self-host it and build on it, including in closed-source and
+commercial products. The full text is in [LICENSE](LICENSE); each package also
+carries a copy.
 
-## Which package is under which license
-
-| Package | License | Why |
+| Package | License | What it is |
 | --- | --- | --- |
-| `pytracer-sdk` | Apache-2.0 | You embed it in your own (often proprietary) agent, so it must be permissive. |
-| `pytracer-langgraph` | Apache-2.0 | Instrumentation adapter that runs inside your agent. |
-| `pytracer-openai-agents` | Apache-2.0 | Instrumentation adapter that runs inside your agent. |
-| `pytracer-crewai` | Apache-2.0 | Instrumentation adapter that runs inside your agent. |
-| `pytracer-autogen` | Apache-2.0 | Instrumentation adapter that runs inside your agent. |
-| `pytracer-replay` | Apache-2.0 | The test/replay engine you run locally and in CI. |
+| `pytracer-sdk` | Apache-2.0 | The instrumentation SDK you embed in your agent. |
+| `pytracer-langgraph` | Apache-2.0 | Adapter for LangGraph / LangChain. |
+| `pytracer-openai-agents` | Apache-2.0 | Adapter for the OpenAI Agents SDK. |
+| `pytracer-crewai` | Apache-2.0 | Adapter for CrewAI. |
+| `pytracer-agent-framework` | Apache-2.0 | Adapter for Microsoft Agent Framework. |
+| `pytracer-claude-agent-sdk` | Apache-2.0 | Adapter for the Claude Agent SDK. |
+| `pytracer-autogen` | Apache-2.0 | Adapter for AutoGen (archived upstream). |
+| `pytracer-replay` | Apache-2.0 | The test and replay engine you run locally and in CI. |
 | `pytracer-runner` | Apache-2.0 | The cross-branch runner you run locally and in CI. |
-| `pytracer-cli` | Apache-2.0 | You run it locally and in CI. |
-| `pytracer-stores` | Apache-2.0 | Client library for reading traces/mocks. |
-| `pytracer-all` (meta) | Apache-2.0 | Convenience bundle; see the note below. |
-| **`pytracer-gateway`** | **AGPL-3.0-or-later** | The ingestion server someone would host as a service. |
-| **`pytracer-registry`** | **AGPL-3.0-or-later** | The collaboration platform someone would host as a service. |
+| `pytracer-cli` | Apache-2.0 | The command-line tool. |
+| `pytracer-stores` | Apache-2.0 | Trace store (ClickHouse) and mock store (PostgreSQL) clients. |
+| `pytracer-gateway` | Apache-2.0 | The ingestion server, self-hosted or hosted. |
+| `pytracer-registry` | Apache-2.0 | The collaboration registry for shared test collections. |
+| `pytracer-all` (meta) | Apache-2.0 | Installs every package above. |
 
-The full texts are in [LICENSE](LICENSE) (Apache-2.0, the default) and in each
-AGPL package's own `LICENSE` file
-([gateway](packages/gateway/LICENSE), [registry](packages/registry/LICENSE)).
+## Earlier releases of the server packages
 
-## What this means in practice
+Up to and including 0.1.4, `pytracer-gateway` and `pytracer-registry` were
+released under **AGPL-3.0-or-later**. Those published versions keep that license;
+the change to Apache-2.0 applies from the next release onward. Every other
+package has always been Apache-2.0.
 
-- **Embedding the SDK or an adapter** in your own agent, even a closed-source or
-  commercial one: Apache-2.0, no source obligations.
-- **Running the CLI, replay, or runner** locally or in CI: Apache-2.0, no source
-  obligations.
-- **Using the hosted pyTracer service**: you are a user of the service and take
-  on no source obligations.
-- **Self-hosting the gateway or registry**: AGPL-3.0 permits this. If you modify
-  them and make the modified version available to others over a network, you
-  must offer those users the corresponding source of your modified version under
-  the AGPL. Running an unmodified copy for your own organization does not
-  trigger a public-source obligation.
+## What is not open source
 
-## The meta-package
-
-`pip install pytracer-all` is a convenience bundle that pulls in every component,
-each under its own license (this is mere aggregation, not a single combined
-license). Because the bundle includes `pytracer-gateway` and `pytracer-registry`,
-installing it brings in AGPL-3.0 components alongside the Apache-2.0 ones. Install
-only `pytracer-sdk` (Apache-2.0) if you want just the client in your agent.
+The hosted pyTracer service and its enterprise features (single sign-on, role-based
+access, audit logs, retention controls, side-effect governance, the hosted registry
+interface) are a separate, commercial product and are not in this repository.
 
 ## Contributions
 
-Contributions are accepted under the license of the package they modify. A
-Contributor License Agreement may be required before contributions are merged so
-the project can keep its relicensing and commercial-licensing options open.
+Contributions are accepted under Apache-2.0. Contributors sign the
+[Contributor License Agreement](CLA.md) once, on their first pull request.
+
+## Trademarks
+
+The license covers the code; the **pyTracer** name and logo are trademarks. See
+[TRADEMARK.md](TRADEMARK.md).

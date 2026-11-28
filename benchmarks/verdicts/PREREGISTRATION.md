@@ -213,8 +213,10 @@ Scripted runs at no cost: B11 and B14 fail on `main` as intended; B12, B13 and B
 need a live model to show and are masked under a script.
 
 **Outside review of the ports.** We wrote the ports, so a reviewer with no link to
-pyTracer (anydesk) checks each one against its issue and fix (same mechanism, same
-fix, fair variants). Their verdicts are published with v2, whatever they say.
+pyTracer (askdesk) checks each one against its issue and fix (same mechanism, same
+fix, fair variants). Their verdicts are published with v2, whatever they say. (When
+tagged, this named the reviewer's organisation as "anydesk", which was wrong;
+corrected on 28 November 2026. Nothing else in the review plan changed.)
 
 ### Other changes since the tag
 

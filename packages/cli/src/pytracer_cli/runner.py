@@ -39,6 +39,7 @@ from pytracer_replay import (
 from pytracer_sdk.schema import Span, SpanKind, SpanStatus
 
 from .collection import AssertionSpec, Collection, ScenarioSpec, load_collection
+from .trace_io import read_trace_text
 
 
 class ScenarioError(RuntimeError):
@@ -109,11 +110,15 @@ def load_agent(path: str) -> Callable[..., object]:
 
 
 def load_trace(path: Path) -> list[Span]:
-    """Load a JSONL span recording (one Span per line)."""
+    """Load a JSONL span recording (one Span per line), zstd-compressed if it ends in .zst."""
     if not path.exists():
         raise ScenarioError(f"trace file not found: {path}")
+    try:
+        text = read_trace_text(path)
+    except RuntimeError as exc:  # a .zst trace with no zstd installed
+        raise ScenarioError(str(exc)) from exc
     spans: list[Span] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         line = line.strip()
         if line:
             spans.append(Span.from_json(line))

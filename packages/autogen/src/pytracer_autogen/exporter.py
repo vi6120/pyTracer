@@ -12,6 +12,7 @@ GenAI-instrumented library, not just AutoGen.
 from __future__ import annotations
 
 import time
+import warnings
 from collections import OrderedDict
 from weakref import WeakKeyDictionary
 from collections.abc import Sequence
@@ -332,8 +333,29 @@ def exporter_for(provider: Any) -> PyTracerSpanExporter | None:
 _installed_seams: Any = None
 
 
+DEPRECATION = (
+    "pytracer-autogen is deprecated: Microsoft has archived AutoGen, which gets no bug or "
+    "security fixes. The adapter keeps working and stays tested until it is removed, not "
+    "before pyTracer 0.3.0. Port the agent to Microsoft Agent Framework and use "
+    "pytracer-agent-framework; the recipe is "
+    "https://github.com/vi6120/pyTracer/tree/main/examples/autogen-to-maf"
+)
+_warned = False
+
+
+def _warn_deprecated() -> None:
+    """Warn once per process (a FutureWarning, so it shows by default)."""
+    global _warned
+    if not _warned:
+        _warned = True
+        warnings.warn(DEPRECATION, FutureWarning, stacklevel=3)
+
+
 def install(tracer: Tracer | None = None, *, replayable: bool = False) -> TracerProvider:
     """Register a pyTracer TracerProvider as the global OpenTelemetry provider.
+
+    Deprecated with AutoGen itself (archived upstream): warns once per process; see
+    ``DEPRECATION``.
 
     AutoGen emits its GenAI model and tool spans through the *global* provider, so
     register globally (before building the runtime) to capture them. It also
@@ -351,6 +373,7 @@ def install(tracer: Tracer | None = None, *, replayable: bool = False) -> Tracer
     """
     from opentelemetry import trace as otel_trace
 
+    _warn_deprecated()
     provider, exporter = _build_provider(tracer)
     otel_trace.set_tracer_provider(provider)
     # Model content from GenAI instrumentation arrives as log records (P7).

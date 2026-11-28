@@ -41,3 +41,20 @@ def test_no_autogen_installed_keeps_the_default_path(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(versions, "version", missing)
     assert versions.autogen_version() is None
     assert versions.captures_by_seams() is False and versions.seams_agent_turns() is False
+
+
+def test_install_warns_once_that_the_adapter_is_deprecated() -> None:
+    """AutoGen is archived upstream: install() says so, once per process."""
+    import warnings
+
+    from pytracer_autogen import exporter
+
+    exporter._warned = False
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        exporter._warn_deprecated()
+        exporter._warn_deprecated()
+    deprecations = [w for w in caught if issubclass(w.category, FutureWarning)]
+    assert len(deprecations) == 1
+    assert "archived" in str(deprecations[0].message)
+    assert "pytracer-agent-framework" in str(deprecations[0].message)

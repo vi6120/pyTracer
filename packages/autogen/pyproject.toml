@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "pytracer-autogen"
 version = "0.1.4"
-description = "pyTracer adapter for AutoGen - capture agent runs via an OpenTelemetry exporter."
+description = "pyTracer adapter for AutoGen (deprecated: AutoGen is archived; use pytracer-agent-framework) - capture agent runs via an OpenTelemetry exporter."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

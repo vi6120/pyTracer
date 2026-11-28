@@ -156,6 +156,10 @@ llm_utils.generate = generate
 user_module.generate = generate
 
 
+class UpstreamError(Exception):
+    """A service behind a tool failed (an HTTP 5xx), not the tool's own logic."""
+
+
 @dataclass
 class Session:
     """One tau2 retail task: its database, its user simulator, and its gold outcome."""
@@ -166,6 +170,7 @@ class Session:
     user: Any
     user_state: Any
     flaky_writes: int = 0  # writes still to time out after they commit (bug B1)
+    flaky_lookups: int = 0  # order lookups still to fail upstream, before running (bug B11)
     writes: list[dict[str, Any]] = field(default_factory=list)
 
     @property
@@ -187,6 +192,11 @@ class Session:
         """Run a retail tool as a pyTracer tool op; returns its JSON text."""
 
         def call() -> str:
+            if name == "get_order_details" and self.flaky_lookups:
+                # The order service behind the tool failed (bug B11, after
+                # openai-agents-python#879); nothing ran, so a retry is safe.
+                self.flaky_lookups -= 1
+                raise UpstreamError("upstream order service returned 502 Bad Gateway")
             result = self.env.use_tool(name, **arguments)
             if name in WRITE_TOOLS:
                 self.writes.append({"tool": name, "args": dict(arguments)})
@@ -218,6 +228,7 @@ def start(task_id: str) -> Session:
         task_id=task_id, env=get_environment(), task=task, user=user,
         user_state=user.get_init_state(),
         flaky_writes=int(os.environ.get("BENCH_FLAKY_WRITES", "0")),
+        flaky_lookups=int(os.environ.get("BENCH_FLAKY_LOOKUPS", "0")),
     )
     return session
 

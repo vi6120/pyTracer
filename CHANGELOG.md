@@ -92,6 +92,16 @@
   path, and a live session (Claude Code 2.1.332) was captured and replayed
   with no CLI started and no tool run.
 
+### Deprecated
+
+- **`pytracer-autogen`.** Microsoft has archived AutoGen, which gets no bug or
+  security fixes. The adapter keeps working and stays tested until it is removed,
+  not before 0.3.0; `install()` warns once per process (`FutureWarning`). A new
+  recipe, `examples/autogen-to-maf`, ports an agent from AutoGen to Microsoft Agent
+  Framework and shows what pyTracer can judge across the port: the tests carry over,
+  the recordings do not (a replay across frameworks is `cannot_judge`, not a guess),
+  and a fix on the ported agent is judged against its own recording.
+
 ### Changed
 
 - **Every package is now Apache-2.0.** `pytracer-gateway` and `pytracer-registry`,

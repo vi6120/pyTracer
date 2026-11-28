@@ -5,6 +5,7 @@
 | [`verdicts/`](verdicts/README.md) | When pyTracer says a branch fixed a bug, is it right? (seeded bugs on tau2-bench) |
 | [`overhead/`](#sdk-overhead) | How much time does the SDK add to an agent run? |
 | [`storage/`](#trace-storage) | What does a trace cost to keep, and how much of it repeats? |
+| [`determinism/`](#determinism) | How often does a live test change its answer, and does a replay ever? |
 | this page | How much can one ingestion gateway take? (k6 + Prometheus) |
 
 ## SDK overhead
@@ -47,6 +48,25 @@ because every model call resends the policy and the conversation so far. That
 repetition compresses very well: zstd makes traces 16x smaller (gzip 13.5x, xz 18x),
 while storing each repeated value once saves only about 3x (2.9x within a run, 3.6x
 across runs), most of which compression already captures.
+
+## Determinism
+
+`determinism/determinism.py` reads a finished seeded-bug run (`verdicts/run.py` with
+`--baseline-repeats`) and compares two ways of re-checking a branch. Live: every
+branch was already run live 5 or 10 times, so it counts the branches whose runs
+disagreed and how often one live run gives a different answer than its branch's
+majority. Replay: it replays each recording in the strict setting 10 times per
+branch, each in a fresh process with every model API key removed, and checks that
+the verdict and its reason never change and match what the benchmark run reported.
+Neither side calls a model.
+
+```bash
+python benchmarks/determinism/determinism.py --live-only   # seconds
+BENCH_MODEL=openai/gpt-5.2 python benchmarks/determinism/determinism.py   # plus 10 replays per branch
+```
+
+The replays need tau2-bench and the model names the run recorded (they are part of
+every recorded input), but no key. Results go to `determinism/results/`.
 
 ## Gateway ingestion
 

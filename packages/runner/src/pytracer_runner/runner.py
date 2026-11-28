@@ -92,6 +92,7 @@ class CrossBranchRunner:
         evaluate_changed_prompts: bool = False,
         install: str | bool | None = None,
         provision_cli: bool | None = None,
+        cut_point: bool = False,
     ) -> ReproduceResult:
         """Run a collection at ``ref`` with the frozen trace injected.
 
@@ -136,6 +137,8 @@ class CrossBranchRunner:
         run_cmd = f"{python} -m pytracer_cli run {collection_path} --json {_RESULT_ARTIFACT}"
         if evaluate_changed_prompts:
             run_cmd += " --evaluate-changed-prompts"
+        if cut_point:
+            run_cmd += " --cut-point"
         steps.append(run_cmd)
         command = " && ".join(steps)
         result = self.run_ref(ref, command, artifacts=[_RESULT_ARTIFACT], inject=inject)
@@ -175,6 +178,14 @@ def classify_reproduction(
       about the fix. A model call evaluated live on request
       (``--evaluate-changed-prompts``) does not count as leaving them.
     - FIXED: it passes; DIVERGED: it fails differently.
+
+    With cut-point replay (experimental, ``--cut-point``) a candidate that left its
+    recording ran live from that call onward, so it is judged on that live run:
+    FIXED if it passed, STILL_FAILING if it failed the way the baseline did, else
+    DIVERGED. The baseline must still reproduce from its recording. Such a verdict
+    comes from a live run, and ``explain_reproduction`` says so. If a write was
+    served from the recording before the cut, it never ran, so the live run started
+    from a state the recording does not describe: that is CANNOT_JUDGE.
     """
     base_by_name = {s["name"]: s for s in baseline.get("scenarios", [])}
     verdicts: dict[str, Outcome] = {}
@@ -196,6 +207,17 @@ def classify_reproduction(
             verdicts[name] = Outcome.STILL_FAILING
         elif base is not None and _left_recording(base):
             verdicts[name] = Outcome.CANNOT_REPRODUCE
+        elif _left_recording(scenario) and scenario.get("cut_at"):
+            # Cut-point replay: judged on the live run from the cut onward, unless a
+            # frozen write before the cut left the live state unlike the recording's.
+            if scenario.get("frozen_writes_before_cut"):
+                verdicts[name] = Outcome.CANNOT_JUDGE
+            elif scenario.get("passed"):
+                verdicts[name] = Outcome.FIXED
+            elif base is not None and not base.get("passed") and _same_failure(scenario, base):
+                verdicts[name] = Outcome.STILL_FAILING
+            else:
+                verdicts[name] = Outcome.DIVERGED
         elif _left_recording(scenario):
             verdicts[name] = Outcome.CANNOT_JUDGE
         elif scenario.get("passed"):
@@ -227,7 +249,23 @@ def explain_reproduction(
     live = live_model_verdicts(baseline, candidate, verdicts)
     for name, verdict in verdicts.items():
         value = getattr(verdict, "value", verdict)
-        if name in live:
+        cut_at = cand_by_name.get(name, {}).get("cut_at")
+        frozen_writes = cand_by_name.get(name, {}).get("frozen_writes_before_cut") or []
+        if cut_at and frozen_writes and value == "cannot_judge":
+            reasons[name] = (
+                f"Cut-point replay cannot judge this run: before it left its recording at "
+                f"{cut_at}, {', '.join(frozen_writes)} was served from the recording and "
+                "never ran, so the live run after the cut started from a state the "
+                "recording does not describe. Re-record the scenario on this branch to "
+                "judge it."
+            )
+        elif cut_at and value in {"fixed", "still_failing", "diverged"}:
+            reasons[name] = (
+                f"Cut-point replay: the branch left its recording at {cut_at} and ran "
+                "live from there, tools included, so this verdict comes from a live run "
+                "and can change from run to run; repeat it to be sure."
+            )
+        elif name in live:
             reasons[name] = (
                 f"The model ran live ({live[name]} mode), so this verdict is not a frozen "
                 "result and can change from run to run; repeat it, or judge it in full mode."

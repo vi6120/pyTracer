@@ -243,6 +243,15 @@ settle a scenario it says so with the reason (**cannot judge**: the branch made 
 the recording cannot serve, which it names; **cannot reproduce**: the baseline did),
 exiting with code 2. Needs the runner: `pip install pytracer-cli[runner]`.
 
+**Fixes that change the calls (experimental).** A frozen replay cannot judge a fix
+that makes different calls, so it says `cannot judge`. With `--cut-point`, each ref
+is served from its recording up to the first call that leaves it, and that call and
+everything after it run live, tools included; the branch is then judged on that live
+run, and the verdict says it came from one. If a write was served from the recording
+before the cut, the live run starts from a state the recording does not describe, so
+it still says `cannot judge`. Live tools can have real side effects: use it where the
+tools are safe to run (a test database, a sandboxed service).
+
 With `--isolation docker` (the default) each ref installs into a throwaway container;
 with `--isolation local` it runs in your current environment and installs nothing
 (`--install` / `--no-install` override either).

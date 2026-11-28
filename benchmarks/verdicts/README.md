@@ -68,6 +68,10 @@ pinned at `v2.0.0`), and scores `pytracer reproduce` against what really happene
      changed model call runs live (`--evaluate-changed-prompts`);
    - `partial`: tools frozen, the model live. Its verdicts are not frozen
      results, and pyTracer says so.
+   - `cut-point` (added after the pre-registration, reported apart, not run by
+     default: `--settings strict,cut-point`): frozen up to the first call that
+     leaves the recording, live from there. It lets fixes that change the calls be
+     judged, from a live run.
 4. **The result** per branch: correct, an abstention (`cannot_judge` or
    `cannot_reproduce`, with pyTracer's reason), or wrong. The headline is the unsafe
    count: branches that are not fixed but reported `fixed`. It must be 0. Every

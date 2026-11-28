@@ -309,3 +309,64 @@ def test_a_branch_that_left_its_recording_on_a_redacted_value_blames_redaction()
     assert verdicts == {"s": Outcome.CANNOT_JUDGE}
     reason = explain_reproduction(BASE, cand, verdicts)["s"]
     assert "redacted value" in reason and "A frozen replay cannot judge" in reason
+
+
+def _cut(*, passed: bool, failed: list[tuple[str, str]] | None = None) -> dict[str, Any]:
+    """A candidate that left its recording and ran live from the cut (cut-point)."""
+    scenario = {
+        **_scenario(passed=passed, unrecorded=["tool 'lookup'"]),
+        "divergences": [{"call": "tool 'lookup'", "kind": "tool", "op": "lookup",
+                         "reason": "changed_input", "ran_live": True}],
+        "cut_at": "tool 'lookup'",
+        "assertions": [{"name": n, "passed": False, "detail": d} for n, d in failed or []],
+    }
+    return _run([scenario])
+
+
+BASE_WRITES = _run([{
+    **_scenario(passed=False),
+    "assertions": [{"name": "writes", "passed": False, "detail": "refund called 0 times"}],
+}])
+
+
+def test_a_cut_point_run_that_passes_is_fixed_and_says_it_ran_live() -> None:
+    from pytracer_runner import explain_reproduction
+
+    cand = _cut(passed=True)
+    verdicts = classify_reproduction(BASE_WRITES, cand)
+    assert verdicts == {"s": Outcome.FIXED}
+    reason = explain_reproduction(BASE_WRITES, cand, verdicts)["s"]
+    assert "Cut-point replay" in reason and "tool 'lookup'" in reason and "live run" in reason
+
+
+def test_a_cut_point_run_failing_the_same_way_is_still_failing() -> None:
+    cand = _cut(passed=False, failed=[("writes", "refund called 0 times")])
+    assert classify_reproduction(BASE_WRITES, cand) == {"s": Outcome.STILL_FAILING}
+
+
+def test_a_cut_point_run_failing_another_way_diverged() -> None:
+    cand = _cut(passed=False, failed=[("writes", "refund called 2 times")])
+    assert classify_reproduction(BASE_WRITES, cand) == {"s": Outcome.DIVERGED}
+
+
+def test_a_cut_point_run_still_needs_a_baseline_that_reproduced() -> None:
+    base = _diverged(("tool", "lookup", "changed_input", False))
+    assert classify_reproduction(base, _cut(passed=True)) == {"s": Outcome.CANNOT_REPRODUCE}
+
+
+def test_without_a_cut_a_branch_that_left_its_recording_still_abstains() -> None:
+    cand = _diverged(("tool", "lookup", "changed_input", True))
+    assert classify_reproduction(BASE_WRITES, cand) == {"s": Outcome.CANNOT_JUDGE}
+
+
+def test_a_cut_after_a_frozen_write_cannot_be_judged() -> None:
+    # The write before the cut was served from the recording and never ran, so the
+    # live run after the cut starts from a different state: abstain, and say why.
+    from pytracer_runner import explain_reproduction
+
+    cand = _cut(passed=False, failed=[("writes", "refund called 2 times")])
+    cand["scenarios"][0]["frozen_writes_before_cut"] = ["tool 'refund'"]
+    verdicts = classify_reproduction(BASE_WRITES, cand)
+    assert verdicts == {"s": Outcome.CANNOT_JUDGE}
+    reason = explain_reproduction(BASE_WRITES, cand, verdicts)["s"]
+    assert "tool 'refund'" in reason and "never ran" in reason

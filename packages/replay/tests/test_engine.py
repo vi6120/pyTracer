@@ -862,3 +862,104 @@ def test_a_retry_step_replays_frozen_with_its_attempts_numbered() -> None:
     assert attempts == [1, 2]
     step = next(s for s in res.spans if "pytracer.step.attempts" in s.attributes)
     assert step.attributes["pytracer.step.accepted"] == 2
+
+
+def _two_lookups(order_id: str, calls: dict[str, int]) -> Any:
+    """Looks an order up, then a customer (same input every run), then asks the model."""
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="get_order")
+    def get_order(oid: str) -> str:
+        calls["order"] += 1
+        return f"order {oid}: shipped"
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="get_customer")
+    def get_customer(cid: str) -> str:
+        calls["customer"] += 1
+        return f"customer {cid}: live"
+
+    @pytracer.op(kind=SpanKind.LLM, name="agent_llm")
+    def agent_llm(context: str) -> str:
+        calls["model"] += 1
+        return f"reply to {context}"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="support")
+    def agent() -> str:
+        order = get_order(order_id)
+        customer = get_customer("c1")
+        return agent_llm(f"{order}; {customer}")
+
+    return agent
+
+
+def _recorded_two_lookups() -> MockSet:
+    rec = _record(_two_lookups("#1", {"order": 0, "customer": 0, "model": 0}))
+    return MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+
+
+def test_cut_point_runs_everything_live_from_the_first_miss() -> None:
+    calls = {"order": 0, "customer": 0, "model": 0}
+    res = ReplayEngine(ReplayMode.FULL, strict=True, sandbox=False, cut_point=True).replay(
+        _two_lookups("1", calls), _recorded_two_lookups()
+    )
+    # The changed lookup is the cut; the customer lookup after it matches the
+    # recording exactly but still runs live, and so does the model.
+    assert not res.failed
+    assert calls == {"order": 1, "customer": 1, "model": 1}
+    assert res.cut_at == "tool 'get_order'" and res.live_after_cut == 2
+    assert res.divergences[0]["ran_live"] is True and len(res.divergences) == 1
+    assert res.return_value == "reply to order 1: shipped; customer c1: live"
+    assert {e.target for e in res.side_effects.effects} == {"get_order", "get_customer"}
+
+
+def test_cut_point_changes_nothing_on_a_run_that_stays_on_its_recording() -> None:
+    calls = {"order": 0, "customer": 0, "model": 0}
+    res = ReplayEngine(ReplayMode.FULL, strict=True, cut_point=True).replay(
+        _two_lookups("#1", calls), _recorded_two_lookups()
+    )
+    assert not res.failed and calls == {"order": 0, "customer": 0, "model": 0}
+    assert res.cut_at is None and res.live_after_cut == 0 and res.divergences == []
+
+
+def test_without_cut_point_a_strict_miss_still_fails() -> None:
+    calls = {"order": 0, "customer": 0, "model": 0}
+    res = ReplayEngine(ReplayMode.FULL, strict=True).replay(
+        _two_lookups("1", calls), _recorded_two_lookups()
+    )
+    assert res.failed and res.error_type == "MissingMockError" and res.cut_at is None
+
+
+def test_cut_point_lists_writes_served_frozen_before_the_cut() -> None:
+    calls = {"order": 0, "customer": 0, "model": 0}
+    # get_order is declared a write: served frozen first, then the run cuts later.
+    rec = _record(_two_lookups("#1", {"order": 0, "customer": 0, "model": 0}))
+    mocks = MockSet.from_trace(rec.spans)  # type: ignore[attr-defined]
+    res = ReplayEngine(
+        ReplayMode.FULL, strict=True, sandbox=False, cut_point=True, writes=["get_order"]
+    ).replay(_two_lookups_changed_customer(calls), mocks)
+    assert res.cut_at == "tool 'get_customer'"
+    assert res.frozen_writes_before_cut == ["tool 'get_order'"]
+
+
+def _two_lookups_changed_customer(calls: dict[str, int]) -> Any:
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="get_order")
+    def get_order(oid: str) -> str:
+        calls["order"] += 1
+        return f"order {oid}: shipped"
+
+    @pytracer.op(kind=SpanKind.TOOL, tool_name="get_customer")
+    def get_customer(cid: str) -> str:
+        calls["customer"] += 1
+        return f"customer {cid}: live"
+
+    @pytracer.op(kind=SpanKind.LLM, name="agent_llm")
+    def agent_llm(context: str) -> str:
+        calls["model"] += 1
+        return f"reply to {context}"
+
+    @pytracer.op(kind=SpanKind.AGENT, agent_name="support")
+    def agent() -> str:
+        order = get_order("#1")
+        customer = get_customer("c2")  # changed: the cut
+        return agent_llm(f"{order}; {customer}")
+
+    return agent

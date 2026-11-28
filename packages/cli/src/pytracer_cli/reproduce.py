@@ -25,6 +25,7 @@ class _Runner(Protocol):
         env_dest: str = ".env",
         evaluate_changed_prompts: bool = False,
         install: bool | None = None,
+        cut_point: bool = False,
     ) -> Any: ...
 
 
@@ -59,6 +60,7 @@ def run_reproduction(
     env_dest: str = ".env",
     evaluate_changed_prompts: bool = False,
     install: bool | None = None,
+    cut_point: bool = False,
 ) -> tuple[Any, Any, dict[str, Any]]:
     """Reproduce the collection on both refs and classify each scenario.
 
@@ -66,6 +68,8 @@ def run_reproduction(
     produced no results (for example a failed dependency install); the error
     carries the run's stderr so the cause is visible, not truncated.
     """
+    # Passed only when on, so a runner written before cut-point replay still works.
+    extra: dict[str, Any] = {"cut_point": True} if cut_point else {}
     baseline = runner.reproduce(
         baseline_ref,
         collection_path,
@@ -75,6 +79,7 @@ def run_reproduction(
         env_dest=env_dest,
         evaluate_changed_prompts=evaluate_changed_prompts,
         install=install,
+        **extra,
     )
     candidate = runner.reproduce(
         candidate_ref,
@@ -85,6 +90,7 @@ def run_reproduction(
         env_dest=env_dest,
         evaluate_changed_prompts=evaluate_changed_prompts,
         install=install,
+        **extra,
     )
     for which, ref, run in (("baseline", baseline_ref, baseline), ("candidate", candidate_ref, candidate)):
         if run.results is None:

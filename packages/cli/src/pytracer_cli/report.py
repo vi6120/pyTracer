@@ -219,6 +219,11 @@ def to_json(result: CollectionResult) -> dict[str, Any]:
                 "live_fallbacks": s.replay.live_fallbacks,
                 "divergences": s.replay.divergences,
                 "evaluated_changed_prompts": s.replay.evaluated_changed_prompts,
+                # Cut-point replay: where the run left its recording (every call
+                # from there ran live), or None; the verdict is then from a live run.
+                "cut_at": s.replay.cut_at,
+                "live_after_cut": s.replay.live_after_cut,
+                "frozen_writes_before_cut": s.replay.frozen_writes_before_cut,
                 "concurrency_ambiguities": s.replay.concurrency_ambiguities,
                 "assertions": [
                     {"name": a.name, "passed": a.passed, "detail": a.detail} for a in s.assertions

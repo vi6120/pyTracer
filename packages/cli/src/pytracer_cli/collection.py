@@ -97,6 +97,10 @@ class ScenarioSpec(BaseModel):
     # Run a frozen model op live when its input changed (a prompt edit) instead of
     # failing, so the change is actually evaluated. Makes a live model call.
     evaluate_changed_prompts: bool = False
+    # Experimental: cut-point replay. Serve the recording up to the first call that
+    # misses it, then run that call and everything after it live (tools too), so a
+    # fix that changes the calls can still be judged, from a live run.
+    cut_point: bool = False
     assertions: list[AssertionSpec] = Field(default_factory=list)
 
 

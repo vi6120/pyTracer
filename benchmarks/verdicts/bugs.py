@@ -71,6 +71,9 @@ _INVERTED_STATUS = (
     '    failed = [name for name, _, result in made if not result.startswith("Error")]\n',
 )
 
+# B11 to B15: ported from real issues (PREREGISTRATION.md section 3, the seeded draw).
+_LOOKUPS = "get_order_details"
+
 # The shape of a bug's fix.
 ADDS_CALL = "adds a call"
 CHANGES_ARGS = "changes arguments"
@@ -201,6 +204,78 @@ BUGS: list[Bug] = [
         bug=[(_RECORD_MADE, _RECORD_MADE.replace("in ORDER_WRITES]", "in ORDER_WRITES[1:]]"))],
         cosmetic=[("ORDER_WRITES[1:]]", "ORDER_WRITES[1:len(ORDER_WRITES)]]")],
         other=[_INVERTED_STATUS],
+    ),
+    # v2: ported from real, fixed issues in agent frameworks (the seeded draw).
+    Bug(
+        key="B11",
+        # openai-agents-python#879: an upstream HTTP error from a tool is raised and
+        # ends the run instead of reaching the model as an error it can handle.
+        title="an upstream error from a tool ends the run instead of reaching the model",
+        task_id="13",
+        shape=ADDS_CALL,  # the fixed branch goes on to calls the bug never reaches
+        env={"BENCH_FLAKY_LOOKUPS": "1"},  # the first order lookup fails upstream (502)
+        bug=[(_SWALLOW, '    except Exception as exc:  # noqa: BLE001 - the model reads the error and recovers\n'
+                        '        if "upstream" in str(exc):\n'
+                        '            raise  # a failing upstream service is not the tool\'s error: give up\n'
+                        '        return f"Error: {exc}"\n')],
+        cosmetic=[('if "upstream" in str(exc):', 'if str(exc).find("upstream") >= 0:')],
+        other=[_prepare('    if "order_id" in args:\n        args["order_id"] = str(args["order_id"]).lstrip("#")\n')],
+    ),
+    Bug(
+        key="B12",
+        # llama_index#21124: assistant text that comes with tool calls is dropped
+        # when the conversation is sent back to the model.
+        title="text the model wrote alongside a tool call is dropped from the history",
+        task_id="0",
+        shape=CHANGES_MODEL_INPUT,
+        bug=[(_HISTORY, '    """The conversation the model sees: all of it, policy first."""\n'
+                        '    return [m.model_copy(update={"content": None}) if getattr(m, "tool_calls", None) else m\n'
+                        '            for m in history]\n')],
+        cosmetic=[('if getattr(m, "tool_calls", None) else m', 'if getattr(m, "tool_calls", None) is not None and m.tool_calls else m')],
+        # Text kept, but the customer's first message is dropped.
+        other=[(_HISTORY, '    """The conversation the model sees: all of it, policy first."""\n'
+                          '    return list(history[:1]) + list(history[2:])\n')],
+    ),
+    Bug(
+        key="B13",
+        # openai-agents-python#2110: the caller gets an empty string instead of the
+        # tool's result.
+        title="the model gets an empty string instead of a tool's result",
+        task_id="88",
+        shape=CHANGES_MODEL_INPUT,
+        bug=[(_CALL, f'        result = session.tool(name, args)\n'
+                     f'        return "" if name == "{_LOOKUPS}" else result\n    except TimeoutError:')],
+        cosmetic=[(f'"" if name == "{_LOOKUPS}" else result', f'"" if name in ("{_LOOKUPS}",) else result')],
+        # Results kept, but every cancellation is filed with the wrong reason.
+        other=[_prepare('    if name == "cancel_pending_order":\n        args["reason"] = "no longer needed"\n')],
+    ),
+    Bug(
+        key="B14",
+        # crewAI#5275 (redrawn for #5460, which cannot show in tau2): the arguments
+        # are looked up under a key with a truthy default ("{}"), so the fallback to
+        # the real arguments never runs and the tool is called with none.
+        title="tool arguments silently dropped: the tool runs with empty input",
+        task_id="0",
+        shape=CHANGES_ARGS,
+        bug=[_prepare('    import json\n'
+                      '    found = args.get("arguments", "{}") or args  # "{}" is truthy: never falls back\n'
+                      '    args = json.loads(found) if isinstance(found, str) else dict(found)\n')],
+        cosmetic=[('args.get("arguments", "{}")', 'args.get("arguments", "{" + "}")')],
+        # Arguments kept, but replacement items are paired with the wrong originals.
+        other=[_prepare('    if "new_item_ids" in args:\n        args["new_item_ids"] = list(reversed(args["new_item_ids"]))\n')],
+    ),
+    Bug(
+        key="B15",
+        # llama_index#20872: the system prompt (here, the retail policy) never
+        # reaches the model.
+        title="the policy (system prompt) never reaches the model",
+        task_id="13",
+        shape=CHANGES_MODEL_INPUT,
+        bug=[(_HISTORY, '    """The conversation the model sees: all of it."""\n    return list(history[1:])\n')],
+        cosmetic=[("list(history[1:])", "history[1:][:]")],
+        # Policy kept, but tool results are dropped, so the tool calls have no answer.
+        other=[(_HISTORY, '    """The conversation the model sees: all of it, policy first."""\n'
+                          '    return [m for m in history if getattr(m, "role", None) != "tool"]\n')],
     ),
 ]
 

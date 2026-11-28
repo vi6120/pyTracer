@@ -3,9 +3,9 @@
 The name "pyTracer" and the pyTracer logo (the "Marks") are trademarks of vi6120.
 This policy explains how you may use them.
 
-Important: the open-source licenses that cover pyTracer's code (Apache-2.0 and
-AGPL-3.0, see [LICENSING.md](LICENSING.md)) grant you rights to the *software*.
-They do **not** grant any right to use the Marks. The goal of this policy is to
+Important: the open-source license that covers pyTracer's code (Apache-2.0, see
+[LICENSING.md](LICENSING.md)) grants you rights to the *software*.
+It does **not** grant any right to use the Marks. The goal of this policy is to
 let the community talk about, build on, and integrate with pyTracer freely, while
 preventing uses that confuse people about what is official.
 

@@ -220,3 +220,31 @@ def test_install_can_be_forced_or_skipped_either_way() -> None:
     assert local.startswith(f"{shlex.quote(sys.executable)} -m pip install -e . -q && ")
     assert "pytracer-cli" not in local  # provisioning follows isolation unless asked
     assert _command_for(True, install="uv pip install -e .").startswith("uv pip install -e . && ")
+
+
+def test_a_collection_path_stays_one_argument_in_the_shell_command() -> None:
+    # The command runs in a shell, so the user's path must be quoted: a space or a
+    # ";" in it is part of the path, never a second command.
+    import shlex
+
+    source, executor = FakeSource(), FakeExecutor()
+    runner = CrossBranchRunner(source, executor)
+    path = "tests/my suite.yaml; touch pwned"
+    runner.reproduce("main", path, install=False, provision_cli=False)
+    (_, command, _), = executor.calls
+    assert shlex.quote(path) in command
+    words = shlex.split(command)
+    assert path in words and "touch" not in words
+
+
+def test_a_hostile_collection_path_runs_nothing_in_a_real_shell(tmp_path: Path) -> None:
+    from pytracer_runner import LocalExecutor
+
+    class Source:
+        def checkout(self, ref: str, dest: Path) -> None:
+            dest.mkdir(parents=True, exist_ok=True)
+
+    marker = tmp_path / "pwned"
+    runner = CrossBranchRunner(Source(), LocalExecutor(timeout=60))
+    runner.reproduce("main", f"x.yaml; touch {marker}", install=False, provision_cli=False)
+    assert not marker.exists()

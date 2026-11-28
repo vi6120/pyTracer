@@ -294,8 +294,13 @@ Framework adapters are separate packages, one per framework:
 pip install pytracer-langgraph        # LangGraph / LangChain
 pip install pytracer-openai-agents    # OpenAI Agents SDK
 pip install pytracer-crewai           # CrewAI
-pip install pytracer-autogen          # AutoGen
+pip install pytracer-autogen          # AutoGen (deprecated, see below)
 ```
+
+AutoGen is archived upstream (no bug or security fixes), so `pytracer-autogen` is
+deprecated: it keeps working until it is removed, not before 0.3.0. For agents
+moving to Microsoft Agent Framework, see the
+[AutoGen to Agent Framework recipe](examples/autogen-to-maf/README.md).
 
 These are standard PyPI wheels, so [uv](https://docs.astral.sh/uv/) works too
 (`uv add pytracer-sdk`, or `uv pip install pytracer-all`). pyTracer is a Python

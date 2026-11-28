@@ -139,6 +139,14 @@ class ReplayResult:
     # op was run live rather than failing frozen. Lets a report explain the verdict
     # without advising an option that is already on.
     evaluated_changed_prompts: bool = False
+    # Cut-point replay (experimental): the first call that left the recording, from
+    # which every tool and model call ran live, and how many ran live after it.
+    # ``None`` when the run stayed on its recording or cut-point replay was off.
+    cut_at: str | None = None
+    live_after_cut: int = 0
+    # Writes served from the recording before the cut: they never ran, so the live
+    # run after the cut starts from a state the recording does not describe.
+    frozen_writes_before_cut: list[str] = field(default_factory=list)
 
     @property
     def failed(self) -> bool:
@@ -166,6 +174,7 @@ class ReplayEngine:
         writes: Iterable[str] = (),
         evaluate_changed_prompts: bool = False,
         controls: NondeterminismControls | None = None,
+        cut_point: bool = False,
     ) -> None:
         self.mode = mode
         self.strict = strict
@@ -195,6 +204,12 @@ class ReplayEngine:
         # When set, the clock is frozen and the RNG seeded around agent execution,
         # so a live (or partially live) replay is reproducible beyond the mocks.
         self.controls = controls
+        # Cut-point replay (experimental): serve the recording up to the first call
+        # that misses it, then run that call and every later tool and model call
+        # live. Once a run has left its recording, a later recorded response that
+        # happens to match no longer describes this run, so nothing after the cut
+        # is served from it. Live tools can have real side effects; they are logged.
+        self.cut_point = cut_point
 
     def replay(
         self,
@@ -227,6 +242,8 @@ class ReplayEngine:
         # Flags whether any @op was seen, to detect replaying a run that has
         # recordings but never hits the @op seam (adapter-captured, record-only).
         seen_op = {"any": False}
+        # Cut-point replay: where the run left its recording, and calls run live after.
+        cut: dict[str, Any] = {"at": None, "after": 0, "frozen_writes": []}
 
         def caller_of(identifier: str, inp: object) -> tuple[str, str] | None:
             """Register this op and return its calling op's key, if it has one."""
@@ -243,6 +260,19 @@ class ReplayEngine:
             seen_op["any"] = True
             identifier = _identifier(kind, name, tool_name)
             caller = caller_of(identifier, inp)
+            if cut["at"] is not None and kind in (SpanKind.TOOL, SpanKind.LLM):
+                # After the cut every call runs live (cut-point replay).
+                with se_lock:
+                    cut["after"] += 1
+                if kind is SpanKind.TOOL:
+                    effect = (
+                        SideEffectKind.WRITE
+                        if identifier in self.writes
+                        else SideEffectKind.EXTERNAL_CALL
+                    )
+                    with se_lock:
+                        side_effects.record(identifier, effect, inp)
+                return None
             # Per-op selective freeze overrides the mode's kind-based default.
             if identifier in self.frozen_ops:
                 mock_this = True
@@ -280,6 +310,10 @@ class ReplayEngine:
                     caller_occurrence=caller_occurrence,
                 )
                 if hit:
+                    if self.cut_point and identifier in self.writes:
+                        # Served, not run: the live environment never saw this write.
+                        with se_lock:
+                            cut["frozen_writes"].append(f"{kind.value} {tool_name or name!r}")
                     if isinstance(output, RecordedError):
                         # Re-raise the recorded failure so the agent's error path
                         # replays exactly, instead of serving it as a success.
@@ -303,6 +337,23 @@ class ReplayEngine:
                 with se_lock:
                     unrecorded_calls.append(label)
                     divergences.append(divergence)
+                if self.cut_point:
+                    # The cut: this call and everything after it run live.
+                    with se_lock:
+                        cut["at"] = label
+                        live_fallbacks.append(label)
+                        divergence["ran_live"] = True
+                        if kind is SpanKind.LLM:
+                            model_input_changes.append(identifier)
+                    if kind is SpanKind.TOOL:
+                        effect = (
+                            SideEffectKind.WRITE
+                            if identifier in self.writes
+                            else SideEffectKind.EXTERNAL_CALL
+                        )
+                        with se_lock:
+                            side_effects.record(identifier, effect, inp)
+                    return None
                 # A frozen model op that misses means the model input changed: the
                 # recorded response does not apply. It runs live only when asked
                 # (evaluate_changed_prompts), never as a silent fallback, since a
@@ -418,6 +469,9 @@ class ReplayEngine:
             concurrency_ambiguities=concurrency_ambiguities,
             uninstrumented=(len(mocks) > 0 and not seen_op["any"]),
             evaluated_changed_prompts=self.evaluate_changed_prompts,
+            cut_at=cut["at"],
+            live_after_cut=cut["after"],
+            frozen_writes_before_cut=cut["frozen_writes"] if cut["at"] is not None else [],
         )
 
 

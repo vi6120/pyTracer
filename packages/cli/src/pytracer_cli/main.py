@@ -155,12 +155,19 @@ def run(
         help="Run a frozen model op live when its input changed (a prompt edit), so "
         "the change is evaluated instead of reported as diverged. Makes a live call.",
     ),
+    cut_point: bool | None = typer.Option(
+        None,
+        "--cut-point/--no-cut-point",
+        help="Experimental: serve the recording up to the first call that misses it, "
+        "then run that call and everything after it live, tools included. Live tools "
+        "can have real side effects.",
+    ),
 ) -> None:
     """Run a collection; exit non-zero if any scenario fails."""
     try:
         result = run_path(
             collection, strict=strict, sandbox=sandbox,
-            evaluate_changed_prompts=evaluate_changed_prompts,
+            evaluate_changed_prompts=evaluate_changed_prompts, cut_point=cut_point,
         )
     except (FileNotFoundError, ValueError) as exc:
         typer.echo(f"error: {exc}", err=True)
@@ -335,6 +342,14 @@ def reproduce(
         help="Run a model op whose input changed live instead of failing the frozen "
         "replay, so a fix that also edits a prompt can be evaluated.",
     ),
+    cut_point: bool = typer.Option(
+        False,
+        "--cut-point",
+        help="Experimental: replay each ref from its recording up to the first call "
+        "that misses it, then run the rest live (tools included), so a fix that "
+        "changes the calls gets a verdict from a live run instead of an abstention. "
+        "Live tools can have real side effects.",
+    ),
     install: bool | None = typer.Option(
         None,
         "--install/--no-install",
@@ -395,6 +410,7 @@ def reproduce(
             env_dest=env_dest,
             evaluate_changed_prompts=evaluate_changed_prompts,
             install=install,
+            cut_point=cut_point,
         )
     except (RuntimeError, OSError) as exc:
         typer.echo(f"error: {exc}", err=True)

@@ -1,5 +1,13 @@
 # pytracer-autogen
 
+> **Deprecated.** Microsoft has archived AutoGen: it gets no bug or security fixes,
+> and Microsoft points its users to Microsoft Agent Framework. This adapter keeps
+> working and stays tested until it is removed, not before pyTracer 0.3.0, and
+> `install()` says so once per process (a `FutureWarning`). Port the agent to Agent
+> Framework and use [`pytracer-agent-framework`](../agent-framework/README.md); the
+> [AutoGen to Agent Framework recipe](../../examples/autogen-to-maf/README.md) shows
+> how to keep its tests across the port.
+
 pyTracer adapter for AutoGen (0.4+; the separate AutoGen 0.2 API is not
 supported). AutoGen emits OpenTelemetry spans using the
 GenAI semantic conventions; this adapter plugs a pyTracer exporter into an

@@ -16,6 +16,7 @@ import yaml
 from pytracer_sdk.schema import Span
 
 from .report import retry_steps, step_text
+from .trace_io import ZST_SUFFIX, write_trace_text
 
 
 def parse_entry(items: list[str] | None) -> dict[str, Any]:
@@ -103,10 +104,12 @@ def record_trace(
     name: str | None = None,
     mode: str = "full",
     assertions: list[dict[str, Any]] | None = None,
+    compress: bool = False,
 ) -> tuple[Path, Path]:
     """Write a trace's spans to JSONL and scaffold a collection scenario.
 
-    Creates ``<out>/traces/<trace>.jsonl`` and creates or appends
+    Creates ``<out>/traces/<trace>.jsonl`` (``.jsonl.zst``, zstd-compressed, with
+    ``compress``) and creates or appends
     ``<out>/collection.yaml`` with a scenario that replays the trace against the
     given ``agent`` entrypoint. Returns (jsonl_path, collection_path).
     """
@@ -118,8 +121,8 @@ def record_trace(
     out = Path(out_dir)
     traces_dir = out / "traces"
     traces_dir.mkdir(parents=True, exist_ok=True)
-    jsonl = traces_dir / f"{trace_id[:16]}.jsonl"
-    jsonl.write_text("\n".join(s.to_json() for s in spans) + "\n", encoding="utf-8")
+    jsonl = traces_dir / f"{trace_id[:16]}.jsonl{ZST_SUFFIX if compress else ''}"
+    write_trace_text(jsonl, "\n".join(s.to_json() for s in spans) + "\n")
 
     scenario = {
         "name": scenario_name,

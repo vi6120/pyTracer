@@ -1,0 +1,21 @@
+# The test that carries over from AutoGen to Agent Framework unchanged: it checks
+# what the agent does (one refund of the right order and amount) and what it reports
+# (the receipt), not how either framework phrases its model calls.
+name: refunds
+scenarios:
+  - name: refund-one-order
+    agent: support_agent:run
+    entry: { order_id: "#W1001" }
+    trace: traces/run.jsonl
+    mode: full
+    strict: true
+    writes: [refund_order]
+    assertions:
+      - { type: no_errors }
+      - type: writes
+        only: true
+        expected:
+          - { tool: refund_order, times: 1, args: { order_id: "#W1001", amount: 49.99 } }
+      - type: returns
+        name: receipt
+        expected: { status: refunded, order_id: "#W1001", amount_cents: 4999 }

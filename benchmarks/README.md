@@ -83,6 +83,15 @@ BENCH_MODEL=openai/gpt-5.2 python benchmarks/determinism/determinism.py   # plus
 The replays need tau2-bench and the model names the run recorded (they are part of
 every recorded input), but no key. Results go to `determinism/results/`.
 
+Measured on the v2 GPT-5.2 run (28 November 2026, `determinism/results/`): live, 14
+of 60 branches gave different answers across their runs, and 29 of 480 single live
+runs (6%) disagreed with their branch's majority, so a team re-running a test once
+would be misled about 1 time in 17. Replayed, all 360 strict replays (10 for each of
+the 36 scored branches, about 6 s each, no model key) gave the same verdict and
+reason, matching the run. Stable is not the same as right: 14 of the 36 branches are
+a stable abstention (`cannot_judge`), and how often the verdicts are right is the
+seeded-bug benchmark's question.
+
 ## Scripted mutation benchmark
 
 The seeded-bug benchmark judges 15 hand-written bugs with a live model: realistic,

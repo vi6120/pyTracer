@@ -64,7 +64,7 @@ from bugs import BRANCHES, BUGS, Bug, variants
 
 HERE = Path(__file__).resolve().parent
 AGENT = HERE / "support_agent"
-SETTINGS = {
+SETTINGS: dict[str, dict[str, Any]] = {
     "strict": {"mode": "full", "strict": True, "flags": []},
     "fallback": {"mode": "full", "strict": False, "flags": ["--evaluate-changed-prompts"]},
     "partial": {"mode": "partial", "strict": False, "flags": []},

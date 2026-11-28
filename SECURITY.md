@@ -135,6 +135,46 @@ silently. It contains real span data, so secure Redis the same as the other
 stores (internal network, at-rest encryption) and drain or purge the DLQ on a
 schedule.
 
+## Threat model
+
+What pyTracer runs, where it runs, and what it can reach. The rule throughout:
+**pyTracer runs your code, and in some modes your tools, for real.** Treat each mode
+with the trust you would give that code.
+
+| Step | What runs | Where | Network | What can go wrong | What protects you |
+|---|---|---|---|---|---|
+| Capture (the SDK in your agent) | your agent | your process | yours | a secret or personal value reaching a recording | redaction at capture, before anything is sent (see above) |
+| A recording on disk or in git | nothing; it is data | wherever it is stored | n/a | it holds what the agent saw, after redaction | redaction; review a recording like any test fixture with customer data in it |
+| `pytracer run`, full mode (the default) | your agent, every model and tool call frozen | your process | blocked by the sandbox, loopback allowed | code that bypasses the sandbox | the sandbox, and strict mode failing an unrecorded call instead of running it |
+| `pytracer run` with `--no-strict`, `--evaluate-changed-prompts`, `--cut-point`, or partial / live mode | your agent, with some calls **live** | your process | open unless you pass `--sandbox` | a live tool doing a real write | every live tool call is logged as a side effect; run these modes only against tools that are safe to call |
+| `pytracer reproduce --isolation docker` (the default) | each ref's code, installed in a throwaway container | Docker, `--rm`, only the ref's workspace mounted | Docker's default (open) | the ref's code reaching the internet | the container gets no host environment variables, credentials or home directory, only what you put in its workspace (a file passed with `--env-file` is copied in, so keep secrets out of it for code you do not trust) |
+| `pytracer reproduce --isolation local` | each ref's code | your environment, with your environment variables and credentials | yours | the ref's code doing anything you can | only use it for code you trust: your own branches, never a stranger's pull request |
+| `/pytracer try` in CI (`packages/cli/ci/pr-try-on-branch.yml`) | the pull request's code | the CI runner | open | a pull request from a fork running with your repository's token | the template only runs on comments from owners, members and collaborators, runs the code in Docker (no token inside), and leaves no credentials in the checkout |
+
+What each protection does not cover:
+
+- **The network sandbox is in-process.** It guards Python's name resolution and
+  socket connections. A subprocess the agent starts, or native code that opens its
+  own sockets, is not blocked. It stops accidents in Python code, not a determined
+  attacker; use Docker isolation, or a network policy, for code you do not trust.
+- **Cut-point replay runs everything after the first changed call live, tools
+  included,** so a write there happens for real. A write served from the recording
+  before the cut never ran, which is why pyTracer then refuses to judge (see the
+  README).
+- **Redaction is a regex ruleset** (keys, emails, card numbers, your own rules). It
+  does not find names, addresses or free-text personal data, and a placeholder keeps
+  the length of a value it replaces (`Redactor(preserve_length=False)` drops it).
+- **`--install` is a shell command you supply** and runs as written. Every other
+  value pyTracer puts into the commands it builds is quoted.
+- **Docker isolation is not a security boundary against a hostile kernel exploit**,
+  and its network is open by default. For untrusted code, add a network policy or run
+  on a disposable CI runner, as the `/pytracer try` template does.
+
+If you adapt the `/pytracer try` workflow, keep all three of its protections: the
+commenter check, `--isolation docker`, and `persist-credentials: false`. A
+comment-triggered workflow that runs a pull request's code with `--isolation local`
+gives anyone who can open a pull request your repository's token.
+
 ## Reporting a vulnerability
 
 Report suspected vulnerabilities privately to the maintainers rather than opening

@@ -31,6 +31,20 @@ nothing extra, since a background thread sends the spans. The first measurement,
 before each redaction rule got a cheap pre-check, was 9.7 ms per run (511 µs per
 span); the pre-checks skip a rule's regex on text it cannot match.
 
+**CI gate.** `overhead/gate.py` runs on every pull request that touches the SDK
+(`.github/workflows/perf.yml`). Absolute times on a shared runner move too much to
+compare with a stored number, so it times the change's SDK and the base branch's SDK
+in the same job, each in its own process, in alternating rounds, and compares the
+time each adds per span. It fails when the change adds more than 1.25x what the base
+adds and more than 15 µs per span more, or more than 1 ms per span at all; a failure
+is measured a second time before it counts. Checked on an M1 Pro: identical SDKs
+read 152 versus 152 µs, an extra 9 µs per span passes, an extra 64 µs per span (1.42x)
+fails.
+
+```bash
+python benchmarks/overhead/gate.py --base path/to/base/packages/sdk/src --head packages/sdk/src
+```
+
 ## Trace storage
 
 `storage/storage.py` measures trace files as written: bytes per span and per run,

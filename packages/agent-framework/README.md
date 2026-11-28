@@ -43,3 +43,7 @@ Microsoft has archived AutoGen and points its users to Agent Framework.
 `pytracer-autogen` keeps working for AutoGen agents; once an agent is ported, use
 this adapter instead. Recordings do not carry over: an AutoGen recording replays
 AutoGen code, so capture the ported agent's scenarios again with this adapter.
+The tests do carry over: assertions on what the agent does and returns do not
+depend on the framework. The [AutoGen to Agent Framework
+recipe](../../examples/autogen-to-maf/README.md) walks through a port, runnable with
+no API key.

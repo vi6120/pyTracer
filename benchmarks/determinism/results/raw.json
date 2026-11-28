@@ -1,0 +1,1373 @@
+{
+ "live": {
+  "rows": [
+   {
+    "bug": "B1",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B1",
+    "branch": "fix",
+    "passed": 10,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B1",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B1",
+    "branch": "other",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B2",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B2",
+    "branch": "fix",
+    "passed": 7,
+    "runs": 10,
+    "minority": 3
+   },
+   {
+    "bug": "B2",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B2",
+    "branch": "other",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B3",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B3",
+    "branch": "fix",
+    "passed": 7,
+    "runs": 10,
+    "minority": 3
+   },
+   {
+    "bug": "B3",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B3",
+    "branch": "other",
+    "passed": 9,
+    "runs": 10,
+    "minority": 1
+   },
+   {
+    "bug": "B4",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B4",
+    "branch": "fix",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B4",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B4",
+    "branch": "other",
+    "passed": 2,
+    "runs": 5,
+    "minority": 2
+   },
+   {
+    "bug": "B5",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B5",
+    "branch": "fix",
+    "passed": 6,
+    "runs": 10,
+    "minority": 4
+   },
+   {
+    "bug": "B5",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B5",
+    "branch": "other",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B6",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B6",
+    "branch": "fix",
+    "passed": 10,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B6",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B6",
+    "branch": "other",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B7",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B7",
+    "branch": "fix",
+    "passed": 3,
+    "runs": 10,
+    "minority": 3
+   },
+   {
+    "bug": "B7",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B7",
+    "branch": "other",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B8",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B8",
+    "branch": "fix",
+    "passed": 9,
+    "runs": 10,
+    "minority": 1
+   },
+   {
+    "bug": "B8",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B8",
+    "branch": "other",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B9",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B9",
+    "branch": "fix",
+    "passed": 9,
+    "runs": 10,
+    "minority": 1
+   },
+   {
+    "bug": "B9",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B9",
+    "branch": "other",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B10",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B10",
+    "branch": "fix",
+    "passed": 10,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B10",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B10",
+    "branch": "other",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B11",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B11",
+    "branch": "fix",
+    "passed": 6,
+    "runs": 10,
+    "minority": 4
+   },
+   {
+    "bug": "B11",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B11",
+    "branch": "other",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B12",
+    "branch": "main",
+    "passed": 5,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B12",
+    "branch": "fix",
+    "passed": 4,
+    "runs": 5,
+    "minority": 1
+   },
+   {
+    "bug": "B12",
+    "branch": "nofix",
+    "passed": 5,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B12",
+    "branch": "other",
+    "passed": 3,
+    "runs": 5,
+    "minority": 2
+   },
+   {
+    "bug": "B13",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B13",
+    "branch": "fix",
+    "passed": 10,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B13",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B13",
+    "branch": "other",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B14",
+    "branch": "main",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B14",
+    "branch": "fix",
+    "passed": 9,
+    "runs": 10,
+    "minority": 1
+   },
+   {
+    "bug": "B14",
+    "branch": "nofix",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B14",
+    "branch": "other",
+    "passed": 0,
+    "runs": 10,
+    "minority": 0
+   },
+   {
+    "bug": "B15",
+    "branch": "main",
+    "passed": 3,
+    "runs": 5,
+    "minority": 2
+   },
+   {
+    "bug": "B15",
+    "branch": "fix",
+    "passed": 5,
+    "runs": 5,
+    "minority": 0
+   },
+   {
+    "bug": "B15",
+    "branch": "nofix",
+    "passed": 4,
+    "runs": 5,
+    "minority": 1
+   },
+   {
+    "bug": "B15",
+    "branch": "other",
+    "passed": 0,
+    "runs": 5,
+    "minority": 0
+   }
+  ],
+  "branches": 60,
+  "flaky": 14,
+  "misled": 29,
+  "runs": 480
+ },
+ "replay": {
+  "rows": [
+   {
+    "bug": "B1",
+    "branch": "fix",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch calls tool 'get_order_details' more often than the recording does. A frozen replay cannot judge a change to the calls themselves; re-record the scenario on this branch to judge it.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.5
+   },
+   {
+    "bug": "B1",
+    "branch": "nofix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.5
+   },
+   {
+    "bug": "B1",
+    "branch": "other",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch calls tool 'cancel_pending_order' with arguments the recording does not have. 1 later call(s) left it too, after that one. A frozen replay cannot judge a change to the calls themselves; re-record the scenario on this branch to judge it.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.5
+   },
+   {
+    "bug": "B2",
+    "branch": "fix",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch calls tool 'get_order_details' with arguments the recording does not have. 1 later call(s) left it too, after that one. A frozen replay cannot judge a change to the calls themselves; re-record the scenario on this branch to judge it.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.4
+   },
+   {
+    "bug": "B2",
+    "branch": "nofix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.5
+   },
+   {
+    "bug": "B2",
+    "branch": "other",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch calls tool 'get_order_details' with arguments the recording does not have. 1 later call(s) left it too, after that one. A frozen replay cannot judge a change to the calls themselves; re-record the scenario on this branch to judge it.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.3
+   },
+   {
+    "bug": "B3",
+    "branch": "fix",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch sends model 'support-agent' an input the recording does not have. If the branch edits that prompt, re-run with --evaluate-changed-prompts to judge it live.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.3
+   },
+   {
+    "bug": "B3",
+    "branch": "nofix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.5
+   },
+   {
+    "bug": "B3",
+    "branch": "other",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch sends model 'support-agent' an input the recording does not have. If the branch edits that prompt, re-run with --evaluate-changed-prompts to judge it live.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.3
+   },
+   {
+    "bug": "B5",
+    "branch": "fix",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch calls tool 'return_delivered_order_items' with arguments the recording does not have. 1 later call(s) left it too, after that one. A frozen replay cannot judge a change to the calls themselves; re-record the scenario on this branch to judge it.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.5
+   },
+   {
+    "bug": "B5",
+    "branch": "nofix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.4
+   },
+   {
+    "bug": "B5",
+    "branch": "other",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch calls tool 'return_delivered_order_items' with arguments the recording does not have. 1 later call(s) left it too, after that one. A frozen replay cannot judge a change to the calls themselves; re-record the scenario on this branch to judge it.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.5
+   },
+   {
+    "bug": "B6",
+    "branch": "fix",
+    "replays": 10,
+    "verdicts": [
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed"
+    ],
+    "distinct": [
+     {
+      "verdict": "fixed",
+      "reason": null,
+      "exit": 0
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.5
+   },
+   {
+    "bug": "B6",
+    "branch": "nofix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.5
+   },
+   {
+    "bug": "B6",
+    "branch": "other",
+    "replays": 10,
+    "verdicts": [
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged"
+    ],
+    "distinct": [
+     {
+      "verdict": "diverged",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.5
+   },
+   {
+    "bug": "B7",
+    "branch": "fix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.6
+   },
+   {
+    "bug": "B7",
+    "branch": "nofix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.6
+   },
+   {
+    "bug": "B7",
+    "branch": "other",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.5
+   },
+   {
+    "bug": "B8",
+    "branch": "fix",
+    "replays": 10,
+    "verdicts": [
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed"
+    ],
+    "distinct": [
+     {
+      "verdict": "fixed",
+      "reason": null,
+      "exit": 0
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.7
+   },
+   {
+    "bug": "B8",
+    "branch": "nofix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.6
+   },
+   {
+    "bug": "B8",
+    "branch": "other",
+    "replays": 10,
+    "verdicts": [
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged"
+    ],
+    "distinct": [
+     {
+      "verdict": "diverged",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.8
+   },
+   {
+    "bug": "B9",
+    "branch": "fix",
+    "replays": 10,
+    "verdicts": [
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed"
+    ],
+    "distinct": [
+     {
+      "verdict": "fixed",
+      "reason": null,
+      "exit": 0
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.7
+   },
+   {
+    "bug": "B9",
+    "branch": "nofix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.8
+   },
+   {
+    "bug": "B9",
+    "branch": "other",
+    "replays": 10,
+    "verdicts": [
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged"
+    ],
+    "distinct": [
+     {
+      "verdict": "diverged",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.7
+   },
+   {
+    "bug": "B10",
+    "branch": "fix",
+    "replays": 10,
+    "verdicts": [
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed",
+     "fixed"
+    ],
+    "distinct": [
+     {
+      "verdict": "fixed",
+      "reason": null,
+      "exit": 0
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.9
+   },
+   {
+    "bug": "B10",
+    "branch": "nofix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.8
+   },
+   {
+    "bug": "B10",
+    "branch": "other",
+    "replays": 10,
+    "verdicts": [
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged",
+     "diverged"
+    ],
+    "distinct": [
+     {
+      "verdict": "diverged",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.9
+   },
+   {
+    "bug": "B11",
+    "branch": "fix",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch sends model 'support-agent' an input the recording does not have. If the branch edits that prompt, re-run with --evaluate-changed-prompts to judge it live. Its input holds a redacted value, which may be why: the recording stores a placeholder ([redacted:...]) in place of the original, and code that slices or parses that value reads something different on replay. If so, leave the matching rule out of the Redactor for this scenario and re-record.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.7
+   },
+   {
+    "bug": "B11",
+    "branch": "nofix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.7
+   },
+   {
+    "bug": "B11",
+    "branch": "other",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch calls tool 'get_order_details' with arguments the recording does not have. 1 later call(s) left it too, after that one. A frozen replay cannot judge a change to the calls themselves; re-record the scenario on this branch to judge it.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.7
+   },
+   {
+    "bug": "B13",
+    "branch": "fix",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch sends model 'support-agent' an input the recording does not have. If the branch edits that prompt, re-run with --evaluate-changed-prompts to judge it live. Its input holds a redacted value, which may be why: the recording stores a placeholder ([redacted:...]) in place of the original, and code that slices or parses that value reads something different on replay. If so, leave the matching rule out of the Redactor for this scenario and re-record.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.8
+   },
+   {
+    "bug": "B13",
+    "branch": "nofix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.8
+   },
+   {
+    "bug": "B13",
+    "branch": "other",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch sends model 'support-agent' an input the recording does not have. If the branch edits that prompt, re-run with --evaluate-changed-prompts to judge it live. Its input holds a redacted value, which may be why: the recording stores a placeholder ([redacted:...]) in place of the original, and code that slices or parses that value reads something different on replay. If so, leave the matching rule out of the Redactor for this scenario and re-record.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.8
+   },
+   {
+    "bug": "B14",
+    "branch": "fix",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch calls tool 'find_user_id_by_name_zip' with arguments the recording does not have. 1 later call(s) left it too, after that one. A frozen replay cannot judge a change to the calls themselves; re-record the scenario on this branch to judge it.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.7
+   },
+   {
+    "bug": "B14",
+    "branch": "nofix",
+    "replays": 10,
+    "verdicts": [
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing",
+     "still_failing"
+    ],
+    "distinct": [
+     {
+      "verdict": "still_failing",
+      "reason": null,
+      "exit": 1
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.7
+   },
+   {
+    "bug": "B14",
+    "branch": "other",
+    "replays": 10,
+    "verdicts": [
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge",
+     "cannot_judge"
+    ],
+    "distinct": [
+     {
+      "verdict": "cannot_judge",
+      "reason": "The branch calls tool 'find_user_id_by_name_zip' with arguments the recording does not have. 1 later call(s) left it too, after that one. A frozen replay cannot judge a change to the calls themselves; re-record the scenario on this branch to judge it.",
+      "exit": 2
+     }
+    ],
+    "matches_run": true,
+    "seconds_median": 5.7
+   }
+  ],
+  "branches": 36,
+  "stable": 36,
+  "matches_run": 36
+ }
+}

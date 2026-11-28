@@ -25,7 +25,16 @@ from .ids import new_span_id, new_trace_id
 from .recorder import SpanRecorder
 from .redaction import DEFAULT_RULES, RedactionRule, Redactor
 from .schema import Resource, Span, SpanKind, SpanStatus
-from .tracer import ActiveSpan, Intercept, Interceptor, SpanContext, StepSpan, Tracer, _OpMeta
+from .tracer import (
+    ActiveSpan,
+    Intercept,
+    Interceptor,
+    SpanContext,
+    StepSpan,
+    Tracer,
+    _OpMeta,
+    usage_tokens,
+)
 from .transport import HTTPTransport, InMemoryTransport, Transport, TransportError
 
 __all__ = [
@@ -59,6 +68,7 @@ __all__ = [
     "shutdown",
     "start_span",
     "step",
+    "usage_tokens",
 ]
 
 __version__ = "0.1.4"
@@ -126,6 +136,7 @@ def op(func: Any = None, **kwargs: Any) -> Any:
             kwargs.get("agent_name"),
             kwargs.get("tool_name"),
             kwargs.get("capture_io", True),
+            kwargs.get("tokens"),
         )
         # An async generator function is not a coroutine function, so it must be
         # checked first; generator functions need the streaming capture path too.

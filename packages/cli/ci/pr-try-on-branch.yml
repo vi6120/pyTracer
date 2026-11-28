@@ -6,6 +6,13 @@
 #
 # Drop this in as `.github/workflows/pytracer-try-on-branch.yml`. Adjust the
 # collection path, the frozen trace, and the trigger phrase for your project.
+#
+# Security: a comment-triggered workflow runs in your repository with a token that
+# can write to pull requests, while the PR's code may come from anyone (a fork).
+# So only owners, members and collaborators can trigger it, the PR's code runs in a
+# throwaway Docker container that never sees the token, and no credentials are left
+# in the checkout. Keep all three if you adapt it; never switch to
+# `--isolation local` on a public repository. See SECURITY.md, "Threat model".
 name: pyTracer try on this branch
 
 on:
@@ -18,15 +25,16 @@ permissions:
 
 jobs:
   try:
-    # Only run on pull-request comments that ask for it.
+    # Only pull-request comments that ask for it, from people with write access.
     if: >-
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '/pytracer try')
+      contains(github.event.comment.body, '/pytracer try') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     steps:
       - name: Resolve the PR base branch
         id: pr
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const pr = await github.rest.pulls.get({
@@ -36,17 +44,24 @@ jobs:
             });
             core.setOutput('base', pr.data.base.ref);
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false  # no token left in .git/config for the PR's code
 
       - name: Make the base and PR head available as local branches
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BASE: ${{ steps.pr.outputs.base }}  # an env var, not pasted into the script
+          PR: ${{ github.event.issue.number }}
         run: |
-          git fetch --no-tags --force origin \
-            "refs/heads/${{ steps.pr.outputs.base }}:refs/heads/pytracer-base" \
-            "refs/pull/${{ github.event.issue.number }}/head:refs/heads/pytracer-head"
+          # The token is given to this one command, never written to .git/config.
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$auth" fetch --no-tags --force origin \
+            "refs/heads/$BASE:refs/heads/pytracer-base" \
+            "refs/pull/$PR/head:refs/heads/pytracer-head"
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
@@ -64,7 +79,7 @@ jobs:
             --baseline pytracer-base \
             --branch pytracer-head \
             --collection tests/collection.yaml \
-            --isolation local \
+            --isolation docker \
             --freeze-trace traces/failure.jsonl \
             --trace-dest traces/failure.jsonl \
             --pr ${{ github.event.issue.number }} || true

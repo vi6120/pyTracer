@@ -98,11 +98,18 @@ def _scripted(path: str) -> Any:
     from tau2.data_model.message import ToolCall
 
     script = json.loads(open(path, encoding="utf-8").read())
-    turns = {role: iter(replies) for role, replies in script.items()}
 
     def generate(model: str, messages: list[Any], tools: Any = None, **kwargs: Any) -> Any:
         role = _ROLES.get(str(kwargs.get("call_name")), "support-agent")
-        reply = next(turns[role])
+        # Stateless, like a real model: the reply is chosen by how many replies this
+        # role has already given in the conversation it is sent (its own earlier
+        # turns arrive as assistant messages), not by how often it was called. A
+        # replay that serves some calls from a recording then gets the right reply.
+        turn = sum(getattr(m, "role", None) == "assistant" for m in messages)
+        replies = script[role]
+        if turn >= len(replies):
+            raise RuntimeError(f"scripted {role} has no reply number {turn + 1}")
+        reply = replies[turn]
         calls = [
             ToolCall(id=f"call_{i}", name=c["name"], arguments=c["arguments"])
             for i, c in enumerate(reply.get("tool_calls") or ())

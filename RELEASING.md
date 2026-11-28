@@ -58,13 +58,23 @@ Pending publishers let the first upload create the project, so you configure all
    ```
 
 4. **Release to PyPI:** create a GitHub Release with a tag like `v0.1.2`. The
-   `publish.yml` workflow builds all packages and publishes them to PyPI.
+   `publish.yml` workflow builds all packages and publishes them to PyPI, each file
+   with a PEP 740 attestation. It then attests the same files and an SBOM
+   (`pytracer-all-<version>.cdx.json`, CycloneDX: everything `pytracer-all` installs,
+   as resolved at build time) with GitHub's build provenance and attaches them to the
+   release.
 
 5. **Confirm:**
    ```bash
    pip install pytracer-sdk==0.1.2
    pip install pytracer-all==0.1.2
    ```
+   and that the release's files verify (download one from the release page):
+   ```bash
+   gh attestation verify pytracer_sdk-0.1.2-py3-none-any.whl --repo vi6120/pyTracer
+   gh attestation verify pytracer-all-0.1.2.cdx.json --repo vi6120/pyTracer
+   ```
+   Each file's PyPI attestation shows under "Provenance" on its PyPI file page.
 
 ## Manual fallback
 

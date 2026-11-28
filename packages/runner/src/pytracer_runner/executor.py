@@ -70,9 +70,12 @@ class LocalExecutor:
 
     def run(self, workdir: Path, command: str, *, artifacts: list[str] | None = None) -> ExecResult:
         try:
+            # A shell on purpose: the command chains steps with "&&" and --install
+            # takes a shell command. Every value interpolated into it is quoted
+            # where the command is built (CrossBranchRunner.reproduce).
             proc = subprocess.run(
                 command,
-                shell=True,
+                shell=True,  # nosemgrep: python.lang.security.audit.subprocess-shell-true.subprocess-shell-true
                 cwd=str(workdir),
                 capture_output=True,
                 text=True,

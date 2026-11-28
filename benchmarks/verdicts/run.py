@@ -76,7 +76,7 @@ PREREGISTERED_SETTINGS = ("strict", "fallback", "partial")
 ABSTAIN = {"cannot_judge", "cannot_reproduce"}
 # Seconds each reproduce run may take: with the model live (partial, or a call that
 # falls back to live), a slow model needs far longer than pyTracer's default.
-REPRODUCE_TIMEOUT = os.environ.get("BENCH_REPRODUCE_TIMEOUT", "3600")
+REPRODUCE_TIMEOUT = str(float(os.environ.get("BENCH_REPRODUCE_TIMEOUT", "3600")))  # a number, or fail now
 # How many times the baseline is recorded before giving up on a recording that
 # shows the bug (a live model does not fail the same way every run).
 CAPTURE_TRIES = 3
@@ -294,7 +294,9 @@ def reproduce(bug: Bug, repo: Path, trace: Path, setting: str) -> dict[str, Any]
             "--timeout", REPRODUCE_TIMEOUT, *SETTINGS[setting]["flags"],
         ]
         started = time.monotonic()
-        done = subprocess.run(command, env=_env(bug), capture_output=True, text=True)
+        # An argument list, no shell: nothing in it can run as a command. The env is
+        # the benchmark's own (set by whoever runs it).
+        done = subprocess.run(command, env=_env(bug), capture_output=True, text=True)  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
         seconds = round(time.monotonic() - started, 1)
         _check_budget()  # a reproduce stopped by the cap has no verdict to score
         verdict, reason = None, None

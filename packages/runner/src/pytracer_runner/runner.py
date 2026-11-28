@@ -134,7 +134,12 @@ class CrossBranchRunner:
             steps.append(_cli_install_step(python))
         # `python -m` works whenever pytracer-cli is importable, even if the
         # project does not put the `pytracer` script on PATH.
-        run_cmd = f"{python} -m pytracer_cli run {collection_path} --json {_RESULT_ARTIFACT}"
+        # Quoted: the path is user input and the command runs in a shell, so a space
+        # or a ";" in it must stay part of the path.
+        run_cmd = (
+            f"{python} -m pytracer_cli run {shlex.quote(str(collection_path))} "
+            f"--json {_RESULT_ARTIFACT}"
+        )
         if evaluate_changed_prompts:
             run_cmd += " --evaluate-changed-prompts"
         if cut_point:

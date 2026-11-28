@@ -41,6 +41,12 @@ the same principles scale up.
   sending side, a span the SDK cannot deliver (a full queue or a failed delivery)
   is counted, logged as a warning, and passed to an optional `on_drop` callback,
   so loss there is never silent either.
+- **Security checks on every change.** Each pull request and a weekly run scan the
+  full git history for leaked secrets (Gitleaks), every package's third-party
+  dependencies for known vulnerabilities (pip-audit), the gateway's container image
+  (Trivy), and the code itself for unsafe patterns (Semgrep), and fail the build on
+  what they find (`.github/workflows/security.yml`). Dependabot keeps dependencies and
+  pinned actions up to date.
 
 ## What you must configure
 

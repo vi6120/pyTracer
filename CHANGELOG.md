@@ -10,6 +10,12 @@
   numbered, linked, with `step.reject(error)` recording why an attempt was not used
   and the step recording the attempts, the rejections and the accepted attempt.
   Without it, those calls were unrelated spans that all looked successful.
+- **Token counts on your own model calls.** An `@op(kind=SpanKind.LLM)` function
+  that returns a provider response (OpenAI, Anthropic, LangChain, or a dict of the
+  same) now records its token count from the response's usage, and
+  `@op(..., tokens=reader)` reads any other shape (`pytracer.usage_tokens` is the
+  default reader). Retry waste is then a number for hand-written retry loops, not
+  only for the framework adapters, which already counted tokens.
 - **Retry waste.** `pytracer run --json` (`retry_steps`), the PR report and
   `pytracer traces show` report each retry step's attempts, the accepted one, why
   the others were rejected, and the tokens and cost spent on attempts that were not

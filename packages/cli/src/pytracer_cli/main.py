@@ -18,6 +18,7 @@ from pytracer_sdk.schema import Span
 from . import __version__
 from .github import GitHubClient, sync_issue
 from .keys import format_key_table, format_new_key
+from .registry import bundle_collection, materialize_collection, read_bundle, write_bundle
 from .report import (
     changed_model_note,
     dedup_key,
@@ -28,8 +29,8 @@ from .report import (
     to_junit,
     to_markdown,
 )
-from .registry import bundle_collection, materialize_collection, read_bundle, write_bundle
 from .runner import CollectionResult, run_path
+from .trace_io import read_trace_text
 from .traces import format_summary_table, format_trace_tree, parse_entry, record_trace
 
 app = typer.Typer(add_completion=False, help="Run and manage agent tests.")
@@ -263,7 +264,13 @@ def record(
     name: str | None = typer.Option(None, help="Scenario name."),
     mode: str = typer.Option("full", help="Replay mode: full | partial | live."),
     from_file: Path | None = typer.Option(
-        None, "--from-file", help="Read the trace from a local JSONL file instead of the store."
+        None, "--from-file",
+        help="Read the trace from a local JSONL file (or .jsonl.zst) instead of the store.",
+    ),
+    zstd: bool = typer.Option(
+        False, "--zstd",
+        help="Write the trace zstd-compressed (.jsonl.zst, about 16x smaller); needs "
+        'pip install "pytracer-cli[zstd]" before Python 3.14.',
     ),
 ) -> None:
     """Scaffold a test collection from a captured trace (trace store or local file)."""
@@ -271,11 +278,12 @@ def record(
         if not from_file.exists():
             typer.echo(f"error: trace file not found: {from_file}", err=True)
             raise typer.Exit(code=2)
-        spans = [
-            Span.from_json(line)
-            for line in from_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
+        try:
+            text = read_trace_text(from_file)
+        except RuntimeError as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=2) from exc
+        spans = [Span.from_json(line) for line in text.splitlines() if line.strip()]
         source = str(from_file)
     else:
         if not trace_id:
@@ -289,9 +297,14 @@ def record(
     if not spans:
         typer.echo(f"error: no spans for trace {source}", err=True)
         raise typer.Exit(code=2)
-    jsonl, collection = record_trace(
-        spans, agent=agent, entry=parse_entry(entry), out_dir=out, name=name, mode=mode
-    )
+    try:
+        jsonl, collection = record_trace(
+            spans, agent=agent, entry=parse_entry(entry), out_dir=out, name=name, mode=mode,
+            compress=zstd,
+        )
+    except RuntimeError as exc:  # --zstd with no zstd installed
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
     typer.echo(f"wrote {jsonl}")
     typer.echo(f"wrote {collection}")
     typer.echo(f"run it with: pytracer run {collection}")

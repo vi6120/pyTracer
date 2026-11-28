@@ -219,6 +219,7 @@ def run_scenario(
     strict: bool | None = None,
     sandbox: bool | None = None,
     evaluate_changed_prompts: bool | None = None,
+    cut_point: bool | None = None,
 ) -> ScenarioResult:
     """Replay one scenario and evaluate its assertions.
 
@@ -229,6 +230,9 @@ def run_scenario(
     ``evaluate_changed_prompts`` runs a frozen model op live when its input changed
     (a prompt edit) instead of failing, so the change is actually evaluated; it
     makes a live model call, so it also drops the network sandbox by default.
+
+    ``cut_point`` (experimental) runs the first call that misses the recording, and
+    every tool and model call after it, live; it also drops the sandbox by default.
     """
     try:
         overlap = set(scenario.live) & set(scenario.freeze)
@@ -246,10 +250,11 @@ def run_scenario(
     evaluate_eff = _effective(
         evaluate_changed_prompts, scenario.evaluate_changed_prompts, False
     )
+    cut_eff = _effective(cut_point, scenario.cut_point, False)
     # Ops listed in `live` are meant to run for real, so don't sandbox the network by
     # default when any op is live, or when a changed prompt is evaluated live, or the
     # step under test would be blocked.
-    sandbox_default = full and not scenario.live and not evaluate_eff
+    sandbox_default = full and not scenario.live and not evaluate_eff and not cut_eff
     sandbox_eff = _effective(sandbox, scenario.sandbox, sandbox_default)
     # Pin the clock / RNG only when the scenario asks, so most runs keep the real ones.
     controls = (
@@ -268,6 +273,7 @@ def run_scenario(
         writes=scenario.writes,
         evaluate_changed_prompts=evaluate_eff,
         controls=controls,
+        cut_point=cut_eff,
     ).replay(lambda: agent(**scenario.entry), mocks)
     if result.uninstrumented:
         # Recordings existed but the agent hit no @op seam, so nothing was injected
@@ -302,12 +308,13 @@ def run_collection(
     strict: bool | None = None,
     sandbox: bool | None = None,
     evaluate_changed_prompts: bool | None = None,
+    cut_point: bool | None = None,
 ) -> CollectionResult:
     """Run every scenario in a collection and aggregate the results."""
     results = [
         run_scenario(
             s, base_dir, strict=strict, sandbox=sandbox,
-            evaluate_changed_prompts=evaluate_changed_prompts,
+            evaluate_changed_prompts=evaluate_changed_prompts, cut_point=cut_point,
         )
         for s in collection.scenarios
     ]
@@ -320,10 +327,11 @@ def run_path(
     strict: bool | None = None,
     sandbox: bool | None = None,
     evaluate_changed_prompts: bool | None = None,
+    cut_point: bool | None = None,
 ) -> CollectionResult:
     """Load a collection file and run it end to end."""
     collection, base_dir = load_collection(path)
     return run_collection(
         collection, base_dir, strict=strict, sandbox=sandbox,
-        evaluate_changed_prompts=evaluate_changed_prompts,
+        evaluate_changed_prompts=evaluate_changed_prompts, cut_point=cut_point,
     )

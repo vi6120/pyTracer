@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Security
+
+- **The `/pytracer try` workflow template ran a pull request's code with the
+  repository's token.** It triggered on any comment containing `/pytracer try` and
+  ran `pytracer reproduce --isolation local`, so on a public repository anyone could
+  open a pull request from a fork, comment, and run their code with a token that can
+  write to pull requests. The template now runs only on comments from owners,
+  members and collaborators, runs the code with `--isolation docker` (the container
+  never sees the token), leaves no credentials in the checkout, passes branch names
+  through environment variables, and pins its actions to commits. **If you copied the
+  template into a repository, update it.** SECURITY.md now has a threat model for
+  every mode.
+
 ### Added
 
 - **Retry steps.** `pytracer.step(name)` groups the model calls of a retry loop,

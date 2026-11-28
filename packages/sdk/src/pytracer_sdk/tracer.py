@@ -82,13 +82,48 @@ class _OpMeta:
     tokens: Callable[[Any], int | None] | None = None
 
 
+def _usage_count(usage: Any) -> int | None:
+    """Total tokens from one usage block, whichever provider's names it uses."""
+    def get(key: str) -> Any:
+        return usage.get(key) if isinstance(usage, dict) else getattr(usage, key, None)
+
+    total = get("total_tokens")
+    if isinstance(total, (int, float)) and not isinstance(total, bool):
+        return int(total)
+    parts = [get(k) for k in ("prompt_tokens", "completion_tokens", "input_tokens", "output_tokens")]
+    numbers = [int(p) for p in parts if isinstance(p, (int, float)) and not isinstance(p, bool)]
+    return sum(numbers) if numbers else None
+
+
+def usage_tokens(output: Any) -> int | None:
+    """A model call's token count, read from the usage its result reports.
+
+    Understands the common shapes: an OpenAI response (``usage.total_tokens``, or
+    prompt plus completion), an Anthropic message (``usage.input_tokens`` plus
+    ``output_tokens``), a LangChain message (``usage_metadata``), the same as plain
+    dicts, and a list of stream chunks (summed). ``None`` when there is nothing to read.
+    """
+    if isinstance(output, (list, tuple)):
+        counts = [c for c in (usage_tokens(item) for item in output) if c is not None]
+        return sum(counts) if counts else None
+    for key in ("usage", "usage_metadata"):
+        usage = output.get(key) if isinstance(output, dict) else getattr(output, key, None)
+        if usage is not None and not callable(usage):
+            count = _usage_count(usage)
+            if count is not None:
+                return count
+    return None
+
+
 def _finish(active: ActiveSpan, meta: _OpMeta, output: Any) -> None:
-    """Record a live call's output (and its token count, when ``meta`` reads one)."""
+    """Record a live call's output (and its token count, when ``meta`` reads one; a
+    model call with no reader of its own has its count read by ``usage_tokens``)."""
     if meta.capture_io:
         active.set_output(output)
-    if meta.tokens is not None:
+    reader = meta.tokens or (usage_tokens if meta.kind is SpanKind.LLM else None)
+    if reader is not None:
         try:
-            count = meta.tokens(output)
+            count = reader(output)
         except Exception:  # noqa: BLE001 - an unreadable count must never fail the call
             count = None
         if count:
@@ -429,15 +464,18 @@ class Tracer:
         agent_name: str | None = None,
         tool_name: str | None = None,
         capture_io: bool = True,
+        tokens: Callable[[Any], int | None] | None = None,
     ) -> Any:
         """Decorator that captures a function call as a span, bound to this tracer.
 
         Works on both sync and async functions. Input is the call's args/kwargs
-        and output is the return value, each redacted before storage.
+        and output is the return value, each redacted before storage. ``tokens``
+        reads a call's token count from its return value; a model call
+        (``kind=SpanKind.LLM``) without one is read by :func:`usage_tokens`.
         """
 
         def decorator(fn: F) -> F:
-            meta = _OpMeta(name or fn.__name__, kind, agent_name, tool_name, capture_io)
+            meta = _OpMeta(name or fn.__name__, kind, agent_name, tool_name, capture_io, tokens)
             # An async generator function is not a coroutine function, so it must
             # be checked first or it would fall through to the sync path and never
             # capture its streamed items.
